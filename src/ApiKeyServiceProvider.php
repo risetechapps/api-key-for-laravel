@@ -31,6 +31,10 @@ class ApiKeyServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/../database/migrations/' => database_path('migrations'),
             ], 'migrations');
+
+            $this->publishes([
+                __DIR__.'/routes/routes.php' => base_path('routes/routes.php'),
+            ], 'routes');
         }
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
