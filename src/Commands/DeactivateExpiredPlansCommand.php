@@ -10,7 +10,7 @@ class DeactivateExpiredPlansCommand extends Command
 {
     protected $signature = 'plans:deactivate-expired';
 
-    protected $description = 'Command description';
+    protected $description = 'Desativar todos os usuários com planos expirados';
 
     public function handle(): void
     {

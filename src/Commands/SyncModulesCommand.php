@@ -22,6 +22,7 @@ class SyncModulesCommand extends Command
             $modules = $this->formatModuleNames($controller, $methods);
 
             foreach ($modules as $moduleKey => $methodName) {
+
                 if (!Module::where('module', $methodName)->exists()) {
                     $friendlyName = $this->askFriendlyName($moduleKey);
 
@@ -111,7 +112,7 @@ class SyncModulesCommand extends Command
     {
         $modules = [];
         foreach ($methods as $method) {
-            $modules[$controller] = $controller . "@" . $method;
+            $modules[$controller . "@" . $method] = $controller . "@" . $method;
         }
         return $modules;
     }
