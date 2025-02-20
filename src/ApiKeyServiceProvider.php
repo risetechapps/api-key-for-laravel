@@ -60,6 +60,13 @@ class ApiKeyServiceProvider extends ServiceProvider
         Route::middleware(['plan'])->group(function () {
             $this->loadRoutesFrom(__DIR__ . '/routes/routes.php');
         });
+
+        $this->app->booted(function () {
+            if (file_exists(base_path('routes/routes.php'))) {
+                Route::namespace('')
+                    ->group(base_path('routes/routes.php'));
+            }
+        });
     }
 
     /**
