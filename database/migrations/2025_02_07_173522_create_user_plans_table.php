@@ -16,6 +16,8 @@ return new class extends Migration {
             $table->boolean('active')->default(true);
             $table->integer('requests_used')->default(0);
             $table->timestamps();
+
+            $table->index('authentication_id');
         });
     }
 

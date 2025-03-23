@@ -14,6 +14,9 @@ return new class extends Migration {
             $table->timestamp('expires_at')->nullable();
             $table->boolean('active')->default(true);
             $table->timestamps();
+
+            $table->index('authentication_id');
+            $table->index('key');
         });
     }
 

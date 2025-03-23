@@ -13,6 +13,8 @@ return new class extends Migration {
             $table->string('endpoint');
             $table->timestamp('requested_at')->default(now());
             $table->timestamps();
+
+            $table->index('authentication_id');
         });
     }
 
