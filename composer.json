@@ -27,7 +27,8 @@
         "risetechapps/form-request-for-laravel": "^1.0",
         "risetechapps/media-for-laravel": "^1.0.0",
         "risetechapps/to-upper-for-laravel": "^1.0",
-        "ext-gd": "*"
+        "ext-gd": "*",
+        "tpetry/laravel-postgresql-enhanced": "2.3.4"
     },
     "require-dev": {
         "orchestra/testbench": "^7.0|^8.0",
@@ -62,6 +63,6 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "version": "1.0.0"
+    "version": "1.1.0"
 
 }
