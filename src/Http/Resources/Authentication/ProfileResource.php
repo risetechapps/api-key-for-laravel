@@ -22,7 +22,8 @@ class ProfileResource extends JsonResource
             'marital_status' => $this->marital_status,
             'address' => $this->address,
             'email' => $this->email,
-            'photo' => $this->getPhotoProfile()
+            'photo' => $this->getPhotoProfile(),
+            'app_key' => $this->apiKey->key
         ];
     }
 }
