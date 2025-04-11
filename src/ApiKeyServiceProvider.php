@@ -42,7 +42,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         app('router')->aliasMiddleware('api.key', AuthenticateApiKey::class);
         app('router')->aliasMiddleware('check.active.plan', CheckActivePlanMiddleware::class);
         app('router')->aliasMiddleware('check.module', CheckModuleAccessMiddleware::class);
-        app('router')->aliasMiddleware('check.limite.plan', CheckRequestLimitMiddleware::class);
+        app('router')->aliasMiddleware('check.limit.plan', CheckRequestLimitMiddleware::class);
 
         Config::set('auth.providers.users.model', Authentication::class);
 
@@ -54,7 +54,7 @@ class ApiKeyServiceProvider extends ServiceProvider
             'api.key',
             'check.active.plan',
             'check.module',
-            'check.limite.plan'
+            'check.limit.plan'
         ]);
 
         Route::middleware(['plan'])->group(function () {

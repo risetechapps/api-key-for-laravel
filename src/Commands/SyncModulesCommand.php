@@ -13,7 +13,7 @@ class SyncModulesCommand extends Command
     protected $signature = 'sync:modules';
     protected $description = 'Sincroniza automaticamente os módulos a partir dos Controllers do sistema.';
 
-    public function handle()
+    public function handle(): void
     {
         $controllers = $this->getProjectAndPackageControllers();
 
