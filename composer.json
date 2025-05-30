@@ -22,10 +22,10 @@
         "php": "^8.1",
         "illuminate/support": "^9.0|^10.0",
         "laravel/sanctum": "^3.3",
-        "risetechapps/address-for-laravel": "^1.0",
+        "risetechapps/address-for-laravel": "^2.0.0",
         "risetechapps/code-generate": "^1.0",
-        "risetechapps/form-request-for-laravel": "^1.0",
-        "risetechapps/media-for-laravel": "^1.0.0",
+        "risetechapps/form-request-for-laravel": "^2.0.0",
+        "risetechapps/media-for-laravel": "^2.0.0",
         "risetechapps/to-upper-for-laravel": "^1.0",
         "ext-gd": "*",
         "tpetry/laravel-postgresql-enhanced": "2.3.4"
