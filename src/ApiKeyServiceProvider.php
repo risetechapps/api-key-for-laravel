@@ -82,7 +82,7 @@ class ApiKeyServiceProvider extends ServiceProvider
 
     private function setRules(): void
     {
-        Config::set('rules.forms', [
+        $defaultRules = [
             'register' => [
                 'name' => 'bail|required|min:5',
                 'email' => 'bail|required|email|unique:authentications,email',
@@ -119,7 +119,7 @@ class ApiKeyServiceProvider extends ServiceProvider
             'plan' => [
                 'name' => 'bail|required|min:5',
                 'price' => 'bail|required|numeric|min:1',
-                'request_limit' => 'bail|required|numeric:min:0',
+                'request_limit' => 'bail|required|numeric|min:0',
                 'duration_days' => 'bail|required|integer|min:1',
                 'modules' => 'bail'
             ],
@@ -132,6 +132,11 @@ class ApiKeyServiceProvider extends ServiceProvider
                 'auth_id' => 'bail|required',
                 'plan_id' => 'bail|required',
             ]
-        ]);
+        ];
+
+        Config::set(
+            'rules.forms',
+            array_replace_recursive($defaultRules, config('rules.forms', []))
+        );
     }
 }
