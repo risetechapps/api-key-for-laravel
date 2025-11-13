@@ -24,7 +24,13 @@ class ApiKey extends Model
 
     public static function validateKey($key)
     {
-        return self::where('key', $key)->first();
+        return self::where('key', $key)
+            ->where('active', true)
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            })
+            ->first();
     }
 
     public function authentication(): BelongsTo
