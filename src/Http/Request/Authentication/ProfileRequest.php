@@ -12,20 +12,18 @@ class ProfileRequest extends FormRequest
 
     protected ValidationRuleRepository $repository;
 
-    protected array $result = [];
-
     public function __construct(ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
     {
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
 
         $this->repository = $ruleRepository;
-
-        $this->result = $this->repository->getRules('profile', ['id' => auth()->user()->getKey()]);
     }
 
     public function rules(): array
     {
-        return $this->result['rules'];
+        $userId = optional($this->user())->getKey();
+
+        return $this->repository->getRules('profile', ['id' => $userId])['rules'];
     }
 
     public function authorize(): bool

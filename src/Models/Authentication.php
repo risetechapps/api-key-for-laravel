@@ -62,7 +62,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
 
     public function setPasswordAttribute($value): void
     {
-        $this->attributes['password'] = bcrypt(mb_strtolower($value));
+        $this->attributes['password'] = bcrypt($value);
     }
 
     public function getPhotoProfile(): ?Media
@@ -112,24 +112,30 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
             ->latest();
     }
 
-    public function hasModule($moduleName)
+    public function hasModule($moduleName): bool
     {
-        $userPlan = $this->activePlan()->first();
+        $userPlan = $this->activePlan()->with('plan.modules')->first();
+
+        if (! $userPlan || ! $userPlan->plan) {
+            return false;
+        }
+
         return $userPlan->plan->modules()->where('module', $moduleName)->exists();
     }
 
     public function countUsed(): int
     {
         $plan = $this->activePlan()->first();
-        return $plan->requests_used;
+
+        return $plan?->requests_used ?? 0;
     }
 
     public function requestLimit(): int
     {
-        $plan = $this->activePlan;
+        $plan = $this->activePlan()->with('plan')->first();
 
-        if (!is_null($plan)) {
-            return $plan->plan->request_limit;
+        if ($plan && $plan->plan) {
+            return (int) $plan->plan->request_limit;
         }
 
         return 0;
@@ -141,11 +147,15 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
     }
     public function requestUsed(): void
     {
+        if (! $activePlan = $this->activePlan()->first()) {
+            return;
+        }
+
         $this->requestLog()->create([
             'endpoint' => request()->path(),
             'requested_at' => now(),
         ]);
 
-        $this->activePlan->increment('requests_used');
+        $activePlan->increment('requests_used');
     }
 }
