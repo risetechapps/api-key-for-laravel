@@ -3,23 +3,23 @@
 namespace RiseTechApps\ApiKey\Http\Controllers\Authentication;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
-use RuntimeException;
-use RiseTechApps\ApiKey\Features\AvatarGenerator;
 use RiseTechApps\ApiKey\Http\Request\Authentication\LoginRequest;
 use RiseTechApps\ApiKey\Http\Request\Authentication\RegisterRequest;
 use RiseTechApps\ApiKey\Http\Resources\Authentication\AuthenticationMeResource;
 use RiseTechApps\ApiKey\Models\Authentication;
+use RuntimeException;
 use Throwable;
 
 class AuthController extends Controller
 {
-    public function register(RegisterRequest $request)
+    public function register(RegisterRequest $request): JsonResponse
     {
         $data = $request->validated();
 
@@ -39,10 +39,10 @@ class AuthController extends Controller
                     'active' => false,
                 ]);
 
-                $profileImage = (new AvatarGenerator())->generateAvatar($data['name']);
-                $avatarPath = 'profiles/' . $authentication->getKey() . '.png';
+                $avatarPath = $authentication->getKey() . '.png';
+                $profileImage = avatarGenerator()->generateBase64($data['name']);
 
-                if (! Storage::put($avatarPath, $profileImage)) {
+                if (!Storage::put($avatarPath, $profileImage)) {
                     throw new RuntimeException('Unable to persist generated avatar.');
                 }
                 $authentication->addMediaFromDisk($avatarPath)->toMediaCollection('profile');
@@ -52,58 +52,49 @@ class AuthController extends Controller
 
             $auth->sendEmailVerificationNotification();
 
-            return response()->json(['success' => true], Response::HTTP_CREATED);
+            return response()->jsonSuccess();
         } catch (Throwable $exception) {
-            if ($avatarPath && Storage::exists($avatarPath)) {
-                Storage::delete($avatarPath);
-            }
-
-            report($exception);
-
-            return response()->json(['success' => false], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->jsonGone($exception->getMessage());
         }
     }
 
-    public function verifyEmail(Request $request)
+    public function verifyEmail(Request $request): JsonResponse
     {
-        if (! URL::hasValidSignature($request)) {
+        if (!URL::hasValidSignature($request)) {
             return response()->json(['success' => false], Response::HTTP_FORBIDDEN);
         }
 
         $user = Authentication::find($request->route('id'));
 
-        if (! $user || ! hash_equals((string) $request->route('hash'), sha1($user->getEmailForVerification()))) {
+        if (!$user || !hash_equals((string)$request->route('hash'), sha1($user->getEmailForVerification()))) {
             return response()->json(['success' => false], Response::HTTP_FORBIDDEN);
         }
 
-        if (! $user->hasVerifiedEmail()) {
+        if (!$user->hasVerifiedEmail()) {
             $user->markEmailAsVerified();
         }
 
         return response()->json(['success' => true]);
     }
 
-    public function login(LoginRequest $request)
+    public function login(LoginRequest $request): JsonResponse
     {
         $credentials = $request->validated();
 
         $user = Authentication::where('email', $credentials['email'])->first();
 
-        if (! $user) {
-            return response()->json(['success' => false], Response::HTTP_UNAUTHORIZED);
+        if (!$user) {
+            return response()->jsonGone('User not found');
         }
 
-        if (! $user->hasVerifiedEmail()) {
+        if (!$user->hasVerifiedEmail()) {
             $user->sendEmailVerificationNotification();
 
-            return response()->json([
-                'success' => false,
-                'email_verify' => false,
-            ], Response::HTTP_FORBIDDEN);
+            return response()->jsonGone('Account not verified, please check your email inbox.');
         }
 
-        if (! Auth::attempt(['email' => $credentials['email'], 'password' => $credentials['password']])) {
-            return response()->json(['success' => false], Response::HTTP_UNAUTHORIZED);
+        if (!Auth::attempt(['email' => $credentials['email'], 'password' => $credentials['password']])) {
+            return response()->jsonGone('Incorrect username or password');
         }
 
         $user = Auth::user();
@@ -112,17 +103,15 @@ class AuthController extends Controller
         $token = $user->createToken($user->email);
         $data['token'] = $token->plainTextToken;
 
-        return response()->json(['success' => true, 'data' => $data]);
+        return response()->jsonSuccess($data);
     }
 
-    public function me(Request $request)
+    public function me(Request $request): JsonResponse
     {
-        if (! $request->user()) {
-            return response()->json(['success' => false], Response::HTTP_UNAUTHORIZED);
+        if (!$request->user()) {
+            return response()->jsonGone();
         }
 
-        $data = AuthenticationMeResource::make($request->user())->jsonSerialize();
-
-        return response()->json(['success' => true, 'data' => $data]);
+        return response()->jsonSuccess(AuthenticationMeResource::make($request->user()));
     }
 }

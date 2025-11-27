@@ -3,12 +3,12 @@
 namespace RiseTechApps\ApiKey\Http\Request\Authentication;
 
 use Illuminate\Foundation\Http\FormRequest;
-use RiseTechApps\FormRequest\Traits\hasFormValidation\hasFormValidation;
+use RiseTechApps\FormRequest\Traits\HasFormValidation\HasFormValidation;
 use RiseTechApps\FormRequest\ValidationRuleRepository;
 
 class RegisterRequest extends FormRequest
 {
-    use hasFormValidation;
+    use HasFormValidation;
 
     protected ValidationRuleRepository $ruleRepository;
 

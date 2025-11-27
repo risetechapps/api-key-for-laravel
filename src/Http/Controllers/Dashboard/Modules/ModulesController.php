@@ -3,83 +3,31 @@
 namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Modules;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Modules\StoreModulesRequest;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Modules\UpdateModulesRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Modules\ModulesResource;
 use RiseTechApps\ApiKey\Models\Module;
+use RiseTechApps\ApiKey\Repositories\Module\ModuleRepository;
 use Throwable;
 
 class ModulesController extends Controller
 {
-    public function index()
+
+    public function __construct(protected readonly ModuleRepository $moduleRepository)
     {
-        try {
-            $data = ModulesResource::collection(Module::get())->jsonSerialize();
-
-            return response()->json(['success' => true, 'data' => $data]);
-        } catch (Throwable $exception) {
-            report($exception);
-
-            return response()->json(['success' => false], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
     }
 
-    public function store(StoreModulesRequest $request)
+    public function index(): JsonResponse
     {
         try {
-            $module = Module::create($request->validated());
+            $data = $this->moduleRepository->get();
 
-            $data = ModulesResource::make($module)->jsonSerialize();
-
-            return response()->json(['success' => true, 'data' => $data], Response::HTTP_CREATED);
+            return response()->jsonSuccess(ModulesResource::collection($data));
         } catch (Throwable $exception) {
-            report($exception);
 
-            return response()->json(['success' => false], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    public function show(Module $module)
-    {
-        try {
-
-            $data = ModulesResource::make($module)->jsonSerialize();
-
-            return response()->json(['success' => true, 'data' => $data]);
-
-        } catch (Throwable $exception) {
-            report($exception);
-
-            return response()->json(['success' => false], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    public function update(UpdateModulesRequest $request, Module $module)
-    {
-        try {
-            $data = $request->validated();
-
-            $module->update($data);
-
-            return response()->json(['success' => true]);
-        } catch (Throwable $exception) {
-            report($exception);
-
-            return response()->json(['success' => false], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    public function delete(Module $module)
-    {
-        try {
-            $module->delete();
-
-            return response()->json(['success' => true]);
-        } catch (Throwable $exception) {
-            report($exception);
-
-            return response()->json(['success' => false], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->jsonGone();
         }
     }
 }

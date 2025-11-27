@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Plans;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\AssociatePlanRequest;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\StorePlanRequest;
@@ -10,95 +11,95 @@ use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\UpdatePlanRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
 use RiseTechApps\ApiKey\Models\Authentication;
 use RiseTechApps\ApiKey\Models\Plan;
+use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 
 class PlansController extends Controller
 {
-    public function index(Request $request)
+
+    public function __construct(protected readonly PlanRepository $planRepositor)
+    {
+
+    }
+
+    public function index(Request $request): JsonResponse
     {
         try {
 
-            $data = PlansResource::collection(Plan::where('visible', true)->get())->jsonSerialize();
+            $data = $this->planRepositor->findWhere(['is_active' => true]);
 
-            return response()->json(['success' => true, 'data' => $data]);
+            return response()->jsonSuccess(PlansResource::collection($data));
 
         } catch (\Exception $e) {
-            return response()->json(["success" => false]);
+            return response()->jsonGone($e->getMessage());
         }
     }
 
-    public function store(StorePlanRequest $request)
+    public function store(StorePlanRequest $request): JsonResponse
     {
         try {
 
             $data = $request->validated();
 
-            $plan = Plan::create($data);
+            $plan = $this->planRepositor->store($data);
 
             $plan->modules()->sync($data['modules']);
 
-            return response()->json(["success" => true]);
+            return response()->jsonSuccess();
         } catch (\Exception $e) {
-            return response()->json(["success" => false, $e->getMessage()]);
+            return response()->jsonGone();
         }
     }
 
-    public function show(Plan $plan)
+    public function show(Plan $plan): JsonResponse
     {
         try {
 
-            $plan = PlansResource::make($plan)->jsonSerialize();
-            return response()->json(['success' => true, 'data' => $plan]);
+            if (!is_null($plan)) {
+                return response()->jsonSuccess(PlansResource::make($plan));
+            }
+
+            return response()->jsonGone();
+
         } catch (\Exception $e) {
-            return response()->json(["success" => false]);
+            return response()->jsonGone();
         }
     }
 
-    public function update(UpdatePlanRequest $request, Plan $plan)
+    public function update(UpdatePlanRequest $request, Plan $plan): JsonResponse
     {
         try {
 
             $data = $request->validated();
-            $plan->update($data);
-            $plan->modules()->sync($data['modules']);
-            return response()->json(['success' => true, 'data' => $plan]);
+
+            if (!is_null($plan)) {
+
+                $this->planRepositor->update($plan->getKey(), $data);
+
+                $plan->modules()->sync($data['modules']);
+
+                return response()->jsonSuccess();
+            }
+            return response()->jsonGone();
+
         } catch (\Exception $e) {
-            return response()->json(["success" => false]);
+            return response()->jsonGone();
         }
     }
 
-    public function delete(Plan $plan)
+    public function delete(Plan $plan): JsonResponse
     {
 
         try {
-            $plan->delete();
-            return response()->json(['success' => true]);
+            if (!is_null($plan)) {
+
+                $this->planRepositor->findById($plan->getKey())->delete();
+                return response()->jsonSuccess();
+            }
+
+            return response()->jsonGone();
         } catch (\Exception $e) {
-            return response()->json(["success" => false]);
+            return response()->jsonGone();
         }
     }
 
-    public function associate(AssociatePlanRequest $request)
-    {
-        try {
-
-            $data = $request->validated();
-            $plan = Plan::where('id', $data['plan_id'])->first();
-            $auth = Authentication::where('id', $data['auth_id'])->first();
-
-            if(is_null($plan)){
-
-                return response()->json(["success" => false, "data" =>"plano não encontrado"]);
-            }
-
-            if(is_null($auth)){
-                return response()->json(["success" => false, "data" =>"usuário não encontrado"]);
-            }
-
-            $auth->subscribeToPlan($plan);
-
-            return response()->json(["success" => true]);
-        } catch (\Exception $e) {
-            return response()->json(["success" => false]);
-        }
-    }
 }

@@ -10,26 +10,26 @@ class DeactivateExpiredPlansCommand extends Command
 {
     protected $signature = 'plans:deactivate-expired';
 
-    protected $description = 'Desativar todos os usuários com planos expirados';
+    protected $description = 'Deactivate all users with expired plans';
 
     public function handle(): void
     {
-        $this->info('🔍 Buscando planos vencidos...');
+        $this->info('🔍 Looking for expired shots...');
 
         $expiredPlans = UserPlan::where('end_date', '<', now())->where('active', true)->get();
 
         if ($expiredPlans->isEmpty()) {
-            $this->info('✅ Nenhum plano vencido encontrado.');
+            $this->info('✅ No overdue plans found.');
             return;
         }
 
         DB::transaction(function () use ($expiredPlans) {
             foreach ($expiredPlans as $plan) {
                 $plan->update(['active' => false]);
-                $this->line("❌ Plano desativado para usuário ID: {$plan->authentication_id}");
+                $this->line("❌ Disabled plan for user ID: {$plan->authentication_id}");
             }
         });
 
-        $this->info('🚀 Todos os planos vencidos foram desativados com sucesso!');
+        $this->info('🚀 All expired plans have been successfully deactivated!');
     }
 }
