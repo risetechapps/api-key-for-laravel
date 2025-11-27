@@ -2,17 +2,18 @@
 
 namespace RiseTechApps\ApiKey\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use RiseTechApps\HasUuid\Traits\HasUuid\HasUuid;
+use RiseTechApps\HasUuid\Traits\HasUuid;
 
 class Module extends Model
 {
-    use HasFactory, HasUuid;
+    use HasUuid;
 
     protected $fillable = [
         'name',
-        'module'
+        'module',
+        'description',
+        'status'
     ];
 
     protected $hidden = [
