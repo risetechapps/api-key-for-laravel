@@ -9,6 +9,7 @@ return new class extends Migration {
     {
         Schema::create('api_keys', function (Blueprint $table) {
             $table->uuid('id')->primary();
+            $table->codeGenerate();
             $table->string('key')->unique();
             $table->foreignUuid('authentication_id')->constrained()->onDelete('cascade');
             $table->timestamp('expires_at')->nullable();

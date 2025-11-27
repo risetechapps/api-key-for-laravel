@@ -9,8 +9,16 @@ return new class extends Migration {
     {
         Schema::create('modules', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->caseInsensitiveText('name');
+
+            if (DB::getDriverName() === 'pgsql') {
+                $table->caseInsensitiveText('name');
+            } else {
+                $table->string('name');
+            }
+
             $table->string('module');
+            $table->string('description')->nullable();
+            $table->boolean('status');
             $table->timestamps();
 
             $table->index('name');
