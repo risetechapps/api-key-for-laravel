@@ -23,7 +23,12 @@ return new class extends Migration {
             $table->string('nationality')->nullable();
             $table->string('naturalness')->nullable();
             $table->enum('marital_status', AuthService::maritalStatusProfile())->default("SINGLE")->nullable();
-            $table->caseInsensitiveText('email');
+
+            if (DB::getDriverName() === 'pgsql') {
+                $table->caseInsensitiveText('email');
+            } else {
+                $table->string('email');
+            }
             $table->string('password');
             $table->string('locale')->nullable();
             $table->dateTime('email_verified_at')->nullable();
