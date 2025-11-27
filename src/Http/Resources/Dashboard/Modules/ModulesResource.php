@@ -12,7 +12,9 @@ class ModulesResource extends JsonResource
         return [
             'id' => $this->getKey(),
             'name' => $this->name,
-            'module' => $this->module
+            'module' => $this->module,
+            'description' => $this->description,
+            'status' => $this->status
         ];
     }
 }
