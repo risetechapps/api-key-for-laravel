@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Http\Controllers\Authentication;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use RiseTechApps\ApiKey\Http\Request\Authentication\ProfileRequest;
@@ -11,24 +12,23 @@ use Throwable;
 
 class ProfileController extends Controller
 {
-    public function show(Request $request)
+    public function show(Request $request): JsonResponse
     {
         if (! $request->user()) {
-            return response()->json(['success' => false], Response::HTTP_UNAUTHORIZED);
+            return response()->jsonGone();
         }
 
         try {
-            $data = ProfileResource::make($request->user())->jsonSerialize();
 
-            return response()->json(['success' => true, 'data' => $data]);
+            return response()->jsonSuccess(ProfileResource::make($request->user()));
         } catch (Throwable $exception) {
             report($exception);
 
-            return response()->json(['success' => false], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->jsonGone();
         }
     }
 
-    public function update(ProfileRequest $request)
+    public function update(ProfileRequest $request): JsonResponse
     {
         try {
             $data = $request->validated();
@@ -39,7 +39,7 @@ class ProfileController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return response()->json(['success' => false], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->jsonGone();
         }
     }
 }

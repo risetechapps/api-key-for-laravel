@@ -13,7 +13,7 @@ use Laravel\Sanctum\HasApiTokens;
 use RiseTechApps\Address\Traits\HasAddress\HasAddress;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
-use RiseTechApps\HasUuid\Traits\HasUuid\HasUuid;
+use RiseTechApps\HasUuid\Traits\HasUuid;
 use RiseTechApps\Media\Models\Media;
 use RiseTechApps\Media\Traits\HasConversionsMedia\HasConversionsMedia;
 use RiseTechApps\ToUpper\Traits\HasToUpper;
@@ -53,16 +53,12 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
         'email_verified_at' => 'datetime',
         'status' => 'string',
         'role' => 'string',
+        'password' => 'hashed',
     ];
 
     public function preferredLocale()
     {
         return $this->locale;
-    }
-
-    public function setPasswordAttribute($value): void
-    {
-        $this->attributes['password'] = bcrypt($value);
     }
 
     public function getPhotoProfile(): ?Media
@@ -90,18 +86,21 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
         return $this->hasOne(ApiKey::class);
     }
 
-
     public function subscribeToPlan(Plan $plan)
     {
         $this->activePlan()?->update(['active' => false]);
 
-        return UserPlan::create([
+        $userPlan =  UserPlan::create([
             'authentication_id' => $this->id,
             'plan_id' => $plan->id,
             'start_date' => now(),
             'end_date' => now()->addDays($plan->duration_days),
-            'is_active' => true,
+            'active' => true,
         ]);
+
+        $this->apiKey->update(['active' => true]);
+
+        return $userPlan;
     }
 
     public function activePlan(): HasOne
