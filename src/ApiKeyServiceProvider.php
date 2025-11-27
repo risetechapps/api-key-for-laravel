@@ -8,11 +8,15 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use RiseTechApps\ApiKey\Commands\DeactivateExpiredPlansCommand;
 use RiseTechApps\ApiKey\Commands\SyncModulesCommand;
+use RiseTechApps\ApiKey\Enums\BillingCycle;
+use RiseTechApps\ApiKey\Enums\BillingMethod;
 use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckActivePlanMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckModuleAccessMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckRequestLimitMiddleware;
+use RiseTechApps\ApiKey\Http\Middlewares\LanguageMiddleware;
 use RiseTechApps\ApiKey\Models\Authentication;
+use RiseTechApps\ApiKey\Models\Coupon;
 
 class ApiKeyServiceProvider extends ServiceProvider
 {
@@ -33,33 +37,19 @@ class ApiKeyServiceProvider extends ServiceProvider
             ], 'migrations');
 
             $this->publishes([
-                __DIR__.'/routes/routes.php' => base_path('routes/routes.php'),
+                __DIR__ . '/routes/routes.php' => base_path('routes/routes.php'),
             ], 'routes');
         }
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
-        app('router')->aliasMiddleware('api.key', AuthenticateApiKey::class);
-        app('router')->aliasMiddleware('check.active.plan', CheckActivePlanMiddleware::class);
-        app('router')->aliasMiddleware('check.module', CheckModuleAccessMiddleware::class);
-        app('router')->aliasMiddleware('check.limit.plan', CheckRequestLimitMiddleware::class);
+        $this->registerRouter();
+        $this->registerRepository();
+
 
         Config::set('auth.providers.users.model', Authentication::class);
 
         $this->setRules();
-
-        $router = $this->app->make(Router::class);
-
-        $router->middlewareGroup('plan', [
-            'api.key',
-            'check.active.plan',
-            'check.module',
-            'check.limit.plan'
-        ]);
-
-        Route::middleware(['plan'])->group(function () {
-            $this->loadRoutesFrom(__DIR__ . '/routes/routes.php');
-        });
 
         $this->app->booted(function () {
             if (file_exists(base_path('routes/routes.php'))) {
@@ -74,10 +64,40 @@ class ApiKeyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Register the main class to use with the facade
-        $this->app->singleton('authapikey', function () {
-            return new AuthApiKey();
+
+    }
+
+    protected function registerRouter(): void
+    {
+        $router = $this->app->make(Router::class);
+
+        $router->aliasMiddleware('language', LanguageMiddleware::class);
+        $router->aliasMiddleware('api.key', AuthenticateApiKey::class);
+        $router->aliasMiddleware('check.active.plan', CheckActivePlanMiddleware::class);
+        $router->aliasMiddleware('check.module', CheckModuleAccessMiddleware::class);
+        $router->aliasMiddleware('check.limit.plan', CheckRequestLimitMiddleware::class);
+
+
+        $router->middlewareGroup('plan', [
+            'api.key',
+            'check.active.plan',
+            'check.module',
+            'check.limit.plan',
+            'language'
+        ]);
+
+        Route::middleware(['plan'])->group(function () {
+            $this->loadRoutesFrom(__DIR__ . '/routes/routes.php');
         });
+    }
+
+    protected function registerRepository(): void
+    {
+        if ($this->app->providerIsLoaded(\RiseTechApps\Repository\RepositoryServiceProvider::class)) {
+            $this->app->bind(Repositories\Plan\PlanRepository::class, Repositories\Plan\PlanEloquentRepository::class);
+            $this->app->bind(Repositories\Module\ModuleRepository::class, Repositories\Module\ModuleEloquentRepository::class);
+            $this->app->bind(Repositories\Coupon\CouponRepository::class, Repositories\Coupon\CouponEloquentRepository::class);
+        }
     }
 
     private function setRules(): void
@@ -91,8 +111,8 @@ class ApiKeyServiceProvider extends ServiceProvider
             ],
 
             'login' => [
-                'email' => 'required|email|max:255|exists:authentications,email',
-                'password' => 'required|min:8',
+                'email' => 'bail|required|email|max:255|exists:authentications,email',
+                'password' => 'bail|required|min:8',
             ],
 
             'profile' => [
@@ -117,20 +137,28 @@ class ApiKeyServiceProvider extends ServiceProvider
             ],
 
             'plan' => [
-                'name' => 'bail|required|min:5',
-                'price' => 'bail|required|numeric|min:1',
-                'request_limit' => 'bail|required|numeric|min:0',
-                'duration_days' => 'bail|required|integer|min:1',
-                'modules' => 'bail'
+                'name' => 'bail|required|min:5|max:255|unique:plans,name',
+                'description' => 'bail|nullable',
+                'request_limit' => 'bail|required|integer|min:0',
+                'price' => 'bail|required|numeric|min:0.01',
+                'billing_cycle' => 'bail|required|in:' . implode(',', BillingCycle::values()),
+                'is_active' => 'bail|required|boolean',
+                'modules.*' => 'bail|required|uuid|exists:modules,id',
             ],
 
-            'module' => [
-                'name' => 'bail|required|string|min:5',
+            'signature' => [
+                'plan' => 'bail|required|uuid|exists:plans,id',
+                'method' => 'bail|required|in:' . implode(',', BillingMethod::values()),
+                'method_data' => 'bail|required',
+                'coupon_code' => 'bail|nullable|string',
             ],
 
-            'plan_associate' => [
-                'auth_id' => 'bail|required',
-                'plan_id' => 'bail|required',
+            'coupon' => [
+                'code' => 'bail|required|string|unique:coupons,code',
+                'type' => 'bail|required|in:percentage,fixed',
+                'value' => 'required|numeric|min:0|max:100|decimal:0,2',
+                'max_uses' => 'bail|required|numeric|min:1',
+                'expires_at' => 'bail|required|date_format:Y-m-d',
             ]
         ];
 
