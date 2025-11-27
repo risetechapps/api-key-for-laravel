@@ -4,14 +4,16 @@ namespace RiseTechApps\ApiKey\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
-use RiseTechApps\HasUuid\Traits\HasUuid\HasUuid;
+use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
+use RiseTechApps\HasUuid\Traits\HasUuid;
+use RiseTechApps\ToUpper\Traits\HasToUpper;
 
 class ApiKey extends Model
 {
-    use HasUuid;
+    use HasUuid, HasCodeGenerate, HasToUpper;
 
     protected $fillable = [
+        'code',
         'key',
         'expires_at',
         'active'
