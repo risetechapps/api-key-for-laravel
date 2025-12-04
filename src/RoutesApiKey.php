@@ -14,6 +14,8 @@ class RoutesApiKey
 {
     public static function register(array $options = []): void
     {
+        $options['middleware'][] = 'language';
+
         Route::group($options, function () use ($options) {
 
             Route::post('/register', [AuthController::class, 'register']);
