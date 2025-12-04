@@ -42,6 +42,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         }
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        $this->loadTranslationsFrom(__DIR__ . '/lang');
 
         $this->registerRouter();
         $this->registerRepository();
