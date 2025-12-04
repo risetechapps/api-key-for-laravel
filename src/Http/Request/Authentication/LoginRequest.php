@@ -35,14 +35,7 @@ class LoginRequest extends FormRequest
 
     public function messages(): array
     {
-//                return $this->result['messages'];
-        return [
-            'email.required' => 'Digite seu e-mail',
-            'email.max' => 'Email digitado é invalido',
-            'email.exists' => 'Email não cadastrado',
-            'password.required' => 'Digite sua senha',
-            'password.min' => 'Senha deve ter pelo menos 8 caracteres',
-        ];
+        return $this->result['messages'];
     }
 
 
