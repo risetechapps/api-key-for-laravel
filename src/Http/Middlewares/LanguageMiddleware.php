@@ -12,19 +12,18 @@ class LanguageMiddleware
     {
         try {
             $language = $request->getPreferredLanguage();
+
             if (empty($language)) {
-                $language = "pt_BR";
+                $language = "en";
             }
 
             app()->setLocale($language);
             return $next($request);
         } catch (\Exception $exception) {
 
-            $language = "pt_BR";
+            $language = "en";
             app()->setLocale($language);
             return $next($request);
         }
-
-        return $next($request);
     }
 }
