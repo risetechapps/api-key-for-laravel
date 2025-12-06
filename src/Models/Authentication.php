@@ -11,6 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use RiseTechApps\Address\Traits\HasAddress\HasAddress;
+use RiseTechApps\ApiKey\Enums\BillingCycle;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
@@ -94,7 +95,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
             'authentication_id' => $this->id,
             'plan_id' => $plan->id,
             'start_date' => now(),
-            'end_date' => now()->addDays($plan->duration_days),
+            'end_date' => now()->addDays(BillingCycle::convertInDays($plan->billing_cycle)),
             'active' => true,
         ]);
 

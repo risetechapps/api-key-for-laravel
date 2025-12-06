@@ -24,4 +24,13 @@ enum BillingCycle: string
     {
         return array_map(fn($case) => $case->value, self::cases());
     }
+
+    public static function convertInDays(self $billingCycle):int
+    {
+        return match ($billingCycle) {
+            self::WEEKLY => 7,
+            self::MONTHLY => 30,
+            self::ANNUALLY => 365,
+        };
+    }
 }
