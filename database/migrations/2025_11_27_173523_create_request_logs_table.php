@@ -11,6 +11,8 @@ return new class extends Migration {
             $table->uuid('id')->primary();
             $table->foreignUuid('authentication_id')->constrained()->onDelete('cascade');
             $table->string('endpoint');
+            $table->string('method');
+            $table->string('response_code');
             $table->timestamp('requested_at')->default(now());
             $table->timestamps();
 

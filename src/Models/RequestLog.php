@@ -9,5 +9,5 @@ class RequestLog extends Model
 {
     use HasUuid;
 
-    protected $fillable = ['authentication_id', 'endpoint', 'requested_at'];
+    protected $fillable = ['authentication_id', 'endpoint', 'requested_at', 'method', 'response_code'];
 }
