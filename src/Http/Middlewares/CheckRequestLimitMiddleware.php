@@ -17,11 +17,14 @@ class CheckRequestLimitMiddleware
         $requestsLimit = $user->requestLimit();
 
         if ($requestsMade >= $requestsLimit && $requestsLimit > 0) {
+            $user->requestUsed(429);
             return response()->json(['error' => 'Limite de requisições atingido'], 429);
         }
 
-        $user->requestUsed();
+        $response = $next($request);
 
-        return $next($request);
+        $user->requestUsed($response->getStatusCode());
+
+        return $response;
     }
 }
