@@ -15,7 +15,7 @@ class PlansResource extends JsonResource
             'name' => $this->name,
             'request_limit' => $this->request_limit,
             'price' => $this->price,
-            'duration_days' => $this->duration_days,
+            'billing_cycle' => $this->billing_cycle,
             'visible' => $this->visible,
             'modules' => ModulesResource::collection($this->modules)
         ];
