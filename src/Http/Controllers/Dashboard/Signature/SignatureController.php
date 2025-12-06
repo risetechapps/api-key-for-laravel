@@ -37,7 +37,7 @@ class SignatureController extends Controller
             $data = SignatureHistoryResource::collection(auth()->user()->userPlan);
             return response()->jsonSuccess($data);
         } catch (\Exception $e) {
-            return response()->jsonGone($e->getMessage());
+            return response()->jsonGone();
         }
     }
 
@@ -48,7 +48,7 @@ class SignatureController extends Controller
             $data = LogHistoryResource::collection(auth()->user()->requestLog);
             return response()->jsonSuccess($data);
         } catch (\Exception $e) {
-            return response()->jsonGone($e->getMessage());
+            return response()->jsonGone();
         }
     }
 }
