@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Models;
 
 use Illuminate\Auth\MustVerifyEmail;
 use Illuminate\Contracts\Translation\HasLocalePreference;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -104,6 +105,11 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
         return $userPlan;
     }
 
+    public function userPlan(): HasMany
+    {
+        return $this->hasMany(UserPlan::class,);
+    }
+
     public function activePlan(): HasOne
     {
         return $this->hasOne(UserPlan::class)
@@ -145,7 +151,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
     {
         return $this->hasMany(RequestLog::class);
     }
-    public function requestUsed(): void
+    public function requestUsed(int $status = 0): void
     {
         if (! $activePlan = $this->activePlan()->first()) {
             return;
@@ -154,6 +160,8 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
         $this->requestLog()->create([
             'endpoint' => request()->path(),
             'requested_at' => now(),
+            'method' => request()->method(),
+            'response_code' => $status
         ]);
 
         $activePlan->increment('requests_used');

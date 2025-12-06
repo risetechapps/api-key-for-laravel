@@ -44,6 +44,8 @@ class RoutesApiKey
                 Route::delete('/dashboard/coupons/{coupon}', [CouponsController::class, 'delete']);
 
                 Route::post('/dashboard/signature', [SignatureController::class, 'signature']);
+                Route::get('/dashboard/history', [SignatureController::class, 'history']);
+                Route::get('/dashboard/log', [SignatureController::class, 'log']);
             });
         });
     }

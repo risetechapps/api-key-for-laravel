@@ -5,7 +5,6 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Plans;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\AssociatePlanRequest;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\StorePlanRequest;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\UpdatePlanRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
