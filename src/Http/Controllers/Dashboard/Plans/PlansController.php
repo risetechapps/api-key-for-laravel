@@ -29,7 +29,7 @@ class PlansController extends Controller
             return response()->jsonSuccess(PlansResource::collection($data));
 
         } catch (\Exception $e) {
-            return response()->jsonGone($e->getMessage());
+            return response()->jsonGone();
         }
     }
 

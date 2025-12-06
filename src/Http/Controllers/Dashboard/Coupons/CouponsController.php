@@ -37,7 +37,7 @@ class CouponsController extends Controller
             $this->couponRepository->store($data);
             return response()->jsonSuccess();
         } catch (\Exception $e) {
-            return response()->jsonGone($e->getMessage());
+            return response()->jsonGone();
 
         }
     }
