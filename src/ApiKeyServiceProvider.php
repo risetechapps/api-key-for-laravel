@@ -14,9 +14,9 @@ use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckActivePlanMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckModuleAccessMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckRequestLimitMiddleware;
+use RiseTechApps\ApiKey\Http\Middlewares\DisableRouteWebMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\LanguageMiddleware;
 use RiseTechApps\ApiKey\Models\Authentication;
-use RiseTechApps\ApiKey\Models\Coupon;
 
 class ApiKeyServiceProvider extends ServiceProvider
 {
@@ -78,6 +78,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->aliasMiddleware('check.module', CheckModuleAccessMiddleware::class);
         $router->aliasMiddleware('check.limit.plan', CheckRequestLimitMiddleware::class);
 
+        $router->pushMiddlewareToGroup('web', DisableRouteWebMiddleware::class);
 
         $router->middlewareGroup('plan', [
             'api.key',
