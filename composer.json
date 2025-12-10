@@ -30,7 +30,7 @@
         "risetechapps/has-uuid-for-laravel": "^1.0",
         "tpetry/laravel-postgresql-enhanced": "^3.5.0",
         "laravel/tinker": "^2.10.1",
-        "risetechapps/risetools": "^1.1.0",
+        "risetechapps/risetools": "^1.2.0",
         "risetechapps/repository-for-laravel" : "^1.1.0",
         "risetechapps/view-suite": "^1.0.0"
     },
