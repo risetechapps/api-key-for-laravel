@@ -35,11 +35,36 @@ class ProfileController extends Controller
 
             $request->user()->update($data);
 
-            return response()->json(['success' => true]);
+            return response()->jsonSuccess();
         } catch (Throwable $exception) {
             report($exception);
 
             return response()->jsonGone();
         }
     }
+
+    public function getAllowedOrigins(Request $request)
+    {
+        try{
+            $data = auth()->user()->apiKey->allowed_origins;
+            return response()->jsonSuccess($data );
+        }catch (\Exception $exception){
+            report($exception);
+            return response()->jsonGone();
+        }
+    }
+
+    public function updateAllowedOrigins(Request $request)
+    {
+        try{
+            auth()->user()->apiKey->update([
+                'allowed_origins' => $request->get('allowed')
+            ]);
+            return response()->jsonSuccess();
+        }catch (\Exception $exception){
+            report($exception);
+            return response()->jsonGone($exception->getMessage());
+        }
+    }
+
 }
