@@ -80,7 +80,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->aliasMiddleware('check.limit.plan', CheckRequestLimitMiddleware::class);
         $router->aliasMiddleware('api.key.origin', ApiKeyOriginValidatorMiddleware::class);
 
-//        $router->pushMiddlewareToGroup('web', DisableRouteWebMiddleware::class);
+        $router->pushMiddlewareToGroup('web', DisableRouteWebMiddleware::class);
 
         $router->middlewareGroup('plan', [
             'api.key',
