@@ -29,6 +29,9 @@ class RoutesApiKey
                 Route::get('/dashboard/profile', [ProfileController::class, 'show']);
                 Route::put('/dashboard/profile', [ProfileController::class, 'update']);
 
+                Route::get('/dashboard/profile/allowed', [ProfileController::class, 'getAllowedOrigins']);
+                Route::post('/dashboard/profile/allowed', [ProfileController::class, 'updateAllowedOrigins']);
+
                 Route::get('/dashboard/plans', [PlansController::class, 'index']);
                 Route::post('/dashboard/plans', [PlansController::class, 'store']);
                 Route::get('/dashboard/plans/{plan}', [PlansController::class, 'show']);
