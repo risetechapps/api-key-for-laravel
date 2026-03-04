@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use RiseTechApps\ApiKey\Http\Request\Authentication\LoginRequest;
@@ -54,7 +55,9 @@ class AuthController extends Controller
 
             return response()->jsonSuccess();
         } catch (Throwable $exception) {
-            return response()->jsonGone($exception->getMessage());
+
+            report($exception);
+            return response()->jsonGone("We were unable to register at this time, please try again later.");
         }
     }
 

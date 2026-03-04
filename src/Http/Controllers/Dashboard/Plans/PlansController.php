@@ -29,7 +29,8 @@ class PlansController extends Controller
             return response()->jsonSuccess(PlansResource::collection($data));
 
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("Error loading plan list");
         }
     }
 
@@ -45,7 +46,9 @@ class PlansController extends Controller
 
             return response()->jsonSuccess();
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("Error registering this plan, please try again later.");
+
         }
     }
 
@@ -57,10 +60,11 @@ class PlansController extends Controller
                 return response()->jsonSuccess(PlansResource::make($plan));
             }
 
-            return response()->jsonGone();
+            return response()->jsonGone("Error loading plan data to be viewed.");
 
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("Error loading plan data to be viewed.");
         }
     }
 
@@ -78,10 +82,11 @@ class PlansController extends Controller
 
                 return response()->jsonSuccess();
             }
-            return response()->jsonGone();
+            return response()->jsonGone("We couldn't update the plan at the moment, please try again later.");
 
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("We couldn't update the plan at the moment, please try again later.");
         }
     }
 
@@ -95,9 +100,11 @@ class PlansController extends Controller
                 return response()->jsonSuccess();
             }
 
-            return response()->jsonGone();
+            return response()->jsonGone("We couldn't delete this plan at the moment, please try again later");
         } catch (\Exception $e) {
-            return response()->jsonGone();
+
+            report($e);
+            return response()->jsonGone("We couldn't delete this plan at the moment, please try again later");
         }
     }
 

@@ -24,7 +24,7 @@ class ProfileController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return response()->jsonGone();
+            return response()->jsonGone("Error loading data from your profile");
         }
     }
 
@@ -39,7 +39,7 @@ class ProfileController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return response()->jsonGone();
+            return response()->jsonGone("It is not possible to update your profile at this time.");
         }
     }
 
@@ -50,7 +50,7 @@ class ProfileController extends Controller
             return response()->jsonSuccess($data );
         }catch (\Exception $exception){
             report($exception);
-            return response()->jsonGone();
+            return response()->jsonGone("Error loading allowed access data");
         }
     }
 
@@ -63,7 +63,7 @@ class ProfileController extends Controller
             return response()->jsonSuccess();
         }catch (\Exception $exception){
             report($exception);
-            return response()->jsonGone($exception->getMessage());
+            return response()->jsonGone("Error updating user-allowed access data.");
         }
     }
 

@@ -26,7 +26,8 @@ class SignatureController extends Controller
 
             return response()->jsonSuccess();
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("Unable to complete the subscription at this time, please try again later.");
         }
     }
 
@@ -37,7 +38,8 @@ class SignatureController extends Controller
             $data = SignatureHistoryResource::collection(auth()->user()->userPlan);
             return response()->jsonSuccess($data);
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("Unable to load subscribed plan history");
         }
     }
 
@@ -48,7 +50,8 @@ class SignatureController extends Controller
             $data = LogHistoryResource::collection(auth()->user()->requestLog);
             return response()->jsonSuccess($data);
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("Unable to load request history");
         }
     }
 }

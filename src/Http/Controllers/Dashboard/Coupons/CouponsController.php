@@ -25,7 +25,8 @@ class CouponsController extends Controller
             $data = $this->couponRepository->get();
             return response()->jsonSuccess(CouponsResource::collection($data));
         }catch (\Exception $e){
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("Error loading coupons.");
         }
     }
 
@@ -37,7 +38,8 @@ class CouponsController extends Controller
             $this->couponRepository->store($data);
             return response()->jsonSuccess();
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("We were unable to register this coupon at this time, please try again later");
 
         }
     }
@@ -52,7 +54,8 @@ class CouponsController extends Controller
 
             return response()->jsonSuccess(CouponsResource::make($coupon));
         }catch (\Exception $exception){
-            return response()->jsonGone($exception->getMessage());
+            report($exception);
+            return response()->jsonGone("Unable to load coupon details at this time, please try again later.");
         }
     }
 
@@ -68,10 +71,11 @@ class CouponsController extends Controller
 
                 return response()->jsonSuccess();
             }
-            return response()->jsonGone();
+            return response()->jsonGone("We couldn't update this coupon at this time, please try again later.");
 
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("We couldn't update this coupon at this time, please try again later.");
         }
     }
 
@@ -85,9 +89,10 @@ class CouponsController extends Controller
                 return response()->jsonSuccess();
             }
 
-            return response()->jsonGone();
+            return response()->jsonGone("We couldn't delete this coupon at the moment, please try again later.");
         } catch (\Exception $e) {
-            return response()->jsonGone();
+            report($e);
+            return response()->jsonGone("We couldn't delete this coupon at the moment, please try again later.");
         }
     }
 }
