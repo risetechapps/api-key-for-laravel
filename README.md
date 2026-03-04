@@ -97,7 +97,7 @@ use ApiKey;
 
 Este pacote depende de algumas bibliotecas importantes, incluindo:
 
-*   **`php: ^8.3`**
+*   **`php: ^8.4`*
 *   **`illuminate/support: ^12`**
 *   **`laravel/sanctum: ^4.0`**: Essencial para a funcionalidade de autenticação de API.
 *   **`risetechapps/*`**: Uma série de pacotes internos que fornecem funcionalidades adicionais como gerenciamento de endereço, requisições de formulário, manipulação de mídia e repositórios.
