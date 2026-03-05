@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Coupon\StoreCouponRequest;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Coupon\UpdateCouponRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Coupons\CouponsResource;
-use RiseTechApps\ApiKey\Models\Coupon;
+use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\ApiKey\Repositories\Coupon\CouponRepository;
 
 class CouponsController extends Controller
