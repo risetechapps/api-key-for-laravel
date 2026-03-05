@@ -6,18 +6,19 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use RiseTechApps\ApiKey\Commands\DeactivateExpiredPlansCommand;
-use RiseTechApps\ApiKey\Commands\SyncModulesCommand;
-use RiseTechApps\ApiKey\Enums\BillingCycle;
-use RiseTechApps\ApiKey\Enums\BillingMethod;
+use Laravel\Pennant\Feature;
 use RiseTechApps\ApiKey\Http\Middlewares\ApiKeyOriginValidatorMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckActivePlanMiddleware;
-use RiseTechApps\ApiKey\Http\Middlewares\CheckModuleAccessMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckRequestLimitMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\DisableRouteWebMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\LanguageMiddleware;
-use RiseTechApps\ApiKey\Models\Authentication;
+use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
+use RiseTechApps\ApiKey\Rules\AuthenticationRules;
+use RiseTechApps\ApiKey\Rules\CouponRules;
+use RiseTechApps\ApiKey\Rules\PlanRules;
+use RiseTechApps\ApiKey\Rules\SignatureRules;
+use RiseTechApps\FormRequest\RulesRegistry;
 
 class ApiKeyServiceProvider extends ServiceProvider
 {
@@ -26,12 +27,10 @@ class ApiKeyServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        if ($this->app->runningInConsole()) {
 
-            $this->commands([
-                SyncModulesCommand::class,
-                DeactivateExpiredPlansCommand::class,
-            ]);
+        $rulesRegistry = $this->app->make(RulesRegistry::class);
+
+        if ($this->app->runningInConsole()) {
 
             $this->publishes([
                 __DIR__ . '/../database/migrations/' => database_path('migrations'),
@@ -49,15 +48,30 @@ class ApiKeyServiceProvider extends ServiceProvider
         $this->registerRepository();
 
 
-        Config::set('auth.providers.users.model', Authentication::class);
+        Config::set('auth.providers.users.model', \RiseTechApps\ApiKey\Models\Authentication\Authentication::class);
 
-        $this->setRules();
+        $this->setRules($rulesRegistry);
 
         $this->app->booted(function () {
             if (file_exists(base_path('routes/routes.php'))) {
                 Route::namespace('')
                     ->group(base_path('routes/routes.php'));
             }
+        });
+
+        Feature::define('package-feature', function (\RiseTechApps\ApiKey\Models\Authentication\Authentication $user, string $feature) {
+            // 1. Carrega o plano ativo com os dados do plano pai
+            $activeUserPlan = $user->activePlan()->with('plan')->first();
+
+            // 2. Se não tiver plano ativo, bloqueia tudo
+            if (!$activeUserPlan || !$activeUserPlan->plan) {
+                return false;
+            }
+
+            // 3. Verifica se a string $feature está dentro do array 'features' do plano
+            $allowedFeatures = $activeUserPlan->plan->features ?? [];
+
+            return in_array($feature, $allowedFeatures);
         });
     }
 
@@ -76,7 +90,6 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->aliasMiddleware('language', LanguageMiddleware::class);
         $router->aliasMiddleware('api.key', AuthenticateApiKey::class);
         $router->aliasMiddleware('check.active.plan', CheckActivePlanMiddleware::class);
-        $router->aliasMiddleware('check.module', CheckModuleAccessMiddleware::class);
         $router->aliasMiddleware('check.limit.plan', CheckRequestLimitMiddleware::class);
         $router->aliasMiddleware('api.key.origin', ApiKeyOriginValidatorMiddleware::class);
 
@@ -85,7 +98,6 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->middlewareGroup('plan', [
             'api.key',
             'check.active.plan',
-            'check.module',
             'check.limit.plan',
             'api.key.origin',
             'language'
@@ -99,77 +111,21 @@ class ApiKeyServiceProvider extends ServiceProvider
     protected function registerRepository(): void
     {
         if ($this->app->providerIsLoaded(\RiseTechApps\Repository\RepositoryServiceProvider::class)) {
-            $this->app->bind(Repositories\Plan\PlanRepository::class, Repositories\Plan\PlanEloquentRepository::class);
-            $this->app->bind(Repositories\Module\ModuleRepository::class, Repositories\Module\ModuleEloquentRepository::class);
+            $this->app->bind(PlanRepository::class, Repositories\Plan\PlanEloquentRepository::class);
             $this->app->bind(Repositories\Coupon\CouponRepository::class, Repositories\Coupon\CouponEloquentRepository::class);
         }
     }
 
-    private function setRules(): void
+    private function setRules(RulesRegistry $rulesRegistry): void
     {
-        $defaultRules = [
-            'register' => [
-                'name' => 'bail|required|min:5',
-                'email' => 'bail|required|email|unique:authentications,email',
-                'password' => 'bail|required|min:8',
-                'password_confirmation' => 'bail|required|min:8|same:password',
-            ],
-
-            'login' => [
-                'email' => 'bail|required|email|max:255|exists:authentications,email',
-                'password' => 'bail|required|min:8',
-            ],
-
-            'profile' => [
-                'name' => 'bail|required|string|min:5',
-                'cpf' => 'bail|required|min:11|cpf|unique:authentications,cpf',
-                'rg' => 'bail|min:5',
-                'birth_date' => 'bail|required|date',
-                'cellphone' => 'bail|required|min:11|cellphone',
-                'telephone' => 'bail',
-                'genre' => 'bail',
-                'nationality' => 'bail',
-                'naturalness' => 'bail',
-                'marital_status' => 'bail',
-                'email' => 'bail|required|email|unique:authentications,email',
-                'address.country' => 'bail|required|string|min:2',
-                'address.state' => 'bail|required|string|min:2',
-                'address.city' => 'bail|required|string|min:2',
-                'address.zip_code' => 'bail|required',
-                'address.district' => 'bail|required|min:5',
-                'address.address' => 'bail|required|min:5',
-                'address.number' => 'bail|required',
-            ],
-
-            'plan' => [
-                'name' => 'bail|required|min:5|max:255|unique:plans,name',
-                'description' => 'bail|nullable',
-                'request_limit' => 'bail|required|integer|min:0',
-                'price' => 'bail|required|numeric|min:0.01',
-                'billing_cycle' => 'bail|required|in:' . implode(',', BillingCycle::values()),
-                'is_active' => 'bail|required|boolean',
-                'modules.*' => 'bail|required|uuid|exists:modules,id',
-            ],
-
-            'signature' => [
-                'plan' => 'bail|required|uuid|exists:plans,id',
-                'method' => 'bail|required|in:' . implode(',', BillingMethod::values()),
-                'method_data' => 'bail|required',
-                'coupon_code' => 'bail|nullable|string',
-            ],
-
-            'coupon' => [
-                'code' => 'bail|required|string|unique:coupons,code',
-                'type' => 'bail|required|in:percentage,fixed',
-                'value' => 'required|numeric|min:0|max:100|decimal:0,2',
-                'max_uses' => 'bail|required|numeric|min:1',
-                'expires_at' => 'bail|required|date_format:Y-m-d',
-            ]
-        ];
-
-        Config::set(
-            'rules.forms',
-            array_replace_recursive($defaultRules, config('rules.forms', []))
-        );
+        $rulesRegistry->register(AuthenticationRules::class);
+        $rulesRegistry->register(PlanRules::class);
+        $rulesRegistry->register(CouponRules::class);
+        $rulesRegistry->register(SignatureRules::class);
     }
 }
+
+//046.699.172-00
+//04669917200
+//11991609296
+//11991609246

@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Route;
 use RiseTechApps\ApiKey\Http\Controllers\Authentication\AuthController;
 use RiseTechApps\ApiKey\Http\Controllers\Authentication\ProfileController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Coupons\CouponsController;
-use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Modules\ModulesController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Plans\PlansController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Signature\SignatureController;
 
@@ -37,8 +36,6 @@ class RoutesApiKey
                 Route::get('/dashboard/plans/{plan}', [PlansController::class, 'show']);
                 Route::put('/dashboard/plans/{plan}', [PlansController::class, 'update']);
                 Route::delete('/dashboard/plans/{plan}', [PlansController::class, 'delete']);
-
-                Route::get('/dashboard/modules', [ModulesController::class, 'index']);
 
                 Route::get('/dashboard/coupons', [CouponsController::class, 'index']);
                 Route::post('/dashboard/coupons', [CouponsController::class, 'store']);

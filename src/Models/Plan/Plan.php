@@ -1,10 +1,8 @@
 <?php
 
-namespace RiseTechApps\ApiKey\Models;
+namespace RiseTechApps\ApiKey\Models\Plan;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use RiseTechApps\ApiKey\Enums\BillingCycle;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
@@ -22,12 +20,14 @@ class Plan extends Model
         'billing_cycle',
         'price',
         'is_active',
+        'features',
     ];
 
     protected $casts = [
         'request_limit' => 'integer',
         'is_active' => 'boolean',
         'billing_cycle' => BillingCycle::class,
+        'features' => 'array',
     ];
 
     protected $hidden = [
@@ -37,14 +37,6 @@ class Plan extends Model
     ];
 
     protected array $no_upper   = ['billing_cycle'];
-
-    /**
-     * Os módulos que este plano possui.
-     */
-    public function modules(): BelongsToMany
-    {
-        return $this->belongsToMany(Module::class, 'plan_module');
-    }
 
     /**
      * Verifica se o plano tem limite de requisições.

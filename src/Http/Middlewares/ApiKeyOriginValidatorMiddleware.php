@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
-use RiseTechApps\ApiKey\Models\ApiKey;
 use RiseTechApps\RiseTools\Features\Device\Device;
 use Symfony\Component\HttpFoundation\Response;
 

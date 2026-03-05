@@ -1,8 +1,9 @@
 <?php
 
 namespace RiseTechApps\ApiKey\Repositories\Coupon;
-use RiseTechApps\ApiKey\Models\Coupon;
+use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\Repository\Core\BaseRepository;
+
 class CouponEloquentRepository extends BaseRepository implements CouponRepository
 {
     public function entity(): string

@@ -8,8 +8,7 @@ use Illuminate\Http\Request;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\StorePlanRequest;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\UpdatePlanRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
-use RiseTechApps\ApiKey\Models\Authentication;
-use RiseTechApps\ApiKey\Models\Plan;
+use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 
 class PlansController extends Controller
@@ -40,14 +39,12 @@ class PlansController extends Controller
 
             $data = $request->validated();
 
-            $plan = $this->planRepositor->store($data);
-
-            $plan->modules()->sync($data['modules']);
+            $this->planRepositor->store($data);
 
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("Error registering this plan, please try again later.");
+            return response()->jsonGone("Error registering this plan, please try again later." . $e->getMessage());
 
         }
     }
@@ -78,8 +75,6 @@ class PlansController extends Controller
 
                 $this->planRepositor->update($plan->getKey(), $data);
 
-                $plan->modules()->sync($data['modules']);
-
                 return response()->jsonSuccess();
             }
             return response()->jsonGone("We couldn't update the plan at the moment, please try again later.");
@@ -96,7 +91,8 @@ class PlansController extends Controller
         try {
             if (!is_null($plan)) {
 
-                $this->planRepositor->findById($plan->getKey())->delete();
+                $plan = $this->planRepositor->find($plan->getKey())->delete();
+
                 return response()->jsonSuccess();
             }
 
