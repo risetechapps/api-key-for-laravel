@@ -8,7 +8,7 @@ class AuthService
     public static string $DISABLE = 'disabled';
     public static string $BLOCKED = 'blocked';
 
-
+    public static string $ADMIN = 'admin';
     public static string $CLIENT = 'client';
     public static string $EMPLOYEE = 'employee';
 
