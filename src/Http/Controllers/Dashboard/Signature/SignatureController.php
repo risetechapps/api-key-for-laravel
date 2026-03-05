@@ -4,6 +4,7 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Signature;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Laravel\Pennant\Feature;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Signature\SignatureRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Signature\LogHistoryResource;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Signature\SignatureHistoryResource;
@@ -23,6 +24,10 @@ class SignatureController extends Controller
 
             $plan = $this->planRepository->findById($data['plan']);
             auth()->user()->subscribeToPlan($plan);
+
+            $features = $plan->features;
+
+            Feature::for(auth()->user())->forget($features ?? []);
 
             return response()->jsonSuccess();
         } catch (\Exception $e) {
