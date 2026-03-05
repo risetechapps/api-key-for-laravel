@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\URL;
 use RiseTechApps\ApiKey\Http\Request\Authentication\LoginRequest;
 use RiseTechApps\ApiKey\Http\Request\Authentication\RegisterRequest;
 use RiseTechApps\ApiKey\Http\Resources\Authentication\AuthenticationMeResource;
-use RiseTechApps\ApiKey\Models\Authentication;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RuntimeException;
 use Throwable;
 

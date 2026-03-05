@@ -1,6 +1,6 @@
 <?php
 
-namespace RiseTechApps\ApiKey\Models;
+namespace RiseTechApps\ApiKey\Models\Authentication;
 
 
 use Illuminate\Auth\MustVerifyEmail;
@@ -13,6 +13,10 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use RiseTechApps\Address\Traits\HasAddress\HasAddress;
 use RiseTechApps\ApiKey\Enums\BillingCycle;
+use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
+use RiseTechApps\ApiKey\Models\Plan\Plan;
+use RiseTechApps\ApiKey\Models\RequestLog\RequestLog;
+use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
@@ -116,17 +120,6 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
             ->where('active', true)
             ->where('end_date', '>=', now())
             ->latest();
-    }
-
-    public function hasModule($moduleName): bool
-    {
-        $userPlan = $this->activePlan()->with('plan.modules')->first();
-
-        if (! $userPlan || ! $userPlan->plan) {
-            return false;
-        }
-
-        return $userPlan->plan->modules()->where('module', $moduleName)->exists();
     }
 
     public function countUsed(): int

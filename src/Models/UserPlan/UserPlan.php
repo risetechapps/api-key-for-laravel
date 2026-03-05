@@ -1,12 +1,10 @@
 <?php
 
-namespace RiseTechApps\ApiKey\Models;
+namespace RiseTechApps\ApiKey\Models\UserPlan;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
+use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\HasUuid\Traits\HasUuid;
-use RiseTechApps\ToUpper\Traits\HasToUpper;
 
 class UserPlan extends Model
 {

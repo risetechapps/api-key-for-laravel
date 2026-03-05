@@ -4,7 +4,7 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
-use RiseTechApps\ApiKey\Models\ApiKey;
+use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 
 class AuthenticateApiKey
 {

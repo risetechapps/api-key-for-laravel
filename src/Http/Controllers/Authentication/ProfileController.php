@@ -5,7 +5,6 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Authentication;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use RiseTechApps\ApiKey\Http\Request\Authentication\ProfileRequest;
 use RiseTechApps\ApiKey\Http\Resources\Authentication\ProfileResource;
 use Throwable;
