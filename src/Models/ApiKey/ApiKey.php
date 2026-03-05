@@ -1,9 +1,11 @@
 <?php
 
-namespace RiseTechApps\ApiKey\Models;
+namespace RiseTechApps\ApiKey\Models\ApiKey;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
 use RiseTechApps\ToUpper\Traits\HasToUpper;
