@@ -1,6 +1,6 @@
 <?php
 
-namespace RiseTechApps\ApiKey\Models;
+namespace RiseTechApps\ApiKey\Models\RequestLog;
 
 use Illuminate\Database\Eloquent\Model;
 use RiseTechApps\HasUuid\Traits\HasUuid;
