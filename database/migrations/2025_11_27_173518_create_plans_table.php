@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use RiseTechApps\ApiKey\Enums\BillingCycle;
 use Tpetry\PostgresqlEnhanced\Schema\Blueprint;
 use Tpetry\PostgresqlEnhanced\Support\Facades\Schema;
 
@@ -19,10 +20,10 @@ return new class extends Migration {
 
             $table->unsignedBigInteger('request_limit')->default(0);
 
-            $table->enum('billing_cycle', \RiseTechApps\ApiKey\Enums\BillingCycle::cases());
+            $table->enum('billing_cycle',BillingCycle::cases());
             $table->decimal('price', 8, 2);
 
-            // ID do Preço no Stripe (Cashier
+            $table->jsonb('features')->nullable();
 
             $table->boolean('is_active')->default(true);
             $table->timestamps();
