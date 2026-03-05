@@ -10,6 +10,7 @@ use Laravel\Pennant\Feature;
 use RiseTechApps\ApiKey\Http\Middlewares\ApiKeyOriginValidatorMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckActivePlanMiddleware;
+use RiseTechApps\ApiKey\Http\Middlewares\CheckPlanFeatureMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckRequestLimitMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\DisableRouteWebMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\LanguageMiddleware;
@@ -92,6 +93,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->aliasMiddleware('check.active.plan', CheckActivePlanMiddleware::class);
         $router->aliasMiddleware('check.limit.plan', CheckRequestLimitMiddleware::class);
         $router->aliasMiddleware('api.key.origin', ApiKeyOriginValidatorMiddleware::class);
+        $router->aliasMiddleware('feature', CheckPlanFeatureMiddleware::class);
 
         $router->pushMiddlewareToGroup('web', DisableRouteWebMiddleware::class);
 
