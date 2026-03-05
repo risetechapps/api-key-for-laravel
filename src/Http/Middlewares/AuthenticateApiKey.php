@@ -20,7 +20,6 @@ class AuthenticateApiKey
 
         auth()->setUser($apiKey->authentication);
 
-
         return $next($request);
     }
 }
