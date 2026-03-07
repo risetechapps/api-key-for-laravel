@@ -6,7 +6,6 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use Laravel\Pennant\Feature;
 use RiseTechApps\ApiKey\Http\Middlewares\ApiKeyOriginValidatorMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckActivePlanMiddleware;
@@ -59,21 +58,6 @@ class ApiKeyServiceProvider extends ServiceProvider
                     ->group(base_path('routes/routes.php'));
             }
         });
-
-        Feature::define('package-feature', function (\RiseTechApps\ApiKey\Models\Authentication\Authentication $user, string $feature) {
-            // 1. Carrega o plano ativo com os dados do plano pai
-            $activeUserPlan = $user->activePlan()->with('plan')->first();
-
-            // 2. Se não tiver plano ativo, bloqueia tudo
-            if (!$activeUserPlan || !$activeUserPlan->plan) {
-                return false;
-            }
-
-            // 3. Verifica se a string $feature está dentro do array 'features' do plano
-            $allowedFeatures = $activeUserPlan->plan->features ?? [];
-
-            return in_array($feature, $allowedFeatures);
-        });
     }
 
     /**
@@ -81,7 +65,9 @@ class ApiKeyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-
+        $this->app->singleton('apikey', function ($app) {
+            return new \RiseTechApps\ApiKey\FeatureManager();
+        });
     }
 
     protected function registerRouter(): void
@@ -126,8 +112,3 @@ class ApiKeyServiceProvider extends ServiceProvider
         $rulesRegistry->register(SignatureRules::class);
     }
 }
-
-//046.699.172-00
-//04669917200
-//11991609296
-//11991609246

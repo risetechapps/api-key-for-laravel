@@ -25,10 +25,6 @@ class SignatureController extends Controller
             $plan = $this->planRepository->findById($data['plan']);
             auth()->user()->subscribeToPlan($plan);
 
-            $features = $plan->features;
-
-            Feature::for(auth()->user())->forget($features ?? []);
-
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
