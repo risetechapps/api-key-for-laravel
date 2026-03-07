@@ -49,9 +49,11 @@ class PlansController extends Controller
         }
     }
 
-    public function show(Plan $plan): JsonResponse
+    public function show(Request $request,string $plan): JsonResponse
     {
         try {
+
+            $plan = $this->planRepositor->findById($plan);
 
             if (!is_null($plan)) {
                 return response()->jsonSuccess(PlansResource::make($plan));
@@ -65,11 +67,13 @@ class PlansController extends Controller
         }
     }
 
-    public function update(UpdatePlanRequest $request, Plan $plan): JsonResponse
+    public function update(UpdatePlanRequest $request, string $plan): JsonResponse
     {
         try {
 
             $data = $request->validated();
+
+            $plan = $this->planRepositor->findById($plan);
 
             if (!is_null($plan)) {
 
@@ -85,10 +89,13 @@ class PlansController extends Controller
         }
     }
 
-    public function delete(Plan $plan): JsonResponse
+    public function delete(Request $request,string $plan): JsonResponse
     {
 
         try {
+
+            $plan = $this->planRepositor->findById($plan);
+
             if (!is_null($plan)) {
 
                 $plan = $this->planRepositor->find($plan->getKey())->delete();
