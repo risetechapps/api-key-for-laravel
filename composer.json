@@ -33,7 +33,7 @@
         "risetechapps/risetools": "^1.7.0",
         "risetechapps/to-upper-for-laravel": "^1.0",
         "risetechapps/view-suite": "^1.2.0",
-        "tpetry/laravel-postgresql-enhanced": "^3.5.0"
+        "tpetry/laravel-postgresql-enhanced": "^3.5.1"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
