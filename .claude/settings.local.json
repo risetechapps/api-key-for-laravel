@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(composer require:*)",
+      "Bash(ls:*)",
+      "Bash(vendor/bin/pest --colors=never)",
+      "Bash(vendor/bin/pest --colors=never tests/Unit/Models/UserPlanTest.php --verbose)",
+      "Bash(vendor/bin/pest --colors=never tests/Unit/Models/UserPlanTest.php --debug)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)"
+    ]
+  }
+}
