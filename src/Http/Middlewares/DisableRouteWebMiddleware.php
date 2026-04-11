@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class DisableRouteWebMiddleware
 {
-    public function handle(Request $request, Closure $next)
+    public function handle(Request $request, Closure $next): Response
     {
         $userAgent = $request->header('User-Agent');
 

@@ -6,10 +6,11 @@ use Closure;
 use Illuminate\Http\Request;
 use Laravel\Pennant\Feature;
 use RiseTechApps\ApiKey\ApiKeyFacade;
+use Symfony\Component\HttpFoundation\Response;
 
 class CheckPlanFeatureMiddleware
 {
-    public function handle(Request $request, Closure $next, string ...$features)
+    public function handle(Request $request, Closure $next, string ...$features): Response
     {
         $hasAccess = false;
 
