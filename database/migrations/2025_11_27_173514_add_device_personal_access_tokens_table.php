@@ -20,6 +20,12 @@ return new class extends Migration {
 
     public function down(): void
     {
-
+        if(Schema::hasTable('personal_access_tokens')){
+            Schema::table('personal_access_tokens', function (Blueprint $table) {
+                if(Schema::hasColumn('personal_access_tokens', 'device')){
+                    $table->dropColumn('device');
+                }
+            });
+        }
     }
 };

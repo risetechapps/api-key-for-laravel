@@ -19,6 +19,10 @@ return new class extends Migration {
 
     public function down(): void
     {
-
+        if(Schema::hasTable('personal_access_tokens')){
+            Schema::table('personal_access_tokens', function (Blueprint $table) {
+                $table->dropMorphs('tokenable');
+            });
+        }
     }
 };
