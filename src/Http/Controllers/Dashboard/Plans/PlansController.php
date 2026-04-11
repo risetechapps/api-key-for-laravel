@@ -29,7 +29,7 @@ class PlansController extends Controller
 
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("Error loading plan list");
+            return response()->jsonGone(__('api-key::messages.error_loading_plans'));
         }
     }
 
@@ -44,7 +44,7 @@ class PlansController extends Controller
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("Error registering this plan, please try again later." . $e->getMessage());
+            return response()->jsonGone(__('api-key::messages.error_creating_plan'));
 
         }
     }
@@ -59,11 +59,11 @@ class PlansController extends Controller
                 return response()->jsonSuccess(PlansResource::make($plan));
             }
 
-            return response()->jsonGone("Error loading plan data to be viewed.");
+            return response()->jsonGone(__('api-key::messages.error_loading_plan'));
 
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("Error loading plan data to be viewed.");
+            return response()->jsonGone(__('api-key::messages.error_loading_plan'));
         }
     }
 
@@ -81,11 +81,11 @@ class PlansController extends Controller
 
                 return response()->jsonSuccess();
             }
-            return response()->jsonGone("We couldn't update the plan at the moment, please try again later.");
+            return response()->jsonGone(__('api-key::messages.error_updating_plan'));
 
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("We couldn't update the plan at the moment, please try again later.");
+            return response()->jsonGone(__('api-key::messages.error_updating_plan'));
         }
     }
 
@@ -103,11 +103,11 @@ class PlansController extends Controller
                 return response()->jsonSuccess();
             }
 
-            return response()->jsonGone("We couldn't delete this plan at the moment, please try again later");
+            return response()->jsonGone(__('api-key::messages.error_deleting_plan'));
         } catch (\Exception $e) {
 
             report($e);
-            return response()->jsonGone("We couldn't delete this plan at the moment, please try again later");
+            return response()->jsonGone(__('api-key::messages.error_deleting_plan'));
         }
     }
 

@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Signature;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Laravel\Pennant\Feature;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Signature\SignatureRequest;
@@ -16,7 +17,7 @@ class SignatureController extends Controller
     {
     }
 
-    public function signature(SignatureRequest $request)
+    public function signature(SignatureRequest $request): JsonResponse
     {
         try {
 
@@ -28,11 +29,11 @@ class SignatureController extends Controller
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("Unable to complete the subscription at this time, please try again later.");
+            return response()->jsonGone(__('api-key::messages.error_creating_signature'));
         }
     }
 
-    public function history(Request $request)
+    public function history(Request $request): JsonResponse
     {
         try {
 
@@ -40,11 +41,11 @@ class SignatureController extends Controller
             return response()->jsonSuccess($data);
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("Unable to load subscribed plan history");
+            return response()->jsonGone(__('api-key::messages.error_loading_signature_history'));
         }
     }
 
-    public function log(Request $request)
+    public function log(Request $request): JsonResponse
     {
         try {
 
@@ -52,7 +53,7 @@ class SignatureController extends Controller
             return response()->jsonSuccess($data);
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("Unable to load request history");
+            return response()->jsonGone(__('api-key::messages.error_loading_request_log'));
         }
     }
 }

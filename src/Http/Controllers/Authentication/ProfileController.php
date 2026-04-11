@@ -23,7 +23,7 @@ class ProfileController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return response()->jsonGone("Error loading data from your profile");
+            return response()->jsonGone(__('api-key::messages.error_loading_profile'));
         }
     }
 
@@ -38,22 +38,22 @@ class ProfileController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return response()->jsonGone("It is not possible to update your profile at this time.");
+            return response()->jsonGone(__('api-key::messages.error_updating_profile'));
         }
     }
 
-    public function getAllowedOrigins(Request $request)
+    public function getAllowedOrigins(Request $request): JsonResponse
     {
         try{
             $data = auth()->user()->apiKey->allowed_origins;
             return response()->jsonSuccess($data );
         }catch (\Exception $exception){
             report($exception);
-            return response()->jsonGone("Error loading allowed access data");
+            return response()->jsonGone(__('api-key::messages.error_loading_allowed_origins'));
         }
     }
 
-    public function updateAllowedOrigins(Request $request)
+    public function updateAllowedOrigins(Request $request): JsonResponse
     {
         try{
             auth()->user()->apiKey->update([
@@ -62,7 +62,7 @@ class ProfileController extends Controller
             return response()->jsonSuccess();
         }catch (\Exception $exception){
             report($exception);
-            return response()->jsonGone("Error updating user-allowed access data.");
+            return response()->jsonGone(__('api-key::messages.error_updating_allowed_origins'));
         }
     }
 

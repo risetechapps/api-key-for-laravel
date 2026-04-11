@@ -6,57 +6,36 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use RiseTechApps\ApiKey\Http\Request\Authentication\LoginRequest;
 use RiseTechApps\ApiKey\Http\Request\Authentication\RegisterRequest;
 use RiseTechApps\ApiKey\Http\Resources\Authentication\AuthenticationMeResource;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
-use RuntimeException;
+use RiseTechApps\ApiKey\Services\AuthService;
+use RiseTechApps\ApiKey\Services\UserRegistrationService;
 use Throwable;
 
 class AuthController extends Controller
 {
+    public function __construct(
+        private readonly UserRegistrationService $registrationService,
+        private readonly AuthService $authService
+    ) {}
+
     public function register(RegisterRequest $request): JsonResponse
     {
-        $data = $request->validated();
-
-        $avatarPath = null;
-
         try {
-            /** @var Authentication $auth */
-            $auth = DB::transaction(function () use ($data, &$avatarPath) {
-                $authentication = Authentication::create([
-                    'name' => $data['name'],
-                    'email' => $data['email'],
-                    'password' => $data['password'],
-                ]);
+            $user = $this->registrationService->register($request->validated());
 
-                $authentication->apiKey()->create([
-                    'key' => bin2hex(random_bytes(64)),
-                    'active' => false,
-                ]);
+            $user->sendEmailVerificationNotification();
 
-                $avatarPath = $authentication->getKey() . '.png';
-                $profileImage = avatarGenerator()->generateBase64($data['name']);
-
-                if (!Storage::put($avatarPath, $profileImage)) {
-                    throw new RuntimeException('Unable to persist generated avatar.');
-                }
-                $authentication->addMediaFromDisk($avatarPath)->toMediaCollection('profile');
-
-                return $authentication;
-            });
-
-            $auth->sendEmailVerificationNotification();
-
-            return response()->jsonSuccess();
+            return response()->jsonSuccess([
+                'message' => __('api-key::messages.registration_success'),
+                'api_key' => $user->apiKey->plainKey,
+            ]);
         } catch (Throwable $exception) {
-
             report($exception);
-            return response()->jsonGone("We were unable to register at this time, please try again later.");
+            return response()->jsonGone(__('api-key::messages.registration_failed'));
         }
     }
 
@@ -83,27 +62,27 @@ class AuthController extends Controller
     {
         $credentials = $request->validated();
 
-        $user = Authentication::where('email', $credentials['email'])->first();
+        // Find user and check verification
+        $user = $this->authService->findUserByEmail($credentials['email']);
 
         if (!$user) {
-            return response()->jsonGone('User not found');
+            return response()->jsonGone(__('api-key::messages.user_not_found'));
         }
 
         if (!$user->hasVerifiedEmail()) {
             $user->sendEmailVerificationNotification();
-
-            return response()->jsonGone('Account not verified, please check your email inbox.');
+            return response()->jsonGone(__('api-key::messages.account_not_verified'));
         }
 
-        if (!Auth::attempt(['email' => $credentials['email'], 'password' => $credentials['password']])) {
-            return response()->jsonGone('Incorrect username or password');
+        // Attempt login
+        $result = $this->authService->attemptLogin($credentials);
+
+        if (!$result) {
+            return response()->jsonGone(__('api-key::messages.incorrect_credentials'));
         }
 
-        $user = Auth::user();
-
-        $data = AuthenticationMeResource::make($user)->jsonSerialize();
-        $token = $user->createToken($user->email);
-        $data['token'] = $token->plainTextToken;
+        $data = AuthenticationMeResource::make($result['user'])->jsonSerialize();
+        $data['token'] = $result['token'];
 
         return response()->jsonSuccess($data);
     }

@@ -26,7 +26,7 @@ class CouponsController extends Controller
             return response()->jsonSuccess(CouponsResource::collection($data));
         }catch (\Exception $e){
             report($e);
-            return response()->jsonGone("Error loading coupons.");
+            return response()->jsonGone(__('api-key::messages.error_loading_coupons'));
         }
     }
 
@@ -39,7 +39,7 @@ class CouponsController extends Controller
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("We were unable to register this coupon at this time, please try again later");
+            return response()->jsonGone(__('api-key::messages.error_creating_coupon'));
 
         }
     }
@@ -55,7 +55,7 @@ class CouponsController extends Controller
             return response()->jsonSuccess(CouponsResource::make($coupon));
         }catch (\Exception $exception){
             report($exception);
-            return response()->jsonGone("Unable to load coupon details at this time, please try again later.");
+            return response()->jsonGone(__('api-key::messages.error_loading_coupon'));
         }
     }
 
@@ -71,11 +71,11 @@ class CouponsController extends Controller
 
                 return response()->jsonSuccess();
             }
-            return response()->jsonGone("We couldn't update this coupon at this time, please try again later.");
+            return response()->jsonGone(__('api-key::messages.error_updating_coupon'));
 
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("We couldn't update this coupon at this time, please try again later.");
+            return response()->jsonGone(__('api-key::messages.error_updating_coupon'));
         }
     }
 
@@ -89,10 +89,10 @@ class CouponsController extends Controller
                 return response()->jsonSuccess();
             }
 
-            return response()->jsonGone("We couldn't delete this coupon at the moment, please try again later.");
+            return response()->jsonGone(__('api-key::messages.error_deleting_coupon'));
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone("We couldn't delete this coupon at the moment, please try again later.");
+            return response()->jsonGone(__('api-key::messages.error_deleting_coupon'));
         }
     }
 }
