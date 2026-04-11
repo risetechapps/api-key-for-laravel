@@ -2,7 +2,6 @@
 
 namespace RiseTechApps\ApiKey\Http\Resources\Dashboard\Coupons;
 
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,11 +14,19 @@ class CouponsResource extends JsonResource
             'code' => $this->code,
             'type' => $this->type,
             'value' => $this->value,
-            'max_uses' => $this->max_uses,
-            'uses' => $this->uses,
-            'expires_at' => !is_null($this->expires_at) ? Carbon::parse($this->expires_at)->format('Y-m-d') : null,
+            'usage' => [
+                'current' => $this->uses,
+                'max' => $this->max_uses,
+                'remaining' => $this->max_uses ? max(0, $this->max_uses - $this->uses) : null,
+                'is_valid' => $this->isValid(),
+            ],
+            'expires_at' => $this->expires_at?->toIso8601String(),
             'is_active' => $this->is_active,
             'gateway_coupon_id' => $this->gateway_coupon_id,
+            'dates' => [
+                'created_at' => $this->created_at?->toIso8601String(),
+                'updated_at' => $this->updated_at?->toIso8601String(),
+            ],
         ];
     }
 }
