@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\URL;
 
 class EmailVerifyNotification extends VerifyEmail
 {
-    protected function verificationUrl($notifiable)
+    protected function verificationUrl($notifiable): string
     {
         return URL::temporarySignedRoute(
             'verification.verify',
@@ -18,7 +18,7 @@ class EmailVerifyNotification extends VerifyEmail
         );
     }
 
-    public function toMail($notifiable)
+    public function toMail($notifiable): MailMessage
     {
         $url = $this->verificationUrl($notifiable);
 

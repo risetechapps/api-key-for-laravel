@@ -8,9 +8,16 @@ use Illuminate\Database\Eloquent\Scope;
 
 class ApiKeyScope implements Scope
 {
-
     public function apply(Builder $builder, Model $model): void
     {
-        $builder->where('api_key_id', auth()->user()->apiKey->id);
+        $user = auth()->user();
+
+        if (!$user || !$user->apiKey) {
+            $builder->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $builder->where('api_key_id', $user->apiKey->id);
     }
 }

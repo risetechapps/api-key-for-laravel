@@ -17,10 +17,12 @@ class RoutesApiKey
 
         Route::group($options, function () use ($options) {
 
-            Route::post('/register', [AuthController::class, 'register']);
+            Route::middleware(['throttle:5,1'])->group(function () {
+                Route::post('/register', [AuthController::class, 'register']);
+                Route::post('login', [AuthController::class, 'login']);
+            });
 
             Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])->name('verification.verify');
-            Route::post('login', [AuthController::class, 'login']);
 
             Route::middleware(['auth:sanctum'])->group(function () {
                 Route::get('/auth/me', [AuthController::class, 'me']);

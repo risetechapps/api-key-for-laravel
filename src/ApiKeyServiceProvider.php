@@ -18,6 +18,7 @@ use RiseTechApps\ApiKey\Rules\AuthenticationRules;
 use RiseTechApps\ApiKey\Rules\CouponRules;
 use RiseTechApps\ApiKey\Rules\PlanRules;
 use RiseTechApps\ApiKey\Rules\SignatureRules;
+use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
 use RiseTechApps\FormRequest\RulesRegistry;
 
 class ApiKeyServiceProvider extends ServiceProvider
@@ -39,10 +40,14 @@ class ApiKeyServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/routes/routes.php' => base_path('routes/routes.php'),
             ], 'routes');
+
+            $this->publishes([
+                __DIR__ . '/lang' => resource_path('lang/vendor/api-key'),
+            ], 'lang');
         }
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
-        $this->loadTranslationsFrom(__DIR__ . '/lang');
+        $this->loadTranslationsFrom(__DIR__ . '/lang', 'api-key');
 
         $this->registerRouter();
         $this->registerRepository();
@@ -68,6 +73,17 @@ class ApiKeyServiceProvider extends ServiceProvider
         $this->app->singleton('apikey', function ($app) {
             return new \RiseTechApps\ApiKey\FeatureManager();
         });
+
+        $this->registerCommands();
+    }
+
+    protected function registerCommands(): void
+    {
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                CheckExpiredPlans::class,
+            ]);
+        }
     }
 
     protected function registerRouter(): void
