@@ -532,6 +532,132 @@ class UserResource extends JsonResource
 | 4.1 Cache completo ApiKey | ✅ | `src/Models/ApiKey/ApiKey.php` |
 | 4.3 Eventos para Auditoria | ✅ | `src/Events/*`, Listeners |
 | 4.7 Grace Period | ✅ | `config/config.php`, `UserPlan`, Middleware |
+| 5.1 Internacionalização (i18n) | ✅ | `src/lang/*`, todos os Controllers |
+| 5.2 Métodos Longos - Service Layer | ✅ | `src/Services/*`, Controllers refatorados |
+| 5.6 Tipagem de Retorno | ✅ | Todos os Middlewares, Controllers, Models, Notifications |
+| 6.6 API Resources Consistentes | ✅ | `src/Http/Resources/*`, `ApiResponse`, `ApiResponseTrait` |
+
+### 📝 Exemplo de Uso - API Resources Consistentes
+
+```php
+// Resources criados/atualizados para respostas consistentes
+use RiseTechApps\ApiKey\Http\Resources\UserResource;
+use RiseTechApps\ApiKey\Http\Resources\UserPlanResource;
+use RiseTechApps\ApiKey\Http\Resources\ApiKeyResource;
+use RiseTechApps\ApiKey\Http\Resources\RequestLogResource;
+use RiseTechApps\ApiKey\Http\Resources\SuccessResource;
+use RiseTechApps\ApiKey\Http\Resources\ErrorResource;
+
+// Response padronizado
+return UserResource::make($user);
+
+// Response com relacionamentos
+return UserResource::make($user->load(['apiKey', 'activePlan.plan', 'address']));
+
+// Response padronizado de sucesso
+return ApiResponse::success(
+    data: UserResource::make($user),
+    message: 'User created successfully',
+    code: 201
+);
+
+// Response padronizado de erro
+return ApiResponse::error(
+    message: 'Validation failed',
+    code: 422,
+    errors: ['email' => ['Email already exists']],
+    error_code: 'VALIDATION_ERROR'
+);
+
+// Usando trait nos controllers
+class MyController extends Controller
+{
+    use ApiResponseTrait;
+
+    public function show($id): JsonResponse
+    {
+        $user = User::find($id);
+
+        if (!$user) {
+            return $this->notFoundResponse('User');
+        }
+
+        return $this->successResponse(
+            data: UserResource::make($user),
+            message: 'User retrieved successfully'
+        );
+    }
+}
+```
+
+### 📝 Exemplo de Uso - Tipagem Completa
+
+Todos os métodos agora possuem tipagem de retorno explícita:
+
+```php
+// Middlewares
+public function handle(Request $request, Closure $next): Response
+
+// Controllers
+public function index(Request $request): JsonResponse
+public function show(Request $request, string $id): JsonResponse
+
+// Models
+public function isValid(): bool
+public function getGatewayCouponId(): string
+public function isActive(): bool
+public function isInGracePeriod(): bool
+
+// Services
+public function register(array $data): Authentication
+public function attemptLogin(array $credentials): ?array
+public function subscribe(Authentication $user, Plan $plan): UserPlan
+
+// Notifications
+protected function verificationUrl($notifiable): string
+public function toMail($notifiable): MailMessage
+```
+
+### 📝 Exemplo de Uso - Service Layer
+
+```php
+// UserRegistrationService - encapsula lógica de registro
+$service = app(UserRegistrationService::class);
+$user = $service->register([
+    'name' => 'John Doe',
+    'email' => 'john@example.com',
+    'password' => 'secret'
+]);
+
+// AuthService - encapsula autenticação
+$authService = app(AuthService::class);
+$result = $authService->attemptLogin([
+    'email' => 'john@example.com',
+    'password' => 'secret'
+]);
+// Retorna: ['user' => $user, 'token' => $plainTextToken] ou null
+
+// PlanService - encapsula assinaturas
+$planService = app(PlanService::class);
+$userPlan = $planService->subscribe($user, $plan);
+```
+
+### 📝 Exemplo de Uso - i18n
+
+```php
+// Todas as mensagens do pacote agora usam o sistema de tradução do Laravel
+// O idioma padrão é inglês, com suporte a português
+
+// Para usar em português, configure no .env:
+APP_LOCALE=pt
+
+// Ou alterne dinamicamente:
+App::setLocale('pt');
+
+// Exemplo de mensagem:
+__('api-key::messages.request_limit_reached');
+// Retorna: 'Request limit reached' (en) ou 'Limite de requisições atingido' (pt)
+```
 
 ### 📝 Exemplo de Uso - Grace Period
 
