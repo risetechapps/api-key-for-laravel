@@ -28,10 +28,16 @@ class ApiKeyServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->mergeConfigFrom(
+            __DIR__ . '/../config/config.php', 'api-key'
+        );
 
         $rulesRegistry = $this->app->make(RulesRegistry::class);
 
         if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__ . '/../config/config.php' => config_path('api-key.php'),
+            ], 'config');
 
             $this->publishes([
                 __DIR__ . '/../database/migrations/' => database_path('migrations'),
