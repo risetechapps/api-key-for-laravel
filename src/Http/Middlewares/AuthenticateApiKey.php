@@ -11,7 +11,8 @@ class AuthenticateApiKey
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $key = $request->header('X-API-KEY');
+        $headerName = config('api-key.header_name', 'X-API-KEY');
+        $key = $request->header($headerName);
 
         $apiKey = ApiKey::validateKey($key);
 

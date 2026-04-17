@@ -97,19 +97,24 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->aliasMiddleware('api.key.origin', ApiKeyOriginValidatorMiddleware::class);
         $router->aliasMiddleware('feature', CheckPlanFeatureMiddleware::class);
 
-        $router->pushMiddlewareToGroup('web', DisableRouteWebMiddleware::class);
+        if (config('api-key.disable_web_middleware.enabled', true)) {
+            $router->pushMiddlewareToGroup('web', DisableRouteWebMiddleware::class);
+        }
 
-        $router->middlewareGroup('plan', [
+        $middlewareGroup = config('api-key.middleware_group.plan', [
             'api.key',
             'check.active.plan',
             'check.limit.plan',
             'api.key.origin',
-            'language'
+            'language',
         ]);
+        $router->middlewareGroup('plan', $middlewareGroup);
 
-        Route::middleware(['plan'])->group(function () {
-            $this->loadRoutesFrom(__DIR__ . '/routes/routes.php');
-        });
+        if (config('api-key.routes.enabled', true)) {
+            Route::middleware(['plan'])->group(function () {
+                $this->loadRoutesFrom(__DIR__ . '/routes/routes.php');
+            });
+        }
     }
 
     protected function registerRepository(): void

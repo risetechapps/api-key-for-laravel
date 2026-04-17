@@ -80,17 +80,79 @@ php artisan vendor:publish --provider="RiseTechApps\ApiKey\ApiKeyServiceProvider
 return [
     // Grace period days for expired subscriptions
     'grace_period_days' => 3,
-    
-    // Token expiration time in minutes
-    'token_expiration' => 60,
-    
-    // Token refresh time in minutes
-    'token_refresh' => 1440,
-    
-    // Bcrypt algorithm for API key hashing
-    'bcrypt_algorithm' => PASSWORD_BCRYPT,
+
+    // Rate limiting cache TTL in seconds
+    'rate_limit' => [
+        'cache_ttl' => 3600,
+    ],
+
+    // Cache configuration for API keys
+    'cache' => [
+        'enabled' => true,
+        'ttl' => 300, // 5 minutes
+        'prefix' => 'api_key_',
+    ],
+
+    // Disable web middleware (prevents access to web routes with API auth)
+    'disable_web_middleware' => [
+        'enabled' => true, // Set to false to allow web routes
+    ],
+
+    // Authentication throttle (rate limiting)
+    'auth_throttle' => [
+        'enabled' => true,
+        'attempts' => 5,        // Number of attempts
+        'decay_minutes' => 1,    // Time window in minutes
+    ],
+
+    // API Key header name
+    'header_name' => 'X-API-KEY',
+
+    // Default language
+    'default_language' => 'en',
+
+    // Cache TTL settings (in seconds)
+    'cache_ttl' => [
+        'validation' => 300,    // API key validation cache
+        'origin' => 60,         // Origin validation cache
+    ],
+
+    // Routes configuration
+    'routes' => [
+        'enabled' => true,      // Set to false to disable auto-loading routes
+        'prefix' => '',          // Route prefix (optional)
+    ],
+
+    // Middleware group configuration
+    'middleware_group' => [
+        'plan' => [
+            'api.key',
+            'check.active.plan',
+            'check.limit.plan',
+            'api.key.origin',
+            'language',
+        ],
+    ],
 ];
 ```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `API_KEY_GRACE_PERIOD_DAYS` | Grace period days | `3` |
+| `API_KEY_CACHE_ENABLED` | Enable API key cache | `true` |
+| `API_KEY_CACHE_TTL` | Cache TTL (seconds) | `300` |
+| `API_KEY_DISABLE_WEB_MIDDLEWARE` | Disable web middleware | `true` |
+| `API_KEY_AUTH_THROTTLE_ENABLED` | Enable auth rate limiting | `true` |
+| `API_KEY_AUTH_THROTTLE_ATTEMPTS` | Throttle attempts | `5` |
+| `API_KEY_AUTH_THROTTLE_DECAY` | Throttle decay (minutes) | `1` |
+| `API_KEY_HEADER_NAME` | API key header name | `X-API-KEY` |
+| `API_KEY_DEFAULT_LANGUAGE` | Default language | `en` |
+| `API_KEY_CACHE_TTL_VALIDATION` | Validation cache TTL | `300` |
+| `API_KEY_CACHE_TTL_ORIGIN` | Origin cache TTL | `60` |
+| `API_KEY_ROUTES_ENABLED` | Auto-load routes | `true` |
+| `API_KEY_ROUTES_PREFIX` | Route prefix | `''` |
 
 ## Usage
 

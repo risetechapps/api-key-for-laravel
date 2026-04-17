@@ -15,9 +15,20 @@ class RoutesApiKey
     {
         $options['middleware'][] = 'language';
 
+        $prefix = config('api-key.routes.prefix', '');
+        if (!empty($prefix)) {
+            $options['prefix'] = ($options['prefix'] ?? '') . '/' . trim($prefix, '/');
+        }
+
         Route::group($options, function () use ($options) {
 
-            Route::middleware(['throttle:5,1'])->group(function () {
+            $throttleAttempts = config('api-key.auth_throttle.attempts', 5);
+            $throttleDecay = config('api-key.auth_throttle.decay_minutes', 1);
+            $throttleMiddleware = config('api-key.auth_throttle.enabled', true)
+                ? ["throttle:{$throttleAttempts},{$throttleDecay}"]
+                : [];
+
+            Route::middleware(array_filter($throttleMiddleware))->group(function () {
                 Route::post('/register', [AuthController::class, 'register']);
                 Route::post('login', [AuthController::class, 'login']);
             });

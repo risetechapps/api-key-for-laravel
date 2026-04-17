@@ -15,14 +15,14 @@ class LanguageMiddleware
             $language = $request->getPreferredLanguage();
 
             if (empty($language)) {
-                $language = "en";
+                $language = config('api-key.default_language', 'en');
             }
 
             app()->setLocale($language);
             return $next($request);
         } catch (\Exception $exception) {
 
-            $language = "en";
+            $language = config('api-key.default_language', 'en');
             app()->setLocale($language);
             return $next($request);
         }

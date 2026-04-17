@@ -168,8 +168,9 @@ class ApiKey extends Model
         // Check each key using Hash::check
         foreach ($apiKeys as $apiKey) {
             if (Hash::check($key, $apiKey->key)) {
-                // Cache the valid key ID for 5 minutes
-                Cache::put($cacheKey, $apiKey->id, 300);
+                // Cache the valid key ID
+                $cacheTtl = config('api-key.cache_ttl.validation', 300);
+                Cache::put($cacheKey, $apiKey->id, $cacheTtl);
 
                 return $apiKey;
             }
@@ -195,7 +196,9 @@ class ApiKey extends Model
         // Cache key for origin validation
         $cacheKey = 'api_key_origin:' . $this->id . ':' . md5($normalizedOrigin);
 
-        return Cache::remember($cacheKey, 60, function () use ($normalizedOrigin, $allowed) {
+        $cacheTtl = config('api-key.cache_ttl.origin', 60);
+
+        return Cache::remember($cacheKey, $cacheTtl, function () use ($normalizedOrigin, $allowed) {
             foreach ($allowed as $allowedOrigin) {
                 if (strtolower($allowedOrigin) === $normalizedOrigin) {
                     return true;
