@@ -3,7 +3,7 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
-## [2.0.0] - 2026-04-10
+## [2.0.0] - 2026-04-17
 
 ### Adicionado
 - Sistema de eventos para ciclo de vida de API keys e planos (`ApiKeyCreated`, `ApiKeyDeleted`, `UserPlanActivated`, `UserPlanExpired`)
@@ -13,6 +13,14 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Melhorias de segurança no modelo `ApiKey` (hash de tokens, encriptação)
 - Suporte a rate limiting com regras baseadas em planos
 - Tratamento de exceções centralizado para erros de validação
+- **Configurações adicionais:**
+  - `auth_throttle` - Rate limiting configurável para endpoints de autenticação
+  - `header_name` - Nome customizado do header da API key
+  - `default_language` - Idioma padrão configurável
+  - `cache_ttl.validation` e `cache_ttl.origin` - TTL específico para caches
+  - `routes.enabled` e `routes.prefix` - Controle de rotas automáticas
+  - `middleware_group.plan` - Customização do grupo de middlewares
+  - `disable_web_middleware.enabled` - Controle do middleware web
 
 ### Alterado
 - **BREAKING**: Atualizados middlewares com lógica aprimorada (`ApiKeyAuthenticate`, `HasPlan`, `CheckFeature`)
