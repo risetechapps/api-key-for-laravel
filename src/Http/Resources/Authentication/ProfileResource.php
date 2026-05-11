@@ -32,7 +32,17 @@ class ProfileResource extends JsonResource
             ],
 
             // Address
-            'address' => $this->whenLoaded('address', $this->address),
+            'address' => $this->whenLoaded('address', fn() => $this->address ? [
+                'zip_code' => $this->address->zip_code,
+                'country' => $this->address->country,
+                'state' => $this->address->state,
+                'city' => $this->address->city,
+                'district' => $this->address->district,
+                'address' => $this->address->address,
+                'number' => $this->address->number,
+                'complement' => $this->address->complement,
+                'full_address' => $this->address->full_address,
+            ] : null),
 
             // Media
             'photo' => [
@@ -50,7 +60,7 @@ class ProfileResource extends JsonResource
             ],
 
             // Relationships
-            'api_key' => $this->whenLoaded('apiKey', fn() => ApiKeyResource::make($this->apiKey)),
+            'api_key' => $this->apiKey->key ?? '',
             'active_plan' => $this->whenLoaded('activePlan', fn() => UserPlanResource::make($this->activePlan)),
 
             // Usage Statistics
@@ -58,12 +68,6 @@ class ProfileResource extends JsonResource
                 'requests_used' => $this->countUsed(),
                 'requests_limit' => $this->requestLimit(),
                 'remaining_requests' => max(0, $this->requestLimit() - $this->countUsed()),
-            ],
-
-            // Timestamps
-            'timestamps' => [
-                'created_at' => $this->created_at?->toIso8601String(),
-                'updated_at' => $this->updated_at?->toIso8601String(),
             ],
         ];
     }
