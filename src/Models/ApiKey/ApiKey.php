@@ -98,7 +98,7 @@ class ApiKey extends Model
      * Note: This clears cache by ID pattern, individual key hashes cannot be cleared
      * as we don't store the plain keys in cache (only their IDs).
      */
-    public static function clearValidationCache(?int $keyId = null): void
+    public static function clearValidationCache(string|int|null $keyId = null): void
     {
         // Note: We can't clear by key hash because we don't store the original key
         // The cache entries will naturally expire after 5 minutes
@@ -113,7 +113,7 @@ class ApiKey extends Model
      * Clear origin validation cache for a specific API key.
      * Called when allowed_origins is modified.
      */
-    public static function clearOriginCache(int $keyId): void
+    public static function clearOriginCache(int|string $keyId): void
     {
         // Note: Since we use md5 hash in cache keys, we can't selectively clear
         // individual origin entries. They will expire naturally after 60 seconds.
@@ -165,14 +165,23 @@ class ApiKey extends Model
             })
             ->get();
 
-        // Check each key using Hash::check
+        // Check each key using Hash::check or direct comparison
         foreach ($apiKeys as $apiKey) {
-            if (Hash::check($key, $apiKey->key)) {
-                // Cache the valid key ID
-                $cacheTtl = config('api-key.cache_ttl.validation', 300);
-                Cache::put($cacheKey, $apiKey->id, $cacheTtl);
-
-                return $apiKey;
+            // Tenta validar com hash primeiro (padrão)
+            try {
+                if (Hash::check($key, $apiKey->key)) {
+                    $cacheTtl = config('api-key.cache_ttl.validation', 300);
+                    Cache::put($cacheKey, $apiKey->id, $cacheTtl);
+                    return $apiKey;
+                }
+            } catch (\Exception $e) {
+                // Se falhar (ex: hash inválido), tenta comparação direta
+                // Isso permite migração gradual de chaves antigas
+                if ($key === $apiKey->key) {
+                    $cacheTtl = config('api-key.cache_ttl.validation', 300);
+                    Cache::put($cacheKey, $apiKey->id, $cacheTtl);
+                    return $apiKey;
+                }
             }
         }
 
