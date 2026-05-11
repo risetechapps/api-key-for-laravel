@@ -31,7 +31,6 @@ class AuthController extends Controller
 
             return response()->jsonSuccess([
                 'message' => __('api-key::messages.registration_success'),
-                'api_key' => $user->apiKey->plainKey,
             ]);
         } catch (Throwable $exception) {
             report($exception);
