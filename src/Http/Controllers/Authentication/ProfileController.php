@@ -18,8 +18,9 @@ class ProfileController extends Controller
         }
 
         try {
+            $user = $request->user()->load('address');
 
-            return response()->jsonSuccess(ProfileResource::make($request->user()));
+            return response()->jsonSuccess(ProfileResource::make($user));
         } catch (Throwable $exception) {
             report($exception);
 
@@ -32,7 +33,20 @@ class ProfileController extends Controller
         try {
             $data = $request->validated();
 
-            $request->user()->update($data);
+            $user = $request->user();
+
+            $addressData = $data['address'] ?? null;
+            unset($data['address']);
+
+            $user->update($data);
+
+            if ($addressData) {
+                if ($user->address) {
+                    $user->address->update($addressData);
+                } else {
+                    $user->address()->create(array_merge($addressData, ['type' => 'DEFAULT']));
+                }
+            }
 
             return response()->jsonSuccess();
         } catch (Throwable $exception) {
@@ -44,10 +58,10 @@ class ProfileController extends Controller
 
     public function getAllowedOrigins(Request $request): JsonResponse
     {
-        try{
+        try {
             $data = auth()->user()->apiKey->allowed_origins;
-            return response()->jsonSuccess($data );
-        }catch (\Exception $exception){
+            return response()->jsonSuccess($data);
+        } catch (\Exception $exception) {
             report($exception);
             return response()->jsonGone(__('api-key::messages.error_loading_allowed_origins'));
         }
@@ -55,15 +69,37 @@ class ProfileController extends Controller
 
     public function updateAllowedOrigins(Request $request): JsonResponse
     {
-        try{
+        try {
             auth()->user()->apiKey->update([
-                'allowed_origins' => $request->get('allowed')
+                'allowed_origins' => $request->get('allowed') ?? $request->get('allowed_origins')
             ]);
             return response()->jsonSuccess();
-        }catch (\Exception $exception){
+        } catch (\Exception $exception) {
             report($exception);
             return response()->jsonGone(__('api-key::messages.error_updating_allowed_origins'));
         }
     }
 
+    public function regenerateKey(Request $request): JsonResponse
+    {
+        try {
+            $apiKey = auth()->user()->apiKey;
+
+            if (!$apiKey) {
+                return response()->jsonGone('API Key não encontrada');
+            }
+
+            // Gera novo codigo aleatorio
+            $newKey = bin2hex(random_bytes(64));
+
+            $apiKey->update([
+                'key' => $newKey
+            ]);
+
+            return response()->jsonSuccess(['key' => $newKey]);
+        } catch (\Exception $exception) {
+            report($exception);
+            return response()->jsonGone(__('Erro ao regenerar API Key'));
+        }
+    }
 }
