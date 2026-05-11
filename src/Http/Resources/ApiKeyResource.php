@@ -14,6 +14,7 @@ class ApiKeyResource extends JsonResource
     {
         return [
             'id' => $this->getKey(),
+            'key' => $this->code,
             'code' => $this->code,
             'active' => $this->active,
             'expires_at' => $this->expires_at?->toIso8601String(),
