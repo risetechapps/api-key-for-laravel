@@ -21,6 +21,7 @@ class Plan extends Model
         'price',
         'is_active',
         'features',
+        'features_description',
     ];
 
     protected $casts = [
@@ -28,6 +29,7 @@ class Plan extends Model
         'is_active' => 'boolean',
         'billing_cycle' => BillingCycle::class,
         'features' => 'array',
+        'features_description' => 'array',
     ];
 
     protected $hidden = [
