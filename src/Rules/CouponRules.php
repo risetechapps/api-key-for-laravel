@@ -24,4 +24,9 @@ class CouponRules implements RulesContract
     {
         return [];
     }
+
+    public static function messages(): array
+    {
+        return [];
+    }
 }
