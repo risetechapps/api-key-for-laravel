@@ -263,14 +263,12 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
         }
 
         // Use insert for better performance (no model events)
-        RequestLog::insert([
+        RequestLog::create([
             'authentication_id' => $this->id,
             'endpoint' => request()->path(),
             'requested_at' => now(),
             'method' => request()->method(),
             'response_code' => $status,
-            'created_at' => now(),
-            'updated_at' => now(),
         ]);
 
         // Atomic increment using update to avoid race conditions
