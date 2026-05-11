@@ -20,11 +20,17 @@ class PlanRules implements RulesContract
                 'billing_cycle' => 'bail|required|in:' . implode(',', BillingCycle::values()),
                 'is_active' => 'bail|required|boolean',
                 'features' => 'bail|required|array',
+                'features_description' => 'bail|required|array',
             ],
         ];
     }
 
     public static function Validator(): array
+    {
+        return [];
+    }
+
+    public static function messages(): array
     {
         return [];
     }
