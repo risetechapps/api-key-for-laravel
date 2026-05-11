@@ -14,14 +14,14 @@ class LogHistoryResource extends JsonResource
             'request' => [
                 'endpoint' => $this->endpoint,
                 'method' => $this->method,
-                'requested_at' => $this->requested_at?->toIso8601String(),
+                'requested_at' => $this->requested_at,
             ],
             'response' => [
                 'code' => $this->response_code,
                 'status' => $this->getStatusText(),
             ],
             'timestamps' => [
-                'created_at' => $this->created_at?->toIso8601String(),
+                'created_at' => $this->created_at,
             ],
         ];
     }
