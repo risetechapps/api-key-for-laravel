@@ -15,17 +15,11 @@ class PlansResource extends JsonResource
             'name' => $this->name,
             'description' => $this->description,
             'request_limit' => $this->request_limit,
-            'price' => [
-                'value' => $this->price,
-                'formatted' => $this->formatted_price,
-            ],
+            'price' => $this->formatted_price,
             'billing_cycle' => $this->billing_cycle?->value,
             'is_active' => $this->is_active,
             'features' => $this->features ?? [],
-            'dates' => [
-                'created_at' => $this->created_at?->toIso8601String(),
-                'updated_at' => $this->updated_at?->toIso8601String(),
-            ],
+            'features_description' => $this->features_description ?? [],
         ];
     }
 }
