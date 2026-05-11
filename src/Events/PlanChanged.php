@@ -16,6 +16,6 @@ class PlanChanged
         public readonly Authentication $user,
         public readonly Plan $plan,
         public readonly UserPlan $userPlan,
-        public readonly ?UserPlan $previousPlan = null
+        public readonly ?Plan $previousPlan = null
     ) {}
 }
