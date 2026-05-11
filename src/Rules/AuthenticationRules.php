@@ -25,27 +25,33 @@ class AuthenticationRules implements RulesContract
             'profile' => [
                 'name' => 'bail|required|string|min:5',
                 'cpf' => 'bail|required|min:11|cpf|unique:authentications,cpf',
-                'rg' => 'bail|min:5',
+                'rg' => 'bail|nullable|min:5',
                 'birth_date' => 'bail|required|date',
-                'cellphone' => 'bail|required|min:11|cellphone',
-                'telephone' => 'bail',
-                'genre' => 'bail',
-                'nationality' => 'bail',
-                'naturalness' => 'bail',
-                'marital_status' => 'bail',
-                'email' => 'bail|required|email|unique:authentications,email',
-                'address.country' => 'bail|required|string|min:2',
-                'address.state' => 'bail|required|string|min:2',
-                'address.city' => 'bail|required|string|min:2',
-                'address.zip_code' => 'bail|required',
-                'address.district' => 'bail|required|min:5',
-                'address.address' => 'bail|required|min:5',
-                'address.number' => 'bail|required',
+                'cellphone' => 'bail|nullable|min:10|regex:/^[0-9]{10,11}$/',
+                'telephone' => 'bail|nullable|min:10|regex:/^[0-9]{10,11}$/',
+                'genre' => 'bail|nullable|string',
+                'nationality' => 'bail|nullable|string',
+                'naturalness' => 'bail|nullable|string',
+                'marital_status' => 'bail|nullable|string',
+                'address' => 'bail|nullable|array',
+                'address.zip_code' => 'bail|nullable|string|max:20',
+                'address.country' => 'bail|nullable|string|max:100',
+                'address.state' => 'bail|nullable|string|max:2',
+                'address.city' => 'bail|nullable|string|max:100',
+                'address.district' => 'bail|nullable|string|max:100',
+                'address.address' => 'bail|nullable|string|max:255',
+                'address.number' => 'bail|nullable|string|max:20',
+                'address.complement' => 'bail|nullable|string|max:100',
             ],
         ];
     }
 
     public static function Validator(): array
+    {
+        return [];
+    }
+
+    public static function messages(): array
     {
         return [];
     }
