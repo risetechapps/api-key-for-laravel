@@ -35,17 +35,19 @@ class RegisterRequest extends FormRequest
 
     public function messages(): array
     {
-//        return $this->result['messages'];
         return [
-            'name.required' => 'Necessário digitar o nome',
-            'name.min' => 'O nome deve ter pelo menos 5 caracteres',
-            'email.required' => 'Necessário digitar o email',
-            'email.email' => 'Email digitado é inválido',
-            'password.required' => 'Necessário digitar a senha',
-            'password.min' => 'A senha deve ter pelo menos 8 caracteres',
-            'password_confirmation.required' => 'Necessário confirmar a senha',
-            'password_confirmation.min' => 'A senha deve ter pelo menos 8 caracteres',
-            'password_confirmation.same' => 'As senhas devem ser iguais',
+            'name.required' => 'O campo nome é obrigatório.',
+            'name.min' => 'O nome deve ter pelo menos :min caracteres.',
+            'name.max' => 'O nome não pode ter mais que :max caracteres.',
+            'email.required' => 'O campo e-mail é obrigatório.',
+            'email.email' => 'O e-mail deve ser um endereço válido.',
+            'email.unique' => 'Este e-mail já está registrado.',
+            'email.max' => 'O e-mail não pode ter mais que :max caracteres.',
+            'password.required' => 'O campo senha é obrigatório.',
+            'password.min' => 'A senha deve ter pelo menos :min caracteres.',
+            'password_confirmation.required' => 'O campo confirmação de senha é obrigatório.',
+            'password_confirmation.min' => 'A confirmação de senha deve ter pelo menos :min caracteres.',
+            'password_confirmation.same' => 'A confirmação de senha não corresponde à senha.',
         ];
     }
 }
