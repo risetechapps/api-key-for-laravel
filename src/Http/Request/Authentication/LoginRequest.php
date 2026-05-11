@@ -35,7 +35,35 @@ class LoginRequest extends FormRequest
 
     public function messages(): array
     {
-        return $this->result['messages'];
+        $messages = $this->result['messages'] ?? [];
+
+        // Traduzir mensagens de validação
+        $translatedMessages = [];
+        foreach ($messages as $key => $message) {
+            // Se a mensagem é igual à chave (formato automático do repositório), traduzir
+            if ($message === $key) {
+                $translatedMessages[$key] = $this->translateMessage($key);
+            } else {
+                $translatedMessages[$key] = $message;
+            }
+        }
+
+        return $translatedMessages;
+    }
+
+    private function translateMessage(string $key): string
+    {
+        // Mapeamento de mensagens para login
+        $translations = [
+            'email.required' => 'O campo e-mail é obrigatório.',
+            'email.email' => 'O e-mail deve ser um endereço válido.',
+            'email.exists' => 'O e-mail informado não está registrado.',
+            'email.max' => 'O e-mail não pode ter mais que :max caracteres.',
+            'password.required' => 'O campo senha é obrigatório.',
+            'password.min' => 'A senha deve ter pelo menos :min caracteres.',
+        ];
+
+        return $translations[$key] ?? $key;
     }
 
 
