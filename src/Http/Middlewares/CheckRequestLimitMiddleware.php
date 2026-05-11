@@ -4,7 +4,9 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -12,7 +14,7 @@ class CheckRequestLimitMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        /** @var \RiseTechApps\ApiKey\Models\Authentication\Authentication $user */
+        /** @var Authentication $user */
         $user = $request->user();
 
         // Load active plan with eager loading to avoid N+1
@@ -44,9 +46,14 @@ class CheckRequestLimitMiddleware
 
         $response = $next($request);
 
-        // Log request asynchronously to not delay response
-        dispatch(function () use ($user, $response) {
-            $user->requestUsed($response->getStatusCode());
+        $userId = $user->id;
+        $statusCode = $response->getStatusCode();
+
+        dispatch(function () use ($userId, $statusCode) {
+            $user = Authentication::find($userId);
+            if ($user) {
+                $user->requestUsed($statusCode);
+            }
         })->afterResponse();
 
         return $response;
