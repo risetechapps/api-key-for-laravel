@@ -61,19 +61,19 @@ class CheckoutController extends Controller
     public function process(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'plan_id'           => ['required', 'string'],
-            'token'             => ['nullable', 'string'],
-            'mp_card_id'        => ['nullable', 'string'],
-            'security_code'     => ['nullable', 'string'],
-            'payment_method_id' => ['required', 'string'],
-            'payer'             => ['required', 'array'],
-            'payer.email'       => ['required', 'email'],
-            'coupon_code'       => ['nullable', 'string'],
+            'plan_id'                     => ['required', 'string'],
+            'token'                       => ['nullable', 'string'],
+            'mp_card_id'                  => ['nullable', 'string'],
+            'security_code'               => ['nullable', 'string'],
+            'payment_method_id'           => ['nullable', 'string'],
+            'issuer_id'                   => ['nullable', 'string'],
+            'payer'                       => ['nullable', 'array'],
+            'payer.email'                 => ['nullable', 'email'],
+            'payer.identification'        => ['nullable', 'array'],
+            'payer.identification.type'   => ['nullable', 'string'],
+            'payer.identification.number' => ['nullable', 'string'],
+            'coupon_code'                 => ['nullable', 'string'],
         ]);
-
-        if (empty($validated['token']) && empty($validated['mp_card_id'])) {
-            return response()->json(['success' => false, 'message' => 'Dados de pagamento inválidos.'], 422);
-        }
 
         $plan = $this->planRepository->findById($validated['plan_id']);
         if (! $plan) {
@@ -98,6 +98,14 @@ class CheckoutController extends Controller
             auth()->user()->subscribeToPlan($plan);
             $appliedCoupon?->increment('uses');
             return response()->jsonSuccess(['status' => 'approved', 'message' => 'Assinatura ativada com cupom de desconto total.']);
+        }
+
+        if (empty($validated['token']) && empty($validated['mp_card_id'])) {
+            return response()->json(['success' => false, 'message' => 'Dados de pagamento inválidos.'], 422);
+        }
+
+        if (empty($validated['payment_method_id']) || empty($validated['payer']['email'])) {
+            return response()->json(['success' => false, 'message' => 'Dados de pagamento inválidos.'], 422);
         }
 
         $payerEmail   = strtolower($validated['payer']['email']);
@@ -134,17 +142,36 @@ class CheckoutController extends Controller
             if ($mpCustomerId) {
                 $payerData['id'] = $mpCustomerId;
             }
+            $identification = $validated['payer']['identification'] ?? $request->input('payer.identification');
+            if (! empty($identification['type']) && ! empty($identification['number'])) {
+                $payerData['identification'] = $identification;
+            }
 
-            $payment = $client->create([
-                'transaction_amount' => $transactionAmount,
-                'token'              => $token,
-                'description'        => "Assinatura do plano {$plan->name}",
-                'installments'       => 1,
-                'payment_method_id'  => $validated['payment_method_id'],
-                'payer'              => $payerData,
+            Log::debug('MP checkout payer sent', [
+                'payer'          => $payerData,
+                'raw_payer_input'=> $request->input('payer'),
+            ]);
+
+            $authUser  = auth()->user();
+            $nameParts = explode(' ', $authUser->name ?? '', 2);
+
+            $paymentPayload = [
+                'transaction_amount'   => $transactionAmount,
+                'token'                => $token,
+                'description'          => "Assinatura do plano {$plan->name}",
+                'installments'         => 1,
+                'payment_method_id'    => $validated['payment_method_id'],
+                'payer'                => $payerData,
                 'external_reference'   => auth()->id() . '|' . $plan->getKey(),
                 'statement_descriptor' => mb_substr(config('app.name'), 0, 22),
                 'additional_info'      => [
+                    'payer' => [
+                        'first_name'               => $nameParts[0] ?? '',
+                        'last_name'                => $nameParts[1] ?? '',
+                        'registration_date'        => $authUser->created_at?->toIso8601String(),
+                        'is_prime_user'            => '0',
+                        'is_first_purchase_online' => '1',
+                    ],
                     'items' => [
                         [
                             'id'          => (string) $plan->getKey(),
@@ -156,12 +183,19 @@ class CheckoutController extends Controller
                         ],
                     ],
                 ],
-            ]);
+            ];
+
+            if (! empty($validated['issuer_id'])) {
+                $paymentPayload['issuer_id'] = (int) $validated['issuer_id'];
+            }
+
+            $payment = $client->create($paymentPayload);
 
             Log::info('MP payment response', [
                 'status'        => $payment->status,
                 'status_detail' => $payment->status_detail,
                 'id'            => $payment->id,
+                'payment' => $payment
             ]);
 
             if ($payment->status === 'approved') {
@@ -192,7 +226,7 @@ class CheckoutController extends Controller
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         } catch (MPApiException $e) {
-            $body   = json_decode($e->getApiResponse()?->getContent() ?? '{}', true) ?? [];
+            $body   =$e->getApiResponse()?->getContent();
             $detail = $body['status_detail'] ?? $body['message'] ?? '';
             Log::error('MP API exception', ['body' => $body, 'status' => $e->getApiResponse()?->getStatusCode()]);
             return response()->json(['success' => false, 'message' => $this->translateStatusDetail($detail) ?: ($detail ?: 'Pagamento recusado.')], 422);
