@@ -16,6 +16,7 @@ class PlansResource extends JsonResource
             'description' => $this->description,
             'request_limit' => $this->request_limit,
             'price' => $this->formatted_price,
+            'raw_price' => (float) $this->price,
             'billing_cycle' => $this->billing_cycle?->value,
             'is_active' => $this->is_active,
             'features' => $this->features ?? [],
