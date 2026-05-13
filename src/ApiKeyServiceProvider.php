@@ -2,10 +2,12 @@
 
 namespace RiseTechApps\ApiKey;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use RiseTechApps\ApiKey\Http\Middlewares\AdminMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\ApiKeyOriginValidatorMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckActivePlanMiddleware;
@@ -18,7 +20,9 @@ use RiseTechApps\ApiKey\Rules\AuthenticationRules;
 use RiseTechApps\ApiKey\Rules\CouponRules;
 use RiseTechApps\ApiKey\Rules\PlanRules;
 use RiseTechApps\ApiKey\Rules\SignatureRules;
+use RiseTechApps\ApiKey\Console\Commands\Billing\ProcessRenewalsCommand;
 use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
+use RiseTechApps\ApiKey\Console\Commands\MakeAdminCommand;
 use RiseTechApps\FormRequest\RulesRegistry;
 
 class ApiKeyServiceProvider extends ServiceProvider
@@ -37,19 +41,23 @@ class ApiKeyServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__ . '/../config/config.php' => config_path('api-key.php'),
-            ], 'config');
+            ], 'api-key-config');
 
             $this->publishes([
                 __DIR__ . '/../database/migrations/' => database_path('migrations'),
-            ], 'migrations');
+            ], 'api-key-migrations');
 
             $this->publishes([
                 __DIR__ . '/routes/routes.php' => base_path('routes/routes.php'),
-            ], 'routes');
+            ], 'api-key-routes');
 
             $this->publishes([
                 __DIR__ . '/lang' => resource_path('lang/vendor/api-key'),
-            ], 'lang');
+            ], 'api-key-lang');
+
+            $this->publishes([
+                __DIR__ . '/../resources/js/' => resource_path('js/'),
+            ], 'api-key-frontend');
         }
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
@@ -68,6 +76,14 @@ class ApiKeyServiceProvider extends ServiceProvider
                 Route::namespace('')
                     ->group(base_path('routes/routes.php'));
             }
+        });
+
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command('billing:process-renewals')
+                ->dailyAt('08:00')
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->appendOutputTo(storage_path('logs/renewals.log'));
         });
     }
 
@@ -88,6 +104,8 @@ class ApiKeyServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 CheckExpiredPlans::class,
+                MakeAdminCommand::class,
+                ProcessRenewalsCommand::class,
             ]);
         }
     }
@@ -96,6 +114,7 @@ class ApiKeyServiceProvider extends ServiceProvider
     {
         $router = $this->app->make(Router::class);
 
+        $router->aliasMiddleware('admin', AdminMiddleware::class);
         $router->aliasMiddleware('language', LanguageMiddleware::class);
         $router->aliasMiddleware('api.key', AuthenticateApiKey::class);
         $router->aliasMiddleware('check.active.plan', CheckActivePlanMiddleware::class);
