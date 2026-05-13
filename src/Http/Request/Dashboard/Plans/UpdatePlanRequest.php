@@ -19,7 +19,7 @@ class UpdatePlanRequest extends FormRequest
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
 
         $this->ruleRepository = $ruleRepository;
-        $this->result = $this->ruleRepository->getRules('plan', ['id' => request()->plan->getKey()]);
+        $this->result = $this->ruleRepository->getRules('plan', ['id' => request()->route('plan')]);
     }
 
     public function rules(): array

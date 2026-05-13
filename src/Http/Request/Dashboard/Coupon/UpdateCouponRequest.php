@@ -20,7 +20,7 @@ class UpdateCouponRequest extends FormRequest
 
         $this->ruleRepository = $ruleRepository;
 
-        $this->result = $this->ruleRepository->getRules('coupon', ['id' => request()->coupon->getKey()]);
+        $this->result = $this->ruleRepository->getRules('coupon', ['id' => request()->route('coupon')]);
     }
 
     public function rules(): array
