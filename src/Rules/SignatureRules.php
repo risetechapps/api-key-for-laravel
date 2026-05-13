@@ -24,4 +24,9 @@ class SignatureRules implements RulesContract
     {
         return [];
     }
+
+    public static function messages(): array
+    {
+        return [];
+    }
 }
