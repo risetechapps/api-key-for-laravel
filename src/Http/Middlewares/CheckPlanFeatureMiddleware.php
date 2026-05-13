@@ -12,6 +12,10 @@ class CheckPlanFeatureMiddleware
 {
     public function handle(Request $request, Closure $next, string ...$features): Response
     {
+        if ($request->attributes->get('_internal')) {
+            return $next($request);
+        }
+
         $hasAccess = false;
 
         foreach ($features as $feature) {

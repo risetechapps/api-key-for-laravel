@@ -14,6 +14,10 @@ class CheckRequestLimitMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->attributes->get('_internal')) {
+            return $next($request);
+        }
+
         /** @var Authentication $user */
         $user = $request->user();
 

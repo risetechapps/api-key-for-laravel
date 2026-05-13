@@ -11,6 +11,10 @@ class CheckActivePlanMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->attributes->get('_internal')) {
+            return $next($request);
+        }
+
         $user = $request->user();
 
         if (!$user) {
