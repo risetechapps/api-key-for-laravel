@@ -92,6 +92,8 @@ class AuthController extends Controller
             return response()->jsonGone();
         }
 
-        return response()->jsonSuccess(AuthenticationMeResource::make($request->user()));
+        $user = $request->user()->load(['activePlan.plan', 'apiKey']);
+
+        return response()->jsonSuccess(AuthenticationMeResource::make($user));
     }
 }

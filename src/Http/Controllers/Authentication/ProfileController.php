@@ -18,7 +18,7 @@ class ProfileController extends Controller
         }
 
         try {
-            $user = $request->user()->load('address');
+            $user = $request->user()->load(['address', 'activePlan.plan', 'apiKey']);
 
             return response()->jsonSuccess(ProfileResource::make($user));
         } catch (Throwable $exception) {
