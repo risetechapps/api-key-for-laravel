@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Client\Payment\PaymentRefundClient;
 use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
@@ -21,8 +22,9 @@ class AdminController extends Controller
         MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
 
         try {
-            $client = new PaymentRefundClient();
-            $refund = $client->refund((int) $userPlan->payment_id);
+            $payment = (new PaymentClient())->get((int) $userPlan->payment_id);
+            $client  = new PaymentRefundClient();
+            $refund  = $client->refund((int) $userPlan->payment_id, (float) $payment->transaction_amount);
 
             $userPlan->update(['active' => false]);
 
