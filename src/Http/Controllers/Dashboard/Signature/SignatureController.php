@@ -37,7 +37,9 @@ class SignatureController extends Controller
     {
         try {
 
-            $data = SignatureHistoryResource::collection(auth()->user()->userPlan);
+            $data = SignatureHistoryResource::collection(
+                auth()->user()->userPlan()->with('plan')->latest()->get()
+            );
             return response()->jsonSuccess($data);
         } catch (\Exception $e) {
             report($e);
@@ -53,7 +55,7 @@ class SignatureController extends Controller
             return response()->jsonSuccess($data);
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone(__('api-key::messages.error_loading_request_log'));
+            return response()->jsonGone(__('api-key::messages.error_loading_request_log') . $e->getMessage());
         }
     }
 }
