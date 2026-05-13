@@ -54,10 +54,12 @@ class ProfileResource extends JsonResource
                 'id' => $this->getKey(),
                 'code' => $this->code,
                 'status' => $this->status,
+                'role' => $this->role ?? 'user',
                 'locale' => $this->locale,
                 'email_verified' => !is_null($this->email_verified_at),
                 'email_verified_at' => $this->email_verified_at?->toIso8601String(),
             ],
+            'role' => $this->role ?? 'user',
 
             // Relationships
             'api_key' => $this->apiKey->key ?? '',

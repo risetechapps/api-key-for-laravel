@@ -16,6 +16,7 @@ class AuthenticationMeResource extends JsonResource
             'code' => $this->code,
             'email' => $this->email,
             'name' => $this->name,
+            'role' => $this->role ?? 'user',
             'status' => $this->status,
             'email_verified' => !is_null($this->email_verified_at),
             'locale' => $this->locale,
