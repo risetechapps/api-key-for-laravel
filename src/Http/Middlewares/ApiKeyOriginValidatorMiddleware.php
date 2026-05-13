@@ -21,6 +21,10 @@ class ApiKeyOriginValidatorMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->attributes->get('_internal')) {
+            return $next($request);
+        }
+
         $key = $request->header('X-API-KEY') ?? $request->get('api_key');
 
         $apiKey = auth()->user()->apiKey;
