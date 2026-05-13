@@ -155,4 +155,27 @@ return [
         'access_token'   => env('MP_ACCESS_TOKEN'),
         'webhook_secret' => env('MP_WEBHOOK_SECRET'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Demo User ID
+    |--------------------------------------------------------------------------
+    |
+    | ID (authentication_id) of the user used by the public demo endpoint.
+    | Create a dedicated user + active plan and set their ID here.
+    | Find it with: SELECT id FROM authentications WHERE email = 'demo@seu.dominio';
+    |
+    */
+    'demo_user_id' => env('API_KEY_DEMO_USER_ID'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Internal Token
+    |--------------------------------------------------------------------------
+    |
+    | Secret token used for server-to-server calls (dashboard test feature).
+    | Generate with: php artisan tinker --execute="echo Str::random(64);"
+    |
+    */
+    'internal_token' => env('API_INTERNAL_TOKEN'),
 ];
