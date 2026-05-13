@@ -86,6 +86,13 @@ class AuthController extends Controller
         return response()->jsonSuccess($data);
     }
 
+    public function logout(Request $request): JsonResponse
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->jsonSuccess(['message' => 'Logout realizado com sucesso.']);
+    }
+
     public function me(Request $request): JsonResponse
     {
         if (!$request->user()) {
