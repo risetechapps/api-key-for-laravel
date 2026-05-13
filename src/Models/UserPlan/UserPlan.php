@@ -11,7 +11,7 @@ class UserPlan extends Model
 {
     use HasUuid;
 
-    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used'];
+    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id'];
 
     protected $casts = [
         'start_date' => 'datetime',
@@ -22,6 +22,11 @@ class UserPlan extends Model
     public function plan()
     {
         return $this->belongsTo(Plan::class);
+    }
+
+    public function authentication()
+    {
+        return $this->belongsTo(\RiseTechApps\ApiKey\Models\Authentication\Authentication::class);
     }
 
     /**
