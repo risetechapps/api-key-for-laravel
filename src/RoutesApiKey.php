@@ -11,6 +11,7 @@ use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Checkout\CheckoutController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Coupons\CouponsController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Plans\PlansController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Signature\SignatureController;
+use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Test\TestRequestController;
 
 class RoutesApiKey
 {
@@ -43,6 +44,7 @@ class RoutesApiKey
             Route::post('/dashboard/checkout/webhook', [CheckoutController::class, 'webhook']);
 
             Route::middleware(['auth:sanctum'])->group(function () {
+                Route::post('/logout', [AuthController::class, 'logout']);
                 Route::get('/auth/me', [AuthController::class, 'me']);
 
                 Route::post('/dashboard/checkout/process', [CheckoutController::class, 'process']);
@@ -77,6 +79,8 @@ class RoutesApiKey
                 Route::get('/dashboard/cards', [CardController::class, 'index']);
                 Route::post('/dashboard/cards', [CardController::class, 'store']);
                 Route::delete('/dashboard/cards/{id}', [CardController::class, 'destroy']);
+
+                Route::post('/dashboard/test-request', [TestRequestController::class, 'test']);
 
                 Route::post('/dashboard/signature', [SignatureController::class, 'signature']);
                 Route::get('/dashboard/history', [SignatureController::class, 'history']);
