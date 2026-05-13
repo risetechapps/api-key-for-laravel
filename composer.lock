@@ -4932,7 +4932,7 @@
                 "risetechapps/has-uuid-for-laravel": "^1.0.0",
                 "risetechapps/monitoring-for-laravel": "^2.0.0",
                 "risetechapps/orchestrator-link-for-laravel": "^1.1.0",
-                "risetechapps/to-upper-for-laravel": "^1.0.0",
+                "risetechapps/to-upper-for-laravel": "^1.2.0",
                 "tpetry/laravel-postgresql-enhanced": "^3.5.1"
             },
             "require-dev": {
@@ -5397,7 +5397,7 @@
                 "php": "^8.3",
                 "predis/predis": "^v3.3.0",
                 "risetechapps/has-uuid-for-laravel": "^1.0.0",
-                "risetechapps/to-upper-for-laravel": "^1.0.0",
+                "risetechapps/to-upper-for-laravel": "^1.2.0",
                 "tpetry/laravel-postgresql-enhanced": "^3.5.0"
             },
             "require-dev": {
