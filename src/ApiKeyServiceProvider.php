@@ -58,6 +58,20 @@ class ApiKeyServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/../resources/js/' => resource_path('js/'),
             ], 'api-key-frontend');
+
+            $this->publishes([
+                __DIR__ . '/../resources/views/app.blade.php' => resource_path('views/vendor/api-key/app.blade.php'),
+            ], 'api-key-views');
+
+            $this->publishes([
+                __DIR__ . '/../stubs/package.json'  => base_path('package.json'),
+                __DIR__ . '/../stubs/vite.config.ts' => base_path('vite.config.ts'),
+                __DIR__ . '/../stubs/tsconfig.json'  => base_path('tsconfig.json'),
+            ], 'api-key-build');
+
+            $this->publishes([
+                __DIR__ . '/../dist' => public_path('vendor/api-key'),
+            ], 'api-key-assets');
         }
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
