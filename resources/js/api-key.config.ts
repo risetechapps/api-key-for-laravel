@@ -25,7 +25,8 @@ export interface ApiKeyConfig {
 
 const config: ApiKeyConfig = {
     app: {
-        logoText: (import.meta.env.VITE_APP_NAME as string) || 'Dashboard',
+        //@ts-ignore
+        logoText:  'Dashboard',
         logoHref: '/',
         // logoImage: '/images/logo.svg', // Descomente para usar imagem no lugar do ícone padrão
     },
