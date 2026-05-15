@@ -2,6 +2,7 @@
 
 namespace RiseTechApps\ApiKey;
 
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
@@ -57,6 +58,7 @@ class ApiKeyServiceProvider extends ServiceProvider
 
             $this->publishes([
                 __DIR__ . '/../resources/js/' => resource_path('js/'),
+                __DIR__ . '/../resources/css/' => resource_path('css/'),
             ], 'api-key-frontend');
 
             $this->publishes([
@@ -76,9 +78,15 @@ class ApiKeyServiceProvider extends ServiceProvider
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->loadTranslationsFrom(__DIR__ . '/lang', 'api-key');
+        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'api-key');
+
+        ResetPassword::createUrlUsing(function ($notifiable, string $token) {
+            return url('/reset-password?token=' . $token . '&email=' . urlencode($notifiable->getEmailForPasswordReset()));
+        });
 
         $this->registerRouter();
         $this->registerRepository();
+        $this->registerSpaRoute();
 
 
         Config::set('auth.providers.users.model', \RiseTechApps\ApiKey\Models\Authentication\Authentication::class);
@@ -136,7 +144,9 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->aliasMiddleware('api.key.origin', ApiKeyOriginValidatorMiddleware::class);
         $router->aliasMiddleware('feature', CheckPlanFeatureMiddleware::class);
 
-        if (config('api-key.disable_web_middleware.enabled', true)) {
+        $spaEnabled = config('api-key.spa.enabled', false);
+
+        if (!$spaEnabled && config('api-key.disable_web_middleware.enabled', true)) {
             $router->pushMiddlewareToGroup('web', DisableRouteWebMiddleware::class);
         }
 
@@ -154,6 +164,20 @@ class ApiKeyServiceProvider extends ServiceProvider
                 $this->loadRoutesFrom(__DIR__ . '/routes/routes.php');
             });
         }
+    }
+
+    protected function registerSpaRoute(): void
+    {
+        if (!config('api-key.spa.enabled', false)) {
+            return;
+        }
+
+        Route::middleware(['web'])
+            ->group(function () {
+                Route::get('/{any}', fn() => view('api-key::app'))
+                    ->where('any', '^(?!api).*$')
+                    ->name('api-key.spa');
+            });
     }
 
     protected function registerRepository(): void
