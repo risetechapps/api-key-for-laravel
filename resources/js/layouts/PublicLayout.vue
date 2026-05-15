@@ -13,7 +13,7 @@
                         </div>
                         <span class="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600
                             bg-clip-text text-transparent">
-                            Orchestrator
+                            Api Key
                         </span>
                     </router-link>
 
@@ -135,7 +135,6 @@ const mobileMenuOpen = ref(false);
 
 const navigation = [
     { name: 'Recursos', href: '#features' },
-    { name: 'Demo', href: '#demo' },
     { name: 'Preços', href: '#pricing' },
     { name: 'Docs', href: '#docs' },
 ];

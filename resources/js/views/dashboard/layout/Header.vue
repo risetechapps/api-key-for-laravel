@@ -198,8 +198,11 @@ function toggleDarkMode() {
 }
 
 async function logout() {
-    await authStore.logout();
-    router.push('/login');
+    try {
+        await authStore.logout();
+    } finally {
+        router.push('/login');
+    }
 }
 
 // Close dropdowns when clicking outside

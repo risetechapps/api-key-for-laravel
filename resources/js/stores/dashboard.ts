@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import axios from 'axios';
@@ -214,6 +215,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
         savedCards.value = savedCards.value.filter((c: any) => c.id !== id);
     }
 
+    async function testRequest(feature: string, params: Record<string, string> = {}) {
+        const response = await axios.post('/dashboard/test-request', { feature, params });
+        return response.data;
+    }
+
     return {
         stats,
         requests,
@@ -235,5 +241,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchBillingHistory,
         fetchSavedCards,
         deleteSavedCard,
+        testRequest,
     };
 });

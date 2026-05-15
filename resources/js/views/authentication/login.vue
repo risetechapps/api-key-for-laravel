@@ -13,7 +13,7 @@
                     </div>
                     <span class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text
                     text-transparent">
-                        Orchestrator
+                        Api Key
                     </span>
                 </router-link>
             </div>
@@ -89,10 +89,16 @@
                     </Button>
                 </form>
 
-                <div v-if="authStore.error"
+                <div v-if="verifiedMessage"
+                     class="mt-4 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-700
+                     dark:text-green-400 text-sm">
+                    {{ verifiedMessage }}
+                </div>
+
+                <div v-if="authStore.error || errorMessage"
                      class="mt-4 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600
                      dark:text-red-400 text-sm">
-                    {{ authStore.error }}
+                    {{ authStore.error || errorMessage }}
                 </div>
 
                 <div class="mt-8 text-center">
@@ -112,8 +118,8 @@
 </template>
 
 <script setup>
-import {reactive, ref} from 'vue';
-import {useRouter} from 'vue-router';
+import {reactive, ref, onMounted} from 'vue';
+import {useRouter, useRoute} from 'vue-router';
 import {useAuthStore} from '@/stores/auth';
 import {
     PhHexagon,
@@ -127,9 +133,21 @@ import Button from "@/views/componentes/Button.vue";
 import Input from "@/views/componentes/Input.vue";
 
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
 
 const showPassword = ref(false);
+const verifiedMessage = ref('');
+const errorMessage = ref('');
+
+onMounted(() => {
+    if (route.query.verified === '1') {
+        verifiedMessage.value = 'E-mail confirmado com sucesso! Agora você pode fazer login.';
+    }
+    if (route.query.error === 'invalid_link') {
+        errorMessage.value = 'Link de verificação inválido ou expirado. Faça login para reenviar o e-mail.';
+    }
+});
 
 const form = reactive({
     email: '',

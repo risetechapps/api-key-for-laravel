@@ -188,17 +188,7 @@ const saving    = ref(false);
 const formError = ref('');
 
 const availableFeatures = [
-    { key: 'orchestrator-cpf',      label: 'CPF' },
-    { key: 'orchestrator-cnpj',     label: 'CNPJ' },
-    { key: 'orchestrator-zip_code', label: 'CEP' },
-    { key: 'orchestrator-banks',    label: 'Bancos' },
-    { key: 'orchestrator-countries',label: 'Países' },
-    { key: 'orchestrator-states',   label: 'Estados' },
-    { key: 'orchestrator-cities',   label: 'Cidades' },
-    { key: 'orchestrator-holidays', label: 'Feriados' },
-    { key: 'orchestrator-weather',  label: 'Clima' },
-    { key: 'orchestrator-domain',   label: 'Domínio' },
-    { key: 'orchestrator-calendar', label: 'Calendário' },
+
 ];
 
 const emptyForm = () => ({

@@ -6,8 +6,6 @@
 
         <features-section/>
 
-        <demo-section/>
-
         <price-section/>
 
         <footer class="py-12 px-4 sm:px-6 lg:px-8 border-t border-slate-200 dark:border-slate-800">
@@ -22,7 +20,7 @@
                         <span
                             class="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text
                                 text-transparent">
-                            Orchestrator
+                            Api Key
                         </span>
                     </div>
 
@@ -42,7 +40,7 @@
                     </div>
 
                     <p class="text-sm text-slate-500 dark:text-slate-400">
-                        © {{ currentYear }} Orchestrator API. Todos os direitos reservados.
+                        © {{ currentYear }} Api Key. Todos os direitos reservados.
                     </p>
                 </div>
             </div>
@@ -54,7 +52,6 @@
 import {PhHexagon,} from '@phosphor-icons/vue';
 import HomeSection from "@/views/home/sections/home-section.vue";
 import FeaturesSection from "@/views/home/sections/features-section.vue";
-import DemoSection from "@/views/home/sections/demo-section.vue";
 import PriceSection from "@/views/home/sections/price-section.vue";
 
 const currentYear = new Date().getFullYear();

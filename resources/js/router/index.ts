@@ -1,9 +1,13 @@
+//@ts-nocheck
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import appConfig from '@/api-key.config';
 import PublicLayout from '../layouts/PublicLayout.vue';
 import home from '@/views/home/home.vue';
 import login from '@/views/authentication/login.vue';
+import forgotPassword from '@/views/authentication/forgotPassword.vue';
+import resetPassword from '@/views/authentication/resetPassword.vue';
+import register from '@/views/authentication/register.vue';
 import DashboardLayout from '@/layouts/DashboardLayout.vue';
 import dashboard from '@/views/dashboard/dashboard.vue';
 import requests from '@/views/dashboard/requests.vue';
@@ -22,6 +26,9 @@ const routes: RouteRecordRaw[] = [
         children: [
             { path: '', name: 'home', component: home },
             { path: 'login', name: 'login', component: login, meta: { guest: true } },
+            { path: 'register', name: 'register', component: register, meta: { guest: true } },
+            { path: 'forgot-password', name: 'forgot-password', component: forgotPassword, meta: { guest: true } },
+            { path: 'reset-password', name: 'reset-password', component: resetPassword, meta: { guest: true } },
             ...appConfig.routes.extraPublicRoutes,
         ],
     },

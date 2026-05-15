@@ -34,7 +34,7 @@
                     </div>
 
                     <ul class="space-y-4 mb-8">
-                        <li v-for="feature in plan.features_description" :key="feature" class="flex items-center gap-3">
+                        <li v-for="feature in planFeatures(plan)" :key="feature" class="flex items-center gap-3">
                             <PhCheckCircle :size="20" weight="fill" class="text-emerald-500"/>
                             <span class="text-slate-700 dark:text-slate-300">{{ feature }}</span>
                         </li>
@@ -62,6 +62,7 @@ interface PricingPlan {
     description: string;
     price: string | number;
     highlighted: boolean;
+    features: string[];
     features_description: string[];
 }
 
@@ -70,6 +71,15 @@ import axiosDefault from "@/bootstrap";
 import {PhCheckCircle} from "@phosphor-icons/vue";
 
 const pricingPlans = ref<PricingPlan[]>([]);
+
+const featureLabels: Record<string, string> = {
+};
+
+function planFeatures(plan: PricingPlan & { features?: string[] }): string[] {
+    if (plan.features?.length) return plan.features.map(f => featureLabels[f] ?? f);
+    if (plan.features_description?.length) return plan.features_description;
+    return [];
+}
 
 const loadPlans = async () => {
     try {

@@ -47,14 +47,6 @@
                     Começar Grátis
                     <PhArrowRight :size="20" weight="bold"/>
                 </router-link>
-
-                <a
-                    href="#demo"
-                    class="inline-flex items-center gap-2 px-8 py-4 text-lg font-semibold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all"
-                >
-                    <PhPlayCircle :size="20"/>
-                    Ver Demo
-                </a>
             </div>
 
             <!-- Stats -->

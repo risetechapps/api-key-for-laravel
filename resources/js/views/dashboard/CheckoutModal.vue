@@ -358,12 +358,19 @@ function removeCoupon() {
 
 async function confirmFree() {
     confirming.value = true;
+    errorMessage.value = '';
     try {
-        await dashboardStore.subscribeToPlan(props.plan.id);
+        await dashboardStore.processCheckout(
+            props.plan.id,
+            { payer: { email: authStore.user?.email?.toLowerCase() ?? '' } },
+            appliedCoupon.value?.coupon ?? null,
+        );
         await authStore.fetchProfile();
         isOpen.value = false;
         emit('success');
         await Swal.fire({ icon: 'success', title: 'Plano ativado!', html: `Seu plano <strong>${props.plan?.name}</strong> foi ativado com sucesso.`, confirmButtonText: 'Continuar', confirmButtonColor: '#6366f1' });
+    } catch (err) {
+        errorMessage.value = err?.response?.data?.message || 'Erro ao ativar plano.';
     } finally {
         confirming.value = false;
     }

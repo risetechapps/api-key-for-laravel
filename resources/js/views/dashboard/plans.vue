@@ -207,22 +207,12 @@ onMounted(async () => {
 });
 
 const featureLabels = {
-    'orchestrator-cpf':      'Consulta de CPF',
-    'orchestrator-cnpj':     'Consulta de CNPJ',
-    'orchestrator-zip_code': 'Consulta de CEP',
-    'orchestrator-banks':    'Dados bancários',
-    'orchestrator-countries':'Países',
-    'orchestrator-states':   'Estados',
-    'orchestrator-cities':   'Cidades',
-    'orchestrator-holidays': 'Feriados',
-    'orchestrator-weather':  'Clima',
-    'orchestrator-domain':   'Domínio',
-    'orchestrator-calendar': 'Calendário',
+
 };
 
 function planBullets(plan) {
-    if (plan.features_description?.length) return plan.features_description;
     if (plan.features?.length) return plan.features.map(f => featureLabels[f] ?? f);
+    if (plan.features_description?.length) return plan.features_description;
     return [];
 }
 
