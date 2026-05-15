@@ -2,29 +2,26 @@
 
 namespace RiseTechApps\ApiKey\Listeners;
 
+use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanGracePeriodStarted;
+use RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification;
 
 class SendGracePeriodNotification
 {
-    /**
-     * Handle the event.
-     */
     public function handle(PlanGracePeriodStarted $event): void
     {
-        // Example: Send email notification to user
-        // $event->user->notify(new GracePeriodStartedNotification(
-        //     $event->plan,
-        //     $event->gracePeriodDays,
-        //     $event->gracePeriodEndDate
-        // ));
+        $event->user->notify(new GracePeriodStartedNotification(
+            $event->plan,
+            $event->userPlan,
+            $event->gracePeriodDays,
+            $event->gracePeriodEndDate
+        ));
 
-        // Log the grace period start
-        \Illuminate\Support\Facades\Log::info('Plan grace period started', [
-            'user_id' => $event->user->id,
-            'plan_id' => $event->plan->id,
-            'plan_name' => $event->plan->name,
-            'grace_period_days' => $event->gracePeriodDays,
-            'grace_period_end' => $event->gracePeriodEndDate->toDateTimeString(),
+        Log::info('Grace period notification sent', [
+            'user_id'            => $event->user->id,
+            'plan_id'            => $event->plan->id,
+            'grace_period_days'  => $event->gracePeriodDays,
+            'grace_period_end'   => $event->gracePeriodEndDate->format('Y-m-d'),
         ]);
     }
 }
