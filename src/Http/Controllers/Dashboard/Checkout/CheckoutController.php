@@ -33,13 +33,13 @@ class CheckoutController extends Controller
         $plan = $this->planRepository->findById($validated['plan_id']);
 
         if (! $plan) {
-            return response()->json(['success' => false, 'message' => 'Plano não encontrado.'], 404);
+            return response()->json(['success' => false, 'message' => __('api-key::messages.plan_not_found')], 404);
         }
 
         $coupon = Coupon::where('code', strtoupper($validated['code']))->first();
 
         if (! $coupon || ! $coupon->isValid()) {
-            return response()->json(['success' => false, 'message' => 'Cupom inválido ou expirado.'], 422);
+            return response()->json(['success' => false, 'message' => __('api-key::messages.coupon_invalid_or_expired')], 422);
         }
 
         $originalPrice = (float) $plan->price;
@@ -77,7 +77,7 @@ class CheckoutController extends Controller
 
         $plan = $this->planRepository->findById($validated['plan_id']);
         if (! $plan) {
-            return response()->json(['success' => false, 'message' => 'Plano não encontrado.'], 404);
+            return response()->json(['success' => false, 'message' => __('api-key::messages.plan_not_found')], 404);
         }
 
         $transactionAmount = (float) $plan->price;
@@ -97,15 +97,15 @@ class CheckoutController extends Controller
         if ($transactionAmount <= 0) {
             auth()->user()->subscribeToPlan($plan);
             $appliedCoupon?->increment('uses');
-            return response()->jsonSuccess(['status' => 'approved', 'message' => 'Assinatura ativada com cupom de desconto total.']);
+            return response()->jsonSuccess(['status' => 'approved', 'message' => __('api-key::messages.subscription_activated_full_discount')]);
         }
 
         if (empty($validated['token']) && empty($validated['mp_card_id'])) {
-            return response()->json(['success' => false, 'message' => 'Dados de pagamento inválidos.'], 422);
+            return response()->json(['success' => false, 'message' => __('api-key::messages.invalid_payment_data')], 422);
         }
 
         if (empty($validated['payment_method_id']) || empty($validated['payer']['email'])) {
-            return response()->json(['success' => false, 'message' => 'Dados de pagamento inválidos.'], 422);
+            return response()->json(['success' => false, 'message' => __('api-key::messages.invalid_payment_data')], 422);
         }
 
         $payerEmail   = strtolower($validated['payer']['email']);
@@ -120,11 +120,11 @@ class CheckoutController extends Controller
                     ->first();
 
                 if (! $savedCard || ! $savedCard->mp_customer_id) {
-                    return response()->json(['success' => false, 'message' => 'Cartão não encontrado.'], 404);
+                    return response()->json(['success' => false, 'message' => __('api-key::messages.card_not_found')], 404);
                 }
 
                 if (empty($validated['security_code'])) {
-                    return response()->json(['success' => false, 'message' => 'CVV obrigatório.'], 422);
+                    return response()->json(['success' => false, 'message' => __('api-key::messages.cvv_required')], 422);
                 }
 
                 $mpCustomerId = $savedCard->mp_customer_id;
@@ -214,11 +214,11 @@ class CheckoutController extends Controller
                     }
                 }
 
-                return response()->jsonSuccess(['status' => 'approved', 'message' => 'Pagamento aprovado! Sua assinatura foi ativada.']);
+                return response()->jsonSuccess(['status' => 'approved', 'message' => __('api-key::messages.payment_approved')]);
             }
 
             if (in_array($payment->status ?? '', ['pending', 'in_process'])) {
-                return response()->jsonSuccess(['status' => 'pending', 'message' => 'Pagamento em análise. Você será notificado em breve.']);
+                return response()->jsonSuccess(['status' => 'pending', 'message' => __('api-key::messages.payment_pending')]);
             }
 
             return response()->json(['success' => false, 'message' => $this->translateStatusDetail($payment->status_detail ?? '')], 422);
@@ -229,10 +229,10 @@ class CheckoutController extends Controller
             $body   =$e->getApiResponse()?->getContent();
             $detail = $body['status_detail'] ?? $body['message'] ?? '';
             Log::error('MP API exception', ['body' => $body, 'status' => $e->getApiResponse()?->getStatusCode()]);
-            return response()->json(['success' => false, 'message' => $this->translateStatusDetail($detail) ?: ($detail ?: 'Pagamento recusado.')], 422);
+            return response()->json(['success' => false, 'message' => $this->translateStatusDetail($detail) ?: ($detail ?: __('api-key::messages.payment_declined'))], 422);
         } catch (\Exception $e) {
             Log::error('Checkout process error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            return response()->json(['success' => false, 'message' => 'Erro interno ao processar o pagamento.'], 500);
+            return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 500);
         }
     }
 
@@ -286,7 +286,7 @@ class CheckoutController extends Controller
             $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$xRequestId};ts:{$ts};", $secret);
 
             if (! hash_equals($hash, $v1)) {
-                return response()->json(['message' => 'Invalid signature.'], 400);
+                return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
             }
         }
 

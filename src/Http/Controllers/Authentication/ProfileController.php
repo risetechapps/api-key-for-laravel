@@ -86,20 +86,17 @@ class ProfileController extends Controller
             $apiKey = auth()->user()->apiKey;
 
             if (!$apiKey) {
-                return response()->jsonGone('API Key não encontrada');
+                return response()->jsonGone(__('api-key::messages.api_key_not_found'));
             }
 
-            // Gera novo codigo aleatorio
             $newKey = bin2hex(random_bytes(64));
 
-            $apiKey->update([
-                'key' => $newKey
-            ]);
+            $apiKey->update(['key' => $newKey]);
 
             return response()->jsonSuccess(['key' => $newKey]);
         } catch (\Exception $exception) {
             report($exception);
-            return response()->jsonGone(__('Erro ao regenerar API Key'));
+            return response()->jsonGone(__('api-key::messages.error_regenerating_api_key'));
         }
     }
 }

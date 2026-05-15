@@ -32,7 +32,7 @@ class CardController extends Controller
             ->first();
 
         if ($existing) {
-            return response()->json(['success' => false, 'message' => 'Este cartão já está cadastrado.'], 422);
+            return response()->json(['success' => false, 'message' => __('api-key::messages.card_already_registered')], 422);
         }
 
         UserCard::where('authentication_id', $user->getKey())->update(['is_default' => false]);

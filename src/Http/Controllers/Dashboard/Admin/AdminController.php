@@ -34,7 +34,7 @@ class AdminController extends Controller
             ]);
         } catch (\Exception $e) {
             report($e);
-            return response()->jsonGone('Erro ao processar estorno: ' . $e->getMessage());
+            return response()->jsonGone(__('api-key::messages.error_processing_refund') . ': ' . $e->getMessage());
         }
     }
 

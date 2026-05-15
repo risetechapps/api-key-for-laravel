@@ -7,12 +7,18 @@ return [
     'user_not_found' => 'Usuário não encontrado',
     'account_not_verified' => 'Conta não verificada, por favor verifique sua caixa de e-mail.',
     'incorrect_credentials' => 'Usuário ou senha incorretos',
+    'logout_success' => 'Logout realizado com sucesso.',
+    'password_reset_sent' => 'Link de recuperação enviado para seu e-mail.',
+    'password_reset_failed' => 'Não foi possível enviar o link de recuperação. Tente novamente.',
+    'password_reset_success' => 'Senha redefinida com sucesso.',
     'unauthorized' => 'Não autorizado',
     'forbidden' => 'Acesso negado',
 
     // API Key
     'api_key_not_active' => 'Sua chave API não está ativa',
     'api_key_expired' => 'Sua chave API expirou',
+    'api_key_not_found' => 'API Key não encontrada.',
+    'error_regenerating_api_key' => 'Erro ao regenerar a API Key. Tente novamente.',
     'origin_not_allowed' => 'Não autorizado: Origem/IP da requisição não permitido',
 
     // Plan & Subscription
@@ -49,6 +55,25 @@ return [
     'error_creating_signature' => 'Não foi possível completar a assinatura no momento, por favor tente novamente mais tarde',
     'error_loading_signature_history' => 'Não foi possível carregar histórico de planos',
     'error_loading_request_log' => 'Não foi possível carregar histórico de requisições',
+
+    // Cards
+    'card_already_registered' => 'Este cartão já está cadastrado.',
+    'card_not_found' => 'Cartão não encontrado.',
+    'cvv_required' => 'CVV obrigatório.',
+
+    // Checkout & Pagamento
+    'plan_not_found' => 'Plano não encontrado.',
+    'coupon_invalid_or_expired' => 'Cupom inválido ou expirado.',
+    'invalid_payment_data' => 'Dados de pagamento inválidos.',
+    'subscription_activated_full_discount' => 'Assinatura ativada com cupom de desconto total.',
+    'payment_approved' => 'Pagamento aprovado! Sua assinatura foi ativada.',
+    'payment_pending' => 'Pagamento em análise. Você será notificado em breve.',
+    'payment_declined' => 'Pagamento recusado.',
+    'error_processing_payment' => 'Erro interno ao processar o pagamento.',
+    'invalid_webhook_signature' => 'Assinatura inválida.',
+
+    // Admin
+    'error_processing_refund' => 'Erro ao processar estorno.',
 
     // Generic
     'success' => 'Sucesso',

@@ -7,12 +7,18 @@ return [
     'user_not_found' => 'User not found',
     'account_not_verified' => 'Account not verified, please check your email inbox.',
     'incorrect_credentials' => 'Incorrect username or password',
+    'logout_success' => 'Logout successful.',
+    'password_reset_sent' => 'Password reset link sent to your email.',
+    'password_reset_failed' => 'We were unable to send the reset link. Please try again.',
+    'password_reset_success' => 'Password reset successfully.',
     'unauthorized' => 'Unauthorized',
     'forbidden' => 'Forbidden',
 
     // API Key
     'api_key_not_active' => 'Your API key is not active',
     'api_key_expired' => 'Your API key has expired',
+    'api_key_not_found' => 'API Key not found.',
+    'error_regenerating_api_key' => 'Error regenerating the API Key. Please try again.',
     'origin_not_allowed' => 'Unauthorized: Request origin/IP not permitted',
 
     // Plan & Subscription
@@ -49,6 +55,25 @@ return [
     'error_creating_signature' => 'Unable to complete the subscription at this time, please try again later',
     'error_loading_signature_history' => 'Unable to load subscribed plan history',
     'error_loading_request_log' => 'Unable to load request history',
+
+    // Cards
+    'card_already_registered' => 'This card is already registered.',
+    'card_not_found' => 'Card not found.',
+    'cvv_required' => 'CVV is required.',
+
+    // Checkout & Payment
+    'plan_not_found' => 'Plan not found.',
+    'coupon_invalid_or_expired' => 'Invalid or expired coupon.',
+    'invalid_payment_data' => 'Invalid payment data.',
+    'subscription_activated_full_discount' => 'Subscription activated with full discount coupon.',
+    'payment_approved' => 'Payment approved! Your subscription has been activated.',
+    'payment_pending' => 'Payment under review. You will be notified shortly.',
+    'payment_declined' => 'Payment declined.',
+    'error_processing_payment' => 'Internal error processing the payment.',
+    'invalid_webhook_signature' => 'Invalid signature.',
+
+    // Admin
+    'error_processing_refund' => 'Error processing refund.',
 
     // Generic
     'success' => 'Success',
