@@ -39,13 +39,15 @@ class ApiKeyServiceProvider extends ServiceProvider
 
         $rulesRegistry = $this->app->make(RulesRegistry::class);
 
+        $packageRoot = dirname(__DIR__);
+
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__ . '/../config/config.php' => config_path('api-key.php'),
+                $packageRoot . '/config/config.php' => config_path('api-key.php'),
             ], 'api-key-config');
 
             $this->publishes([
-                __DIR__ . '/../database/migrations/' => database_path('migrations'),
+                $packageRoot . '/database/migrations' => database_path('migrations'),
             ], 'api-key-migrations');
 
             $this->publishes([
@@ -57,28 +59,28 @@ class ApiKeyServiceProvider extends ServiceProvider
             ], 'api-key-lang');
 
             $this->publishes([
-                __DIR__ . '/../resources/js/' => resource_path('js/'),
-                __DIR__ . '/../resources/css/' => resource_path('css/'),
+                $packageRoot . '/resources/js'  => resource_path('js'),
+                $packageRoot . '/resources/css' => resource_path('css'),
             ], 'api-key-frontend');
 
             $this->publishes([
-                __DIR__ . '/../resources/views/app.blade.php' => resource_path('views/vendor/api-key/app.blade.php'),
+                $packageRoot . '/resources/views/app.blade.php' => resource_path('views/vendor/api-key/app.blade.php'),
             ], 'api-key-views');
 
             $this->publishes([
-                __DIR__ . '/../stubs/package.json'  => base_path('package.json'),
-                __DIR__ . '/../stubs/vite.config.ts' => base_path('vite.config.ts'),
-                __DIR__ . '/../stubs/tsconfig.json'  => base_path('tsconfig.json'),
+                $packageRoot . '/stubs/package.json'   => base_path('package.json'),
+                $packageRoot . '/stubs/vite.config.ts' => base_path('vite.config.ts'),
+                $packageRoot . '/stubs/tsconfig.json'  => base_path('tsconfig.json'),
             ], 'api-key-build');
 
             $this->publishes([
-                __DIR__ . '/../dist' => public_path('vendor/api-key'),
+                $packageRoot . '/dist' => public_path('vendor/api-key'),
             ], 'api-key-assets');
         }
 
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        $this->loadMigrationsFrom($packageRoot . '/database/migrations');
         $this->loadTranslationsFrom(__DIR__ . '/lang', 'api-key');
-        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'api-key');
+        $this->loadViewsFrom($packageRoot . '/resources/views', 'api-key');
 
         ResetPassword::createUrlUsing(function ($notifiable, string $token) {
             return url('/reset-password?token=' . $token . '&email=' . urlencode($notifiable->getEmailForPasswordReset()));
