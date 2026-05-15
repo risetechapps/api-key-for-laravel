@@ -4,7 +4,7 @@
 use Illuminate\Support\Facades\Route;
 use RiseTechApps\ApiKey\Http\Controllers\Authentication\AuthController;
 
-Route::middleware(['api'])->prefix('api/v1/')->group(function () {
+Route::middleware(['api', 'language'])->prefix('api/v1/')->group(function () {
     // Authentication routes
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
