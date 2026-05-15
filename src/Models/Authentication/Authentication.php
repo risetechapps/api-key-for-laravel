@@ -21,6 +21,7 @@ use RiseTechApps\ApiKey\Events\PlanChanged;
 use RiseTechApps\ApiKey\Events\UserStatusChanged;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
+use RiseTechApps\ApiKey\Notifications\ResetPasswordNotification;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
 use RiseTechApps\Media\Models\Media;
@@ -106,6 +107,11 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
     public function sendEmailVerificationNotification(): void
     {
         $this->notify(new EmailVerifyNotification());
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
     }
 
     public function apiKey(): HasOne
