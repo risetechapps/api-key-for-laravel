@@ -107,7 +107,7 @@ return [
     | a preferred language or when the preferred language is not supported.
     |
     */
-    'default_language' => env('API_KEY_DEFAULT_LANGUAGE', 'en'),
+    'default_language' => env('API_KEY_DEFAULT_LANGUAGE', 'pt'),
 
     /*
     |--------------------------------------------------------------------------
@@ -178,4 +178,19 @@ return [
     |
     */
     'internal_token' => env('API_INTERNAL_TOKEN'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | SPA (Single Page Application) Configuration
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, the package registers a catch-all web route that serves
+    | the Vue SPA entry point (app.blade.php) for all non-API requests.
+    | This also disables the DisableRouteWebMiddleware automatically so
+    | browsers can access the frontend.
+    |
+    */
+    'spa' => [
+        'enabled' => env('API_KEY_SPA_ENABLED', false),
+    ],
 ];
