@@ -14,22 +14,9 @@ export default defineConfig({
         vue(),
     ],
     resolve: {
-        alias: {
-            '@': '/resources/js',
-        },
+        alias: { '@': '/resources/js' },
     },
-    // Adicione este bloco abaixo:
     server: {
-        watch: {
-            usePolling: true,
-        },
-    },
-    build: {
-        watch: {
-            // Garante que o build monitore as pastas de recursos
-            include: 'resources/**',
-        },
-        // Opcional: limpa a pasta build antes de cada nova compilação no watch
-        emptyOutDir: true,
+        watch: { usePolling: true },
     },
 });

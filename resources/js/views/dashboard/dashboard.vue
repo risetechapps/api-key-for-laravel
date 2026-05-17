@@ -287,10 +287,9 @@ const stats = computed(() => {
 });
 
 const planFeatures = [
-    {name: 'Consultas CNPJ/CPF', enabled: true},
-    {name: 'Consultas CEP', enabled: true},
-    {name: 'Previsão do Tempo', enabled: true},
-    {name: 'Feriados Nacionais', enabled: true},
+    {name: 'Modulo A', enabled: true},
+    {name: 'Modulo B', enabled: true},
+    {name: 'Modulo C', enabled: true},
 ];
 
 const recentRequests = computed(() => dashboardStore.requests.slice(0, 10));

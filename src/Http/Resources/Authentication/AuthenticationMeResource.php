@@ -41,6 +41,9 @@ class AuthenticationMeResource extends JsonResource
                 'remaining_requests' => max(0, $this->requestLimit() - $this->countUsed()),
             ],
 
+            // Payment gateway
+            'mp_public_key' => config('api-key.mercadopago.public_key'),
+
             // Timestamps
             'created_at' => $this->created_at?->toIso8601String(),
         ];

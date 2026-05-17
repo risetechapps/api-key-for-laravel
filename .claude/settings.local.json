@@ -7,7 +7,10 @@
       "Bash(vendor/bin/pest --colors=never tests/Unit/Models/UserPlanTest.php --verbose)",
       "Bash(vendor/bin/pest --colors=never tests/Unit/Models/UserPlanTest.php --debug)",
       "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Soares\\\\Documents\\\\Projetos\\\\Back-End\\\\orchestrator-server\\\\packages\\\\RiseTech\\\\api-key-for-laravel\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Test-Path C:\\\\Users\\\\Soares\\\\Documents\\\\Projetos\\\\Back-End\\\\orchestrator-server\\\\packages\\\\RiseTech\\\\api-key-for-laravel\\\\resources\\\\js *)"
     ]
   }
 }

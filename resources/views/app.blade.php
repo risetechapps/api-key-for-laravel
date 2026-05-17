@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="mp-public-key" content="{{ config('api-key.mercadopago.public_key', '') }}">
 
     <title>{{ config('app.name', 'Dashboard') }}</title>
 
@@ -12,11 +13,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-    <!-- Assets -->
-    <link rel="stylesheet" href="{{ asset('vendor/api-key/app.css') }}">
+    <!-- Assets: Level 2 (host build) or Level 1 (pre-built) -->
+    @if(file_exists(public_path('build/manifest.json')))
+        @vite(['resources/css/app.css', 'resources/js/app.ts'])
+    @else
+        <link rel="stylesheet" href="{{ asset('vendor/api-key/app.css') }}">
+    @endif
 </head>
 <body class="antialiased bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
     <div id="app"></div>
-    <script type="module" src="{{ asset('vendor/api-key/app.js') }}"></script>
+    @unless(file_exists(public_path('build/manifest.json')))
+        <script type="module" src="{{ asset('vendor/api-key/app.js') }}"></script>
+    @endunless
 </body>
 </html>

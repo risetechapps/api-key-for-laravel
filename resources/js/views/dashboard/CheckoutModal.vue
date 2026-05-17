@@ -284,7 +284,9 @@ async function loadMpSdk() {
 
 async function mountBrick(containerId = 'mp-brick-container', isVerify = false) {
     if (!window.MercadoPago) return;
-    const publicKey = import.meta.env.VITE_MP_PUBLIC_KEY;
+    const publicKey = authStore.user?.mp_public_key
+        || document.querySelector('meta[name="mp-public-key"]')?.getAttribute('content')
+        || '';
     if (!publicKey) return;
 
     const mp = new window.MercadoPago(publicKey, { locale: 'pt-BR' });
@@ -422,7 +424,7 @@ async function submitSavedCard() {
         if (cardNumber.length < 13) { errorMessage.value = 'Número do cartão inválido.'; return; }
 
         await loadMpSdk();
-        const mp    = new window.MercadoPago(import.meta.env.VITE_MP_PUBLIC_KEY, { locale: 'pt-BR' });
+        const mp    = new window.MercadoPago(authStore.user?.mp_public_key || document.querySelector('meta[name="mp-public-key"]')?.getAttribute('content') || '', { locale: 'pt-BR' });
         const token = await mp.createCardToken({
             cardNumber,
             cardholderName:      selectedCard.value.holder_name,
