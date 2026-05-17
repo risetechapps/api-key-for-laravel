@@ -401,46 +401,48 @@ async function submitSavedCard() {
     errorMessage.value   = '';
 
     try {
-        // Cartão salvo com mp_card_id — tokenizar com CVV via backend
-        if (selectedCard.value.mp_card_id) {
-            if ((savedCardForm.value.cvv?.length ?? 0) < 3) { errorMessage.value = 'CVV inválido.'; return; }
-            const result = await dashboardStore.processCheckout(
-                props.plan.id,
-                {
-                    mp_card_id:        selectedCard.value.mp_card_id,
-                    security_code:     savedCardForm.value.cvv,
-                    payment_method_id: selectedCard.value.brand,
-                    payer:             { email: authStore.user?.email?.toLowerCase() ?? '' },
-                },
-                appliedCoupon.value?.coupon ?? null
-            );
-            await handlePaymentResult(result);
-            return;
-        }
+        const cpf   = (authStore.user?.profile?.cpf ?? '').replace(/\D/g, '');
+        const payer = {
+            email:          authStore.user?.email?.toLowerCase() ?? '',
+            identification: cpf ? { type: 'CPF', number: cpf } : undefined,
+        };
 
-        // Cartão sem mp_card_id — tokenizar no frontend com número + CVV
         if ((savedCardForm.value.cvv?.length ?? 0) < 3) { errorMessage.value = 'CVV inválido.'; return; }
-        const cardNumber = savedCardForm.value.number.replace(/\s/g, '');
-        if (cardNumber.length < 13) { errorMessage.value = 'Número do cartão inválido.'; return; }
 
         await loadMpSdk();
-        const mp    = new window.MercadoPago(authStore.user?.mp_public_key || document.querySelector('meta[name="mp-public-key"]')?.getAttribute('content') || '', { locale: 'pt-BR' });
-        const token = await mp.createCardToken({
-            cardNumber,
-            cardholderName:      selectedCard.value.holder_name,
-            cardExpirationMonth: selectedCard.value.expiry_month,
-            cardExpirationYear:  selectedCard.value.expiry_year,
-            securityCode:        savedCardForm.value.cvv,
-        });
+        const mpKey = authStore.user?.mp_public_key
+            || document.querySelector('meta[name="mp-public-key"]')?.getAttribute('content')
+            || '';
+        const mp = new window.MercadoPago(mpKey, { locale: 'pt-BR' });
+
+        let token;
+        if (selectedCard.value.mp_card_id) {
+            // Cartão salvo com mp_card_id — tokeniza CVV no frontend via JS SDK (secure)
+            token = await mp.createCardToken({
+                cardId:       selectedCard.value.mp_card_id,
+                securityCode: savedCardForm.value.cvv,
+            });
+        } else {
+            // Cartão sem mp_card_id — tokeniza número + CVV no frontend
+            const cardNumber = savedCardForm.value.number.replace(/\s/g, '');
+            if (cardNumber.length < 13) { errorMessage.value = 'Número do cartão inválido.'; return; }
+            token = await mp.createCardToken({
+                cardNumber,
+                cardholderName:      selectedCard.value.holder_name,
+                cardExpirationMonth: selectedCard.value.expiry_month,
+                cardExpirationYear:  selectedCard.value.expiry_year,
+                securityCode:        savedCardForm.value.cvv,
+            });
+        }
 
         const result = await dashboardStore.processCheckout(
             props.plan.id,
             {
                 token:             token.id,
                 installments:      1,
-                payment_method_id: detectBrand(cardNumber),
-                issuer_id:         null,
-                payer:             { email: authStore.user?.email?.toLowerCase() ?? '' },
+                payment_method_id: selectedCard.value.brand || detectBrand(savedCardForm.value.number),
+                saved_card_id:     selectedCard.value.id,
+                payer,
             },
             appliedCoupon.value?.coupon ?? null
         );

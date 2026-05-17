@@ -52,7 +52,7 @@ class CardController extends Controller
                 'installments'         => 1,
                 'payment_method_id'    => $validated['payment_method_id'],
                 'external_reference'   => $user->getKey() . '|card_validation',
-                'statement_descriptor' => mb_substr(config('app.name'), 0, 22),
+                'statement_descriptor' => mb_substr(config('app.name') ?: 'Validacao Cartao', 0, 22),
                 'payer'                => [
                     'email'          => strtolower($user->email),
                     'identification' => ['type' => 'CPF', 'number' => $cpf],

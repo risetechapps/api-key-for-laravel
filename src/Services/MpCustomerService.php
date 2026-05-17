@@ -27,17 +27,38 @@ class MpCustomerService
             return $existing;
         }
 
+        $email    = strtolower($user->email);
         $response = Http::withToken($this->accessToken)
-            ->post("{$this->baseUrl}/v1/customers", [
-                'email' => strtolower($user->email),
-            ]);
+            ->post("{$this->baseUrl}/v1/customers", ['email' => $email]);
 
-        if (! $response->successful()) {
-            Log::error('MP create customer failed', ['body' => $response->body()]);
-            throw new \RuntimeException('Falha ao registrar cliente no Mercado Pago.');
+        if ($response->successful()) {
+            return $response->json('id');
         }
 
-        return $response->json('id');
+        $causeCode = $response->json('cause.0.code') ?? $response->json('cause.code') ?? '';
+
+        // Cliente já existe no MP — busca pelo e-mail
+        if ((string) $causeCode === '101') {
+            return $this->findCustomerByEmail($email);
+        }
+
+        Log::error('MP create customer failed', ['body' => $response->body()]);
+        throw new \RuntimeException('Falha ao registrar cliente no Mercado Pago.');
+    }
+
+    private function findCustomerByEmail(string $email): string
+    {
+        $response = Http::withToken($this->accessToken)
+            ->get("{$this->baseUrl}/v1/customers/search", ['email' => $email]);
+
+        $id = $response->json('results.0.id');
+
+        if (! $id) {
+            Log::error('MP find customer by email failed', ['body' => $response->body()]);
+            throw new \RuntimeException('Falha ao localizar cliente no Mercado Pago.');
+        }
+
+        return $id;
     }
 
     /**

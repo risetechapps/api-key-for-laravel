@@ -63,8 +63,7 @@ class CheckoutController extends Controller
         $validated = $request->validate([
             'plan_id'                     => ['required', 'string'],
             'token'                       => ['nullable', 'string'],
-            'mp_card_id'                  => ['nullable', 'string'],
-            'security_code'               => ['nullable', 'string'],
+            'saved_card_id'               => ['nullable', 'integer'],
             'payment_method_id'           => ['nullable', 'string'],
             'issuer_id'                   => ['nullable', 'string'],
             'payer'                       => ['nullable', 'array'],
@@ -100,7 +99,7 @@ class CheckoutController extends Controller
             return response()->jsonSuccess(['status' => 'approved', 'message' => __('api-key::messages.subscription_activated_full_discount')]);
         }
 
-        if (empty($validated['token']) && empty($validated['mp_card_id'])) {
+        if (empty($validated['token'])) {
             return response()->json(['success' => false, 'message' => __('api-key::messages.invalid_payment_data')], 422);
         }
 
@@ -108,43 +107,27 @@ class CheckoutController extends Controller
             return response()->json(['success' => false, 'message' => __('api-key::messages.invalid_payment_data')], 422);
         }
 
-        $payerEmail   = strtolower($validated['payer']['email']);
-        $token        = $validated['token'] ?? null;
-        $savedCard    = null;
-        $mpCustomerId = null;
+        $payerEmail = strtolower($validated['payer']['email']);
+        $token      = $validated['token'] ?? null;
+        $savedCard  = null;
+
+        if (! empty($validated['saved_card_id'])) {
+            $savedCard = UserCard::where('authentication_id', auth()->user()->getKey())
+                ->find($validated['saved_card_id']);
+        }
 
         try {
-            if (! empty($validated['mp_card_id'])) {
-                $savedCard = UserCard::where('authentication_id', auth()->user()->getKey())
-                    ->where('mp_card_id', $validated['mp_card_id'])
-                    ->first();
-
-                if (! $savedCard || ! $savedCard->mp_customer_id) {
-                    return response()->json(['success' => false, 'message' => __('api-key::messages.card_not_found')], 404);
-                }
-
-                if (empty($validated['security_code'])) {
-                    return response()->json(['success' => false, 'message' => __('api-key::messages.cvv_required')], 422);
-                }
-
-                $mpCustomerId = $savedCard->mp_customer_id;
-                $token        = $this->mpCustomerService->tokenizeCard(
-                    $mpCustomerId,
-                    $savedCard->mp_card_id,
-                    $validated['security_code'],
-                );
-            }
-
             MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
             $client = new PaymentClient();
 
-            $payerData = ['email' => $payerEmail];
-            if ($mpCustomerId) {
-                $payerData['id'] = $mpCustomerId;
-            }
+            $payerData      = ['email' => $payerEmail];
             $identification = $validated['payer']['identification'] ?? $request->input('payer.identification');
             if (! empty($identification['type']) && ! empty($identification['number'])) {
                 $payerData['identification'] = $identification;
+            }
+
+            if ($savedCard?->mp_customer_id) {
+                $payerData['id'] = $savedCard->mp_customer_id;
             }
 
             Log::debug('MP checkout payer sent', [
@@ -163,7 +146,7 @@ class CheckoutController extends Controller
                 'payment_method_id'    => $validated['payment_method_id'],
                 'payer'                => $payerData,
                 'external_reference'   => auth()->id() . '|' . $plan->getKey(),
-                'statement_descriptor' => mb_substr(config('app.name'), 0, 22),
+                'statement_descriptor' => mb_substr(config('app.name') ?: 'Assinatura', 0, 22),
                 'additional_info'      => [
                     'payer' => [
                         'first_name'               => $nameParts[0] ?? '',
@@ -207,11 +190,8 @@ class CheckoutController extends Controller
                     UserCard::where('authentication_id', auth()->user()->getKey())->update(['is_default' => false]);
                     $savedCard->update(['is_default' => true]);
                 } else {
-                    try {
-                        $this->syncCardAfterPayment(auth()->user(), $payment, $validated);
-                    } catch (\Exception $e) {
-                        Log::warning('Card sync after payment failed', ['error' => $e->getMessage()]);
-                    }
+                    try { $this->syncCardAfterPayment(auth()->user(), $payment, $validated); }
+                    catch (\Exception $e) { Log::warning('Card sync after payment failed', ['error' => $e->getMessage()]); }
                 }
 
                 return response()->jsonSuccess(['status' => 'approved', 'message' => __('api-key::messages.payment_approved')]);
@@ -301,6 +281,10 @@ class CheckoutController extends Controller
 
             if ($payment->status === 'approved' && $payment->external_reference) {
                 [$userId, $planId] = explode('|', $payment->external_reference, 2);
+
+                if ($planId === 'card_validation') {
+                    return response()->json(['message' => 'ok']);
+                }
 
                 $user = Authentication::find($userId);
                 $plan = $this->planRepository->findById($planId);
