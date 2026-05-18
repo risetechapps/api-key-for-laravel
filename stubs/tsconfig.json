@@ -1,5 +1,4 @@
 {
-    "extends": "@vue/tsconfig/tsconfig.dom.json",
     "compilerOptions": {
         "target": "ESNext",
         "module": "ESNext",
@@ -9,7 +8,8 @@
         "sourceMap": true,
         "resolveJsonModule": true,
         "esModuleInterop": true,
-        "lib": ["ESNext", "DOM"],
+        "skipLibCheck": true,
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
         "types": ["vite/client"],
         "paths": {
             "@/*": ["./resources/js/*"]
