@@ -73,7 +73,8 @@
                 "RiseTechApps\\ApiKey\\ApiKeyServiceProvider"
             ],
             "aliases": {
-                "ApiKey":  "RiseTechApps\\ApiKey\\ApiKeyFacade"
+                "ApiKey":         "RiseTechApps\\ApiKey\\ApiKeyFacade",
+                "FeatureRegistry": "RiseTechApps\\ApiKey\\Facades\\FeatureRegistry"
             }
         }
     },

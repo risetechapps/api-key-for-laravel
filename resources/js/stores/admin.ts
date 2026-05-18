@@ -6,6 +6,7 @@ import axios from 'axios';
 export const useAdminStore = defineStore('admin', () => {
     const plans    = ref([]);
     const coupons  = ref([]);
+    const features = ref<any[]>([]);
     const users    = ref<any>({ data: [], total: 0, current_page: 1, last_page: 1 });
     const refunds  = ref<any>({ data: [], total: 0, current_page: 1, last_page: 1 });
     const loading  = ref(false);
@@ -63,6 +64,12 @@ export const useAdminStore = defineStore('admin', () => {
         coupons.value = (coupons.value as any[]).filter((c: any) => c.id !== id);
     }
 
+    // ── Features (registry: dashboard/admin/features) ────────────────────
+    async function fetchFeatures() {
+        const r = await axios.get('dashboard/admin/features');
+        features.value = r.data?.data || [];
+    }
+
     // ── Users (package route: dashboard/admin/users) ───────────────────────
     async function fetchUsers(params: any = {}) {
         loading.value = true;
@@ -88,9 +95,10 @@ export const useAdminStore = defineStore('admin', () => {
     }
 
     return {
-        plans, coupons, users, refunds, loading, error,
+        plans, coupons, features, users, refunds, loading, error,
         fetchPlans, createPlan, updatePlan, deletePlan,
         fetchCoupons, createCoupon, updateCoupon, deleteCoupon,
+        fetchFeatures,
         fetchUsers,
         fetchRefunds, processRefund,
     };

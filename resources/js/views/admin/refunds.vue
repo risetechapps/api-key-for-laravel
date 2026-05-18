@@ -34,7 +34,7 @@
                                 <p class="text-xs text-slate-500 dark:text-slate-400">{{ sub.user?.email }}</p>
                             </td>
                             <td class="py-3 px-4 text-sm font-medium text-slate-900 dark:text-white">{{ sub.plan?.name }}</td>
-                            <td class="py-3 px-4 text-sm text-slate-700 dark:text-slate-300">{{ sub.plan?.price }}</td>
+                            <td class="py-3 px-4 text-sm text-slate-700 dark:text-slate-300">{{ sub.payment_amount }}</td>
                             <td class="py-3 px-4 text-sm text-slate-700 dark:text-slate-300">
                                 {{ formatDate(sub.start_date) }} - {{ formatDate(sub.end_date) }}
                             </td>

@@ -11,7 +11,7 @@ class UserPlan extends Model
 {
     use HasUuid;
 
-    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id'];
+    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id', 'payment_amount'];
 
     protected $casts = [
         'start_date' => 'datetime',

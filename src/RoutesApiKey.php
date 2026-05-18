@@ -75,6 +75,7 @@ class RoutesApiKey
                     Route::get('/dashboard/admin/users', [AdminController::class, 'users']);
                     Route::get('/dashboard/admin/refunds', [AdminController::class, 'refunds']);
                     Route::post('/dashboard/admin/refunds/{id}', [AdminController::class, 'processRefund']);
+                    Route::get('/dashboard/admin/features', [AdminController::class, 'features']);
                 });
 
                 Route::get('/dashboard/cards', [CardController::class, 'index']);

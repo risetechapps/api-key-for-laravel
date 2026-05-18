@@ -183,7 +183,10 @@ class CheckoutController extends Controller
 
             if ($payment->status === 'approved') {
                 $userPlan = auth()->user()->subscribeToPlan($plan);
-                $userPlan->update(['payment_id' => $payment->id]);
+                $userPlan->update([
+                    'payment_id'     => $payment->id,
+                    'payment_amount' => $transactionAmount,
+                ]);
                 $appliedCoupon?->increment('uses');
 
                 if ($savedCard) {

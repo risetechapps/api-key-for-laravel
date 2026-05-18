@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Client\Payment\PaymentRefundClient;
 use MercadoPago\MercadoPagoConfig;
+use RiseTechApps\ApiKey\Facades\FeatureRegistry;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
@@ -56,6 +57,9 @@ class AdminController extends Controller
                     'name'  => $up->plan?->name,
                     'price' => $up->plan?->formatted_price,
                 ],
+                'payment_amount' => $up->payment_amount
+                    ? 'R$ ' . number_format((float) $up->payment_amount, 2, ',', '.')
+                    : $up->plan?->formatted_price,
                 'user' => [
                     'id'    => $up->authentication?->getKey(),
                     'name'  => $up->authentication?->name,
@@ -72,6 +76,11 @@ class AdminController extends Controller
     {
         $plans = Plan::orderBy('price')->get();
         return response()->jsonSuccess(PlansResource::collection($plans));
+    }
+
+    public function features(): JsonResponse
+    {
+        return response()->jsonSuccess(FeatureRegistry::all());
     }
 
     public function users(Request $request): JsonResponse

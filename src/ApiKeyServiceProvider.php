@@ -120,6 +120,14 @@ class ApiKeyServiceProvider extends ServiceProvider
             return new \RiseTechApps\ApiKey\FeatureManager();
         });
 
+        $this->app->singleton('apikey.features', function ($app) {
+            return new \RiseTechApps\ApiKey\Services\FeatureRegistry(
+                $app->make('apikey')
+            );
+        });
+
+        $this->app->alias('apikey.features', \RiseTechApps\ApiKey\Services\FeatureRegistry::class);
+
         $this->registerCommands();
     }
 

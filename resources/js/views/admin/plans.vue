@@ -117,14 +117,18 @@
                         <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 block">
                             Features <span class="text-red-500">*</span>
                         </label>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <p v-if="!availableFeatures.length" class="text-xs text-slate-400 italic">
+                            Nenhuma feature registrada. Use <code>FeatureRegistry::register()</code> no seu AppServiceProvider.
+                        </p>
+                        <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             <label
                                 v-for="f in availableFeatures"
                                 :key="f.key"
                                 class="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                :title="f.description ?? ''"
                             >
                                 <input type="checkbox" :value="f.key" v-model="form.features" class="w-4 h-4 rounded text-indigo-600 accent-indigo-600" />
-                                <span class="text-xs text-slate-700 dark:text-slate-300">{{ f.label }}</span>
+                                <span class="text-xs text-slate-700 dark:text-slate-300">{{ f.name }}</span>
                             </label>
                         </div>
                     </div>
@@ -179,17 +183,14 @@ import Button from '@/views/componentes/Button.vue';
 import Modal from '@/views/componentes/Modal.vue';
 
 const adminStore = useAdminStore();
-const loading = computed(() => adminStore.loading);
-const plans   = computed(() => adminStore.plans);
+const loading          = computed(() => adminStore.loading);
+const plans            = computed(() => adminStore.plans);
+const availableFeatures = computed(() => adminStore.features);
 
 const showModal = ref(false);
 const editing   = ref(null);
 const saving    = ref(false);
 const formError = ref('');
-
-const availableFeatures = [
-
-];
 
 const emptyForm = () => ({
     name: '',
@@ -204,7 +205,10 @@ const emptyForm = () => ({
 
 const form = ref(emptyForm());
 
-onMounted(() => adminStore.fetchPlans());
+onMounted(() => {
+    adminStore.fetchPlans();
+    adminStore.fetchFeatures();
+});
 
 function openModal(plan = null) {
     editing.value = plan;
@@ -235,7 +239,7 @@ function removeDescription(index) {
 }
 
 async function save() {
-    if (!form.value.features.length) {
+    if (availableFeatures.value.length && !form.value.features.length) {
         formError.value = 'Selecione ao menos uma feature.';
         return;
     }
