@@ -184,7 +184,7 @@ class ApiKeyServiceProvider extends ServiceProvider
 
         Route::middleware(['web'])
             ->group(function () {
-                Route::get('/{any}', fn() => view('api-key::app'))
+                Route::get('/{any?}', fn() => view('api-key::app'))
                     ->where('any', '^(?!api).*$')
                     ->name('api-key.spa');
             });
