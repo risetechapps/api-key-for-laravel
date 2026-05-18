@@ -13,6 +13,7 @@ API key management, subscription plans, and a ready-to-use Vue 3 SPA dashboard �
 
 - **Secure API Key Management** — bcrypt hashing, not stored in plain text
 - **Subscription Plans** — billing cycles, request limits, feature flags
+- **FeatureRegistry** — register plan features in code, auto-sync to database, exposed to admin UI
 - **Grace Period** — configurable tolerance window after plan expiration
 - **Coupon System** — usage limits, expiration dates, percentage discounts
 - **Origin Validation** — CORS-like protection per API key
@@ -21,7 +22,7 @@ API key management, subscription plans, and a ready-to-use Vue 3 SPA dashboard �
 - **Automated Email Notifications** — grace period alerts, plan expiry, password reset (pt-BR)
 - **Password Reset Flow** — full forgot/reset cycle with signed URLs pointing to SPA
 - **Email Verification** — redirects to SPA after click
-- **MercadoPago Integration** — checkout, webhook, refunds
+- **MercadoPago Integration** — Secure Fields checkout, saved cards, webhook, refunds
 - **Vue 3 SPA Dashboard** — pre-built assets, zero Node.js required on host
 - **Internationalization** — English and Portuguese (pt-BR), auto-detected from `Accept-Language`
 - **Caching Layer** — Redis/Memcached support for API key validation
@@ -129,13 +130,15 @@ When `API_KEY_ROUTES_ENABLED=true` (default), the package registers routes autom
 
 Admin-only routes (requires `admin` middleware):
 
-| Method | URI |
-|--------|-----|
-| `POST/PUT/DELETE` | `api/v1/dashboard/plans/{plan}` |
-| `POST/PUT/DELETE` | `api/v1/dashboard/coupons/{coupon}` |
-| `GET` | `api/v1/dashboard/admin/users` |
-| `GET` | `api/v1/dashboard/admin/refunds` |
-| `POST` | `api/v1/dashboard/admin/refunds/{id}` |
+| Method | URI | Description |
+|--------|-----|-------------|
+| `POST/PUT/DELETE` | `api/v1/dashboard/plans/{plan}` | Create / update / delete plans |
+| `POST/PUT/DELETE` | `api/v1/dashboard/coupons/{coupon}` | Create / update / delete coupons |
+| `GET` | `api/v1/dashboard/admin/plans` | List all plans (admin view) |
+| `GET` | `api/v1/dashboard/admin/users` | List users with subscriptions |
+| `GET` | `api/v1/dashboard/admin/refunds` | List payments with refund option |
+| `POST` | `api/v1/dashboard/admin/refunds/{id}` | Process a refund via MercadoPago |
+| `GET` | `api/v1/dashboard/admin/features` | List registered features (from `FeatureRegistry`) |
 
 ### Manual route registration with `RoutesApiKey`
 
@@ -205,6 +208,70 @@ $plan = Plan::create([
 $user->subscribeToPlan($plan);
 ```
 
+---
+
+## FeatureRegistry
+
+`FeatureRegistry` is a code-first way to declare which features exist in your application. Features are registered in PHP, automatically persisted to the `plan_features` database table, and exposed to the admin dashboard for plan configuration.
+
+### Registering features
+
+Register features in your `AppServiceProvider::boot()`:
+
+```php
+use RiseTechApps\ApiKey\Facades\FeatureRegistry;
+
+public function boot(): void
+{
+    FeatureRegistry::register('api_requests', [
+        'name'        => 'Requisições via API',
+        'description' => 'Permite consumo via chave de API',
+        'icon'        => 'ph-key',
+    ]);
+
+    FeatureRegistry::register('export_csv', [
+        'name'        => 'Exportar CSV',
+        'description' => 'Exportação de dados em formato CSV',
+        'icon'        => 'ph-file-csv',
+    ]);
+}
+```
+
+### How it works
+
+1. `register()` stores the metadata in memory and auto-defines a resolver in `FeatureManager` so the `feature:key` middleware works immediately.
+2. The feature is upserted into the `plan_features` table (silent fail if the table doesn't exist yet — safe to call before migrations run).
+3. The admin dashboard fetches features from `GET /dashboard/admin/features` and renders them as checkboxes when creating or editing a plan.
+
+### Protecting routes by feature
+
+```php
+// Requires the active plan to have 'export_csv' in its features array
+Route::middleware(['api', 'plan', 'feature:export_csv'])->group(function () {
+    Route::get('/api/v1/export', ExportController::class);
+});
+```
+
+### Syncing to database manually
+
+If you run migrations after features are already registered (e.g. in an Artisan command), force-sync them:
+
+```php
+FeatureRegistry::sync();
+```
+
+### Available methods
+
+```php
+FeatureRegistry::all();         // array of all registered features
+FeatureRegistry::get('key');    // metadata for a specific feature (or null)
+FeatureRegistry::keys();        // array of registered keys
+FeatureRegistry::has('key');    // bool
+FeatureRegistry::sync();        // upsert all to database
+```
+
+> **Note:** `FeatureRegistry` uses its own `plan_features` table and does not conflict with `laravel/pennant` which uses the `features` table.
+
 ### Grace period
 
 Expired subscriptions automatically enter a grace period. The user keeps access while the clock ticks:
@@ -220,6 +287,36 @@ if ($userPlan?->isInGracePeriod()) {
 $user->hasActivePlan();     // true during grace period
 $user->isInGracePeriod();   // true only during grace period
 ```
+
+---
+
+## MercadoPago
+
+### Configuration
+
+Add to your `.env`:
+
+```env
+MP_PUBLIC_KEY=APP_USR-...
+MP_ACCESS_TOKEN=APP_USR-...
+MP_WEBHOOK_SECRET=your-webhook-secret
+```
+
+> **Do not** add `VITE_MP_PUBLIC_KEY`. The public key is delivered to the frontend through the authenticated `/auth/me` endpoint (`mp_public_key` field), so it works correctly with the pre-built SPA assets without needing a build-time variable.
+
+### Webhook
+
+Register the webhook URL in your MercadoPago account:
+
+```
+https://yourdomain.com/api/v1/dashboard/checkout/webhook
+```
+
+Set `MP_WEBHOOK_SECRET` to the secret MercadoPago generates for HMAC verification.
+
+### Saved cards
+
+Cards are tokenized via MercadoPago Secure Fields (iframes) directly in the browser — raw card numbers never reach your server. CVV tokenization for saved cards also happens on the frontend via `mp.createCardToken()`.
 
 ---
 
