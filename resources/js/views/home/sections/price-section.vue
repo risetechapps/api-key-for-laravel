@@ -72,11 +72,8 @@ import {PhCheckCircle} from "@phosphor-icons/vue";
 
 const pricingPlans = ref<PricingPlan[]>([]);
 
-const featureLabels: Record<string, string> = {
-};
-
-function planFeatures(plan: PricingPlan & { features?: string[] }): string[] {
-    if (plan.features?.length) return plan.features.map(f => featureLabels[f] ?? f);
+function planFeatures(plan: PricingPlan & { features?: Array<string | { key: string; name: string }> }): string[] {
+    if (plan.features?.length) return plan.features.map(f => typeof f === 'string' ? f : (f.name ?? f.key));
     if (plan.features_description?.length) return plan.features_description;
     return [];
 }

@@ -161,8 +161,11 @@
                     </div>
                 </div>
 
-                <div v-if="formError" class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-                    {{ formError }}
+                <div v-if="formError || fieldErrors.length" class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400 space-y-1">
+                    <p v-if="formError">{{ formError }}</p>
+                    <ul v-if="fieldErrors.length" class="list-disc list-inside space-y-0.5">
+                        <li v-for="(msg, i) in fieldErrors" :key="i">{{ msg }}</li>
+                    </ul>
                 </div>
 
                 <Button type="submit" variant="primary" class="w-full" :loading="saving">
@@ -187,10 +190,11 @@ const loading          = computed(() => adminStore.loading);
 const plans            = computed(() => adminStore.plans);
 const availableFeatures = computed(() => adminStore.features);
 
-const showModal = ref(false);
-const editing   = ref(null);
-const saving    = ref(false);
-const formError = ref('');
+const showModal   = ref(false);
+const editing     = ref(null);
+const saving      = ref(false);
+const formError   = ref('');
+const fieldErrors = ref([]);
 
 const emptyForm = () => ({
     name: '',
@@ -226,8 +230,9 @@ function openModal(plan = null) {
                 : [''],
           }
         : emptyForm();
-    formError.value = '';
-    showModal.value = true;
+    formError.value   = '';
+    fieldErrors.value = [];
+    showModal.value   = true;
 }
 
 function addDescription() {
@@ -249,8 +254,9 @@ async function save() {
         return;
     }
 
-    saving.value = true;
-    formError.value = '';
+    saving.value      = true;
+    formError.value   = '';
+    fieldErrors.value = [];
     try {
         const payload = { ...form.value, features_description: descs };
         if (editing.value) {
@@ -260,7 +266,14 @@ async function save() {
         }
         showModal.value = false;
     } catch (err) {
-        formError.value = err?.response?.data?.message || 'Erro ao salvar plano.';
+        const data = err?.response?.data;
+        const errors = data?.errors ?? {};
+        const flat = Object.values(errors).flat();
+        if (flat.length) {
+            fieldErrors.value = flat;
+        } else {
+            formError.value = data?.message || 'Erro ao salvar plano.';
+        }
     } finally {
         saving.value = false;
     }

@@ -36,6 +36,6 @@ class StorePlanRequest extends FormRequest
 
     public function messages(): array
     {
-        return $this->result['messages'];
+        return array_merge($this->result['messages'] ?? [], \RiseTechApps\ApiKey\Rules\PlanRules::messages());
     }
 }

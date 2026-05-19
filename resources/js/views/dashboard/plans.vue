@@ -206,12 +206,8 @@ onMounted(async () => {
     loading.value = false;
 });
 
-const featureLabels = {
-
-};
-
 function planBullets(plan) {
-    if (plan.features?.length) return plan.features.map(f => featureLabels[f] ?? f);
+    if (plan.features?.length) return plan.features.map(f => f.name ?? f.key ?? f);
     if (plan.features_description?.length) return plan.features_description;
     return [];
 }
