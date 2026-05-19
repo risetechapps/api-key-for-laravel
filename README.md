@@ -326,10 +326,11 @@ Os dados do cartão são tokenizados via MercadoPago Secure Fields (iframes) dir
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 
 $coupon = Coupon::create([
-    'code'                => 'LANCAMENTO50',
-    'discount_percentage' => 50,
-    'max_uses'            => 200,
-    'valid_until'         => now()->addMonth(),
+    'code'       => 'LANCAMENTO50',
+    'type'       => 'percentage', // 'percentage' ou 'fixed'
+    'value'      => 50,
+    'max_uses'   => 200,
+    'expires_at' => now()->addMonth(),
 ]);
 
 if ($coupon->isValid()) {
