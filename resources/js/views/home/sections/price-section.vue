@@ -30,7 +30,7 @@
 
                     <div class="mt-6 mb-8">
                         <span class="text-4xl font-bold text-slate-900 dark:text-white">{{ plan.price }}</span>
-                        <span class="text-slate-500 dark:text-slate-400">/mês</span>
+                        <span class="text-slate-500 dark:text-slate-400">/{{ billingCycleShort(plan.billing_cycle) }}</span>
                     </div>
 
                     <ul class="space-y-4 mb-8">
@@ -61,6 +61,7 @@ interface PricingPlan {
     name: string;
     description: string;
     price: string | number;
+    billing_cycle: string;
     highlighted: boolean;
     features: string[];
     features_description: string[];
@@ -71,6 +72,13 @@ import axiosDefault from "@/bootstrap";
 import {PhCheckCircle} from "@phosphor-icons/vue";
 
 const pricingPlans = ref<PricingPlan[]>([]);
+
+function billingCycleShort(cycle: string): string {
+    if (cycle === 'weekly') return 'semana';
+    if (cycle === 'monthly') return 'mês';
+    if (cycle === 'yearly' || cycle === 'annually') return 'ano';
+    return cycle;
+}
 
 function planFeatures(plan: PricingPlan & { features?: Array<string | { key: string; name: string }> }): string[] {
     if (plan.features?.length) return plan.features.map(f => typeof f === 'string' ? f : (f.name ?? f.key));

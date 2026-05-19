@@ -75,6 +75,11 @@ return [
     // Admin
     'error_processing_refund' => 'Error processing refund.',
 
+    // Billing Cycle
+    'billing_cycle_weekly' => 'Weekly',
+    'billing_cycle_monthly' => 'Monthly',
+    'billing_cycle_annually' => 'Annually',
+
     // Generic
     'success' => 'Success',
     'error' => 'Error',

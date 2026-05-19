@@ -213,6 +213,7 @@ function planBullets(plan) {
 }
 
 function billingCycleShort(cycle) {
+    if (cycle === 'weekly') return 'semana';
     if (cycle === 'monthly') return 'mês';
     if (cycle === 'yearly') return 'ano';
     if (cycle === 'annually') return 'ano';

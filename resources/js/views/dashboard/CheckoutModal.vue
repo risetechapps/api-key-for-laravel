@@ -215,6 +215,7 @@ const isFree       = computed(() => numericPrice.value <= 0);
 
 const billingLabel = computed(() => {
     const c = props.plan?.billing_cycle;
+    if (c === 'weekly') return 'semana';
     if (c === 'monthly') return 'mês';
     if (c === 'yearly' || c === 'annually') return 'ano';
     return c || '';

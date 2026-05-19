@@ -75,6 +75,11 @@ return [
     // Admin
     'error_processing_refund' => 'Erro ao processar estorno.',
 
+    // Billing Cycle
+    'billing_cycle_weekly' => 'Semanal',
+    'billing_cycle_monthly' => 'Mensal',
+    'billing_cycle_annually' => 'Anual',
+
     // Generic
     'success' => 'Sucesso',
     'error' => 'Erro',
