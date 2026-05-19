@@ -3,61 +3,32 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
-## [2.0.0] - 2026-04-17
+## [1.0.0] - 2026-05-19
 
 ### Adicionado
-- Sistema de eventos para ciclo de vida de API keys e planos (`ApiKeyCreated`, `ApiKeyDeleted`, `UserPlanActivated`, `UserPlanExpired`)
-- Cache para melhorar performance em validações de API keys
-- Métodos de login no `AuthService` (`login()`, `logout()`, `validateSession()`, `refresh()`)
-- Opções de configuração para período de carência e cache no arquivo `config/apikey.php`
-- Melhorias de segurança no modelo `ApiKey` (hash de tokens, encriptação)
-- Suporte a rate limiting com regras baseadas em planos
-- Tratamento de exceções centralizado para erros de validação
-- **Configurações adicionais:**
-  - `auth_throttle` - Rate limiting configurável para endpoints de autenticação
-  - `header_name` - Nome customizado do header da API key
-  - `default_language` - Idioma padrão configurável
-  - `cache_ttl.validation` e `cache_ttl.origin` - TTL específico para caches
-  - `routes.enabled` e `routes.prefix` - Controle de rotas automáticas
-  - `middleware_group.plan` - Customização do grupo de middlewares
-  - `disable_web_middleware.enabled` - Controle do middleware web
-
-### Alterado
-- **BREAKING**: Atualizados middlewares com lógica aprimorada (`ApiKeyAuthenticate`, `HasPlan`, `CheckFeature`)
-- **BREAKING**: Atualizados controllers com funcionalidade melhorada (validação de features com retornos padronizados)
-- **BREAKING**: Atualizados resources da API (estrutura de resposta modificada)
-- **BREAKING**: Atualizados providers de serviço e rotas (novos bindings no container)
-- **BREAKING**: Atualizados arquivos de migration (alterações na estrutura das tabelas)
-- Atualizado `Authentication` e `UserPlan` models com novos relacionamentos e atributos
-- Documentação README completamente reescrita com documentação abrangente
-
-### Removed
-- Compatibilidade com versões anteriores do Laravel 10 (requer Laravel 11+)
-- Métodos depreciados no `ApiKey` model
-
-## [1.7.1] - 2026-03-17
-- Atualizado Packages.
-- 
-## [1.7.0] - 2026-03-17
-- Atualizado Packages.
-- 
-## [1.6.0] - 2026-03-13
-- Atualizado Packages.
-
-## [1.5.0] - 2026-03-07
-- Corrigido validação de features nos planos e implementado suporte para validação customizada de features.
-- 
-## [1.4.0] - 2026-03-07
-- Corrigido validação se model existe no metodo show, update e delete
-
-## [1.3.0] - 2026-03-05
-- Atualizado packages
-
-## [1.2.0] - 2026-03-04
-- Atualizado packages
-
-## [1.1.0] - 2025-12-15
-- Atualizado packages HasUuid e RiseTools
-
-## [1.0.0] - 2025-12-10
-- Lançamento inicial (Primeira versão estável).
+- Sistema de autenticação com API Key (geração, hash, validação com cache)
+- Gerenciamento de planos com ciclos de cobrança configuráveis (`BillingCycle`)
+- Assinatura de planos com controle de data de início/fim e período de carência
+- Controle de limite de requisições por plano com log por endpoint
+- Sistema de cupons de desconto (percentual e valor fixo)
+- Integração com MercadoPago (checkout, cartões salvos, webhook com validação HMAC, estornos)
+- Campos de cartão via MercadoPago Secure Fields (iframes oficiais), eliminando captura insegura
+- Detecção de bandeira do cartão em tempo real via `binChange` e `mp.getPaymentMethods`
+- Tokenização de CVV de cartões salvos diretamente no browser via `mp.createCardToken`
+- `MpCustomerService::getOrCreateCustomer()` com tratamento do código de causa `101` (cliente duplicado)
+- Campo `payment_amount` em `user_plans` para registrar o valor efetivamente cobrado (com desconto aplicado)
+- **FeatureRegistry** — `FeatureRegistry::register('key', [...])` registra features em código, sincroniza na tabela `plan_features` e expõe ao painel admin via `GET /dashboard/admin/features`
+- Tabela `plan_features` dedicada para o registro de features (sem conflito com `laravel/pennant`)
+- Middlewares: `api.key`, `check.active.plan`, `check.limit.plan`, `api.key.origin`, `feature`, `admin`, `language`
+- Grupo de middlewares `plan` configurável via `config/api-key.php`
+- Eventos: `ApiKeyCreated`, `ApiKeyStatusChanged`, `PlanChanged`, `PlanExpired`, `PlanGracePeriodStarted`, `RequestLimitReached`, `UserStatusChanged`
+- Notificações de período de carência e expiração de plano por e-mail
+- Painel admin com gestão de planos, usuários, estornos e features dinâmicas
+- Suporte a SPA Vue.js com rota catch-all e assets pré-compilados via Vite
+- `MP_PUBLIC_KEY` entregue ao frontend via `AuthenticationMeResource` (campo `mp_public_key`)
+- Internal token bypass para chamadas servidor-a-servidor (validado por IP loopback)
+- Comandos Artisan: `billing:process-renewals` (agendado diariamente às 08:00), `check:expired-plans`, `make:admin`
+- Rate limiting configurável para endpoints de autenticação (`auth_throttle`)
+- Suporte a origens permitidas por API key com validação via wildcard
+- Internacionalização (pt/en) com idioma padrão configurável
+- Publicação de config, migrations, rotas, frontend, views e assets via `php artisan vendor:publish`
