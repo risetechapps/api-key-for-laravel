@@ -17,52 +17,7 @@ class PlanService
      */
     public function subscribe(Authentication $user, Plan $plan): UserPlan
     {
-        $this->deactivateCurrentPlan($user);
-
-        $userPlan = $this->createUserPlan($user, $plan);
-
-        $this->activateApiKey($user);
-
-        $userPlan->load(['plan']);
-
-        return $userPlan;
-    }
-
-    /**
-     * Deactivate the user's current active plan.
-     */
-    private function deactivateCurrentPlan(Authentication $user): void
-    {
-        $user->activePlan()?->update(['active' => false]);
-    }
-
-    /**
-     * Create a new user plan subscription.
-     */
-    private function createUserPlan(Authentication $user, Plan $plan): UserPlan
-    {
-        return UserPlan::create([
-            'authentication_id' => $user->id,
-            'plan_id' => $plan->id,
-            'start_date' => now(),
-            'end_date' => now()->addDays(\RiseTechApps\ApiKey\Enums\BillingCycle::convertInDays($plan->billing_cycle)),
-            'active' => true,
-        ]);
-    }
-
-    /**
-     * Activate the user's API key.
-     */
-    private function activateApiKey(Authentication $user): void
-    {
-        if ($user->apiKey) {
-            $user->apiKey->update(['active' => true]);
-        } else {
-            $user->apiKey()->create([
-                'key' => bin2hex(random_bytes(64)),
-                'active' => true,
-            ]);
-        }
+        return $user->subscribeToPlan($plan);
     }
 
     /**
