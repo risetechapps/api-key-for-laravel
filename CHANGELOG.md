@@ -3,6 +3,15 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [1.0.1] - 2026-05-20
+
+### Corrigido
+- `CheckActivePlanMiddleware` trocado `activePlan` por `activePlanWithGracePeriod` — o grace period nunca era alcançado porque a relação anterior já filtrava planos expirados
+- `ProcessRenewalsCommand` agora salva `payment_amount` ao criar o novo plano na renovação automática
+- `PlanService::subscribe()` delegava para lógica própria divergente; agora chama `Authentication::subscribeToPlan()` garantindo que o evento `PlanChanged` seja sempre disparado
+- `ApiKey::clearOriginCache()` era no-op; implementado com versioning de cache — ao alterar `allowed_origins`, um contador de versão é incrementado tornando as entradas antigas imediatamente obsoletas
+- `PlansResource::resolveFeatures()` quebrava com `TypeError` quando o campo `features` continha objetos em vez de strings simples; agora aceita ambos os formatos
+
 ## [1.0.0] - 2026-05-19
 
 ### Adicionado
