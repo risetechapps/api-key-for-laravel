@@ -113,7 +113,10 @@ class ProcessRenewalsCommand extends Command
 
         if ($payment->status === 'approved') {
             $newPlan = $user->subscribeToPlan($plan);
-            $newPlan->update(['payment_id' => (string) $payment->id]);
+            $newPlan->update([
+                'payment_id'     => (string) $payment->id,
+                'payment_amount' => $amount,
+            ]);
 
             $this->info("  [{$user->email}] Renewed → {$plan->name} (payment {$payment->id})");
             Log::info('billing:process-renewals approved', [
