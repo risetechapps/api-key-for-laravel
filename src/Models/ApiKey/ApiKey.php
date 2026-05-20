@@ -111,13 +111,12 @@ class ApiKey extends Model
 
     /**
      * Clear origin validation cache for a specific API key.
-     * Called when allowed_origins is modified.
+     * Uses a version counter so all existing entries become stale immediately,
+     * without needing to enumerate individual origin hashes.
      */
     public static function clearOriginCache(int|string $keyId): void
     {
-        // Note: Since we use md5 hash in cache keys, we can't selectively clear
-        // individual origin entries. They will expire naturally after 60 seconds.
-        // For better control, use Redis with cache tags in production.
+        Cache::increment('api_key_origin_version:' . $keyId);
     }
 
     /**
@@ -202,8 +201,8 @@ class ApiKey extends Model
 
         $normalizedOrigin = strtolower(parse_url($origin, PHP_URL_HOST) ?? $origin);
 
-        // Cache key for origin validation
-        $cacheKey = 'api_key_origin:' . $this->id . ':' . md5($normalizedOrigin);
+        $version  = Cache::get('api_key_origin_version:' . $this->id, 1);
+        $cacheKey = 'api_key_origin:' . $this->id . ':v' . $version . ':' . md5($normalizedOrigin);
 
         $cacheTtl = config('api-key.cache_ttl.origin', 60);
 
