@@ -21,41 +21,39 @@ class CheckActivePlanMiddleware
             return response()->json(['error' => __('api-key::messages.unauthorized')], 401);
         }
 
-        $userPlan = $user->activePlan;
+        $userPlan = $user->activePlanWithGracePeriod;
 
-        if (!$userPlan) {
-            return response()->json(['error' => __('api-key::messages.plan_expired_or_inactive')], 403);
-        }
+        if (! $userPlan) {
+            $expiredPlan = $user->userPlan()
+                ->where('active', true)
+                ->latest('end_date')
+                ->first();
 
-        // Check if plan is expired but in grace period
-        if ($userPlan->isExpired()) {
-            if ($userPlan->isInGracePeriod()) {
-                $remainingDays = $userPlan->getGracePeriodRemainingDays();
-
-                // Add grace period warning header
-                $response = $next($request);
-                $response->header('X-Plan-Status', 'grace-period');
-                $response->header('X-Grace-Period-Days-Remaining', $remainingDays);
-
-                return $response;
-            }
-
-            // Plan is completely expired (past grace period)
-            if ($userPlan->isCompletelyExpired()) {
-                // Deactivate the plan and API key
-                $userPlan->update(['active' => false]);
+            if ($expiredPlan?->isCompletelyExpired()) {
+                $expiredPlan->update(['active' => false]);
                 $user->apiKey?->update(['active' => false]);
 
-                // Fire event if not already fired
-                if ($userPlan->plan) {
-                    PlanExpired::dispatch($user, $userPlan, $userPlan->plan, now());
+                if ($expiredPlan->plan) {
+                    PlanExpired::dispatch($user, $expiredPlan, $expiredPlan->plan, now());
                 }
 
                 return response()->json([
-                    'error' => __('api-key::messages.plan_expired_grace_ended'),
-                    'grace_period_ended' => true
+                    'error'              => __('api-key::messages.plan_expired_grace_ended'),
+                    'grace_period_ended' => true,
                 ], 403);
             }
+
+            return response()->json(['error' => __('api-key::messages.plan_expired_or_inactive')], 403);
+        }
+
+        if ($userPlan->isExpired()) {
+            $remainingDays = $userPlan->getGracePeriodRemainingDays();
+
+            $response = $next($request);
+            $response->header('X-Plan-Status', 'grace-period');
+            $response->header('X-Grace-Period-Days-Remaining', $remainingDays);
+
+            return $response;
         }
 
         return $next($request);
