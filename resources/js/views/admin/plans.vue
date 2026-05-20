@@ -224,7 +224,9 @@ function openModal(plan = null) {
             billing_cycle: plan.billing_cycle ?? 'monthly',
             request_limit: plan.request_limit ?? 0,
             is_active: plan.is_active,
-            features: Array.isArray(plan.features) ? [...plan.features] : [],
+            features: Array.isArray(plan.features)
+                ? plan.features.map(f => (f && typeof f === 'object') ? f.key : f).filter(Boolean)
+                : [],
             features_description: Array.isArray(plan.features_description) && plan.features_description.length
                 ? [...plan.features_description]
                 : [''],
