@@ -35,14 +35,20 @@ class PlansResource extends JsonResource
 
         $registry = app(FeatureRegistry::class);
 
-        return collect($keys)->map(function (string $key) use ($registry) {
+        return collect($keys)->map(function ($item) use ($registry) {
+            $key = is_array($item) ? ($item['key'] ?? null) : $item;
+
+            if (! is_string($key)) {
+                return null;
+            }
+
             $meta = $registry->get($key);
 
             return [
                 'key'  => $key,
-                'name' => $meta['name'] ?? $key,
-                'icon' => $meta['icon'] ?? null,
+                'name' => $meta['name'] ?? (is_array($item) ? ($item['name'] ?? $key) : $key),
+                'icon' => $meta['icon'] ?? (is_array($item) ? ($item['icon'] ?? null) : null),
             ];
-        })->values()->all();
+        })->filter()->values()->all();
     }
 }
