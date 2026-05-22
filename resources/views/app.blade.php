@@ -14,7 +14,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <!-- Assets: Level 2 (host build) or Level 1 (pre-built) -->
-    @if(file_exists(public_path('build/manifest.json')))
+    @php
+        $apiKeyUseVite = false;
+        if (file_exists(public_path('build/manifest.json'))) {
+            $apiKeyManifest = json_decode(file_get_contents(public_path('build/manifest.json')), true);
+            $apiKeyUseVite = isset($apiKeyManifest['resources/js/app.ts']);
+        }
+    @endphp
+    @if($apiKeyUseVite)
         @vite(['resources/css/app.css', 'resources/js/app.ts'])
     @else
         <link rel="stylesheet" href="{{ asset('vendor/api-key/app.css') }}">
@@ -22,7 +29,7 @@
 </head>
 <body class="antialiased bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
     <div id="app"></div>
-    @unless(file_exists(public_path('build/manifest.json')))
+    @unless($apiKeyUseVite)
         <script type="module" src="{{ asset('vendor/api-key/app.js') }}"></script>
     @endunless
 </body>
