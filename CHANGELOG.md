@@ -3,6 +3,10 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [1.0.5] - 2026-05-25
+### Corrigido
+- Corrigido erros de palavras
+
 ## [1.0.4] - 2026-05-25
 ### Corrigido
 - Corrigido axios em price-section
