@@ -145,7 +145,7 @@
 
                     <Input
                         v-model="form.address.country"
-                        label="Pais"
+                        label="País"
                         :icon="PhGlobe"
                     />
 
@@ -177,13 +177,13 @@
 
                     <Input
                         v-model="form.address.address"
-                        label="Endereco"
+                        label="Endereço"
                         :icon="PhHouse"
                     />
 
                     <Input
                         v-model="form.address.number"
-                        label="Numero"
+                        label="Número"
                         :icon="PhHash"
                     />
 
@@ -197,7 +197,7 @@
 
                 <div class="flex items-center gap-4 mt-6">
                     <Button type="submit" variant="primary" :loading="updating">
-                        Salvar alteracoes
+                        Salvar alterações
                     </Button>
                     <span v-if="updateSuccess" class="text-emerald-600 dark:text-emerald-400 text-sm">
                         Dados atualizados com sucesso!
@@ -364,29 +364,29 @@ const form = reactive({
 const brazilianStates = [
     {uf: 'AC', name: 'Acre'},
     {uf: 'AL', name: 'Alagoas'},
-    {uf: 'AP', name: 'Amapa'},
+    {uf: 'AP', name: 'Amapá'},
     {uf: 'AM', name: 'Amazonas'},
     {uf: 'BA', name: 'Bahia'},
-    {uf: 'CE', name: 'Ceara'},
+    {uf: 'CE', name: 'Ceará'},
     {uf: 'DF', name: 'Distrito Federal'},
-    {uf: 'ES', name: 'Espirito Santo'},
-    {uf: 'GO', name: 'Goias'},
-    {uf: 'MA', name: 'Maranhao'},
+    {uf: 'ES', name: 'Espírito Santo'},
+    {uf: 'GO', name: 'Goiás'},
+    {uf: 'MA', name: 'Maranhão'},
     {uf: 'MT', name: 'Mato Grosso'},
     {uf: 'MS', name: 'Mato Grosso do Sul'},
     {uf: 'MG', name: 'Minas Gerais'},
-    {uf: 'PA', name: 'Para'},
-    {uf: 'PB', name: 'Paraiba'},
-    {uf: 'PR', name: 'Parana'},
+    {uf: 'PA', name: 'Pará'},
+    {uf: 'PB', name: 'Paraíba'},
+    {uf: 'PR', name: 'Paraná'},
     {uf: 'PE', name: 'Pernambuco'},
-    {uf: 'PI', name: 'Piaui'},
+    {uf: 'PI', name: 'Piauí'},
     {uf: 'RJ', name: 'Rio de Janeiro'},
     {uf: 'RN', name: 'Rio Grande do Norte'},
     {uf: 'RS', name: 'Rio Grande do Sul'},
-    {uf: 'RO', name: 'Rondonia'},
+    {uf: 'RO', name: 'Rondônia'},
     {uf: 'RR', name: 'Roraima'},
     {uf: 'SC', name: 'Santa Catarina'},
-    {uf: 'SP', name: 'Sao Paulo'},
+    {uf: 'SP', name: 'São Paulo'},
     {uf: 'SE', name: 'Sergipe'},
     {uf: 'TO', name: 'Tocantins'},
 ];

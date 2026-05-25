@@ -287,9 +287,9 @@ const stats = computed(() => {
 });
 
 const planFeatures = [
-    {name: 'Modulo A', enabled: true},
-    {name: 'Modulo B', enabled: true},
-    {name: 'Modulo C', enabled: true},
+    {name: 'Módulo A', enabled: true},
+    {name: 'Módulo B', enabled: true},
+    {name: 'Módulo C', enabled: true},
 ];
 
 const recentRequests = computed(() => dashboardStore.requests.slice(0, 10));
