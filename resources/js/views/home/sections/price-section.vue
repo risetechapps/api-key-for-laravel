@@ -68,7 +68,7 @@ interface PricingPlan {
 }
 
 import {onMounted, ref} from "vue";
-import axiosDefault from "@/bootstrap";
+import axios from "axios";
 import {PhCheckCircle} from "@phosphor-icons/vue";
 
 const pricingPlans = ref<PricingPlan[]>([]);
@@ -88,7 +88,7 @@ function planFeatures(plan: PricingPlan & { features?: Array<string | { key: str
 
 const loadPlans = async () => {
     try {
-        const response = await axiosDefault.get('/dashboard/plans');
+        const response = await axios.get('/dashboard/plans');
 
         if (response.data.success === true) {
             return response.data.data;
