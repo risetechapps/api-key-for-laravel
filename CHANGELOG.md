@@ -3,6 +3,21 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [1.0.6] - 2026-05-27
+
+### Corrigido
+- `GET /api/v1/auth/me` retornava 401 para a SPA porque estava no grupo `plan` (exigia `X-API-KEY`); movido para `auth:sanctum` — Bearer token do Sanctum agora é aceito corretamente
+- `ApiKeyServiceProvider::registerRouter()` envolvia todas as rotas internas no grupo `plan`, fazendo `register` e `login` também exigirem API key; wrapper removido
+- `requests.vue` — aba "Histórico" nunca ficava ativa porque `activeTab` era inicializado com `'test'` (chave inexistente); corrigido para usar `tabs[0].key`
+- `requests.vue` — histórico de requisições agora ordenado do mais recente para o mais antigo
+- `plans.vue` e `price-section.vue` — planos agora ordenados por preço crescente via `raw_price` (o campo `price` é string formatada `"R$ 29,90"` e quebrava o `parseFloat`)
+- `coupons.vue` — coluna "Usos" exibia `"0 /"` porque lia `coupon.uses` e `coupon.max_uses` (campos planos inexistentes); corrigido para `coupon.usage.current` e `coupon.usage.max` conforme o `CouponsResource`
+- `coupons.vue` — modal de edição carregava `max_uses` como `undefined`; corrigido para `coupon.usage.max`
+- Contagem de usos de cupom não atualizava no painel admin após checkout — `increment('uses')` no model bypassava o `BaseRepository`, deixando o cache de 24 h obsoleto; criado `CouponRepository::incrementUses()` que faz o increment e chama `clearCacheForEntity()`
+
+### Adicionado
+- `coupons.vue` — botão de atualização manual na listagem de cupons para forçar re-fetch da contagem de usos sem recarregar a página
+
 ## [1.0.5] - 2026-05-25
 ### Corrigido
 - Corrigido erros de palavras
