@@ -12,6 +12,7 @@ use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
+use RiseTechApps\ApiKey\Repositories\Coupon\CouponRepository;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
 
@@ -20,6 +21,7 @@ class CheckoutController extends Controller
     public function __construct(
         protected readonly PlanRepository $planRepository,
         protected readonly MpCustomerService $mpCustomerService,
+        protected readonly CouponRepository $couponRepository,
     ) {
     }
 
@@ -95,7 +97,7 @@ class CheckoutController extends Controller
 
         if ($transactionAmount <= 0) {
             auth()->user()->subscribeToPlan($plan);
-            $appliedCoupon?->increment('uses');
+            if ($appliedCoupon) $this->couponRepository->incrementUses($appliedCoupon);
             return response()->jsonSuccess(['status' => 'approved', 'message' => __('api-key::messages.subscription_activated_full_discount')]);
         }
 
@@ -187,7 +189,7 @@ class CheckoutController extends Controller
                     'payment_id'     => $payment->id,
                     'payment_amount' => $transactionAmount,
                 ]);
-                $appliedCoupon?->increment('uses');
+                if ($appliedCoupon) $this->couponRepository->incrementUses($appliedCoupon);
 
                 if ($savedCard) {
                     UserCard::where('authentication_id', auth()->user()->getKey())->update(['is_default' => false]);

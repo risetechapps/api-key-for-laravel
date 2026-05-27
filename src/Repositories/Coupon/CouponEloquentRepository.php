@@ -20,4 +20,10 @@ class CouponEloquentRepository extends BaseRepository implements CouponRepositor
     {
         return [];
     }
+
+    public function incrementUses(Coupon $coupon): void
+    {
+        $coupon->increment('uses');
+        $this->clearCacheForEntity();
+    }
 }
