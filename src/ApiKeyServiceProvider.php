@@ -170,9 +170,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->middlewareGroup('plan', $middlewareGroup);
 
         if (config('api-key.routes.enabled', true)) {
-            Route::middleware(['plan'])->group(function () {
-                $this->loadRoutesFrom(__DIR__ . '/routes/routes.php');
-            });
+            $this->loadRoutesFrom(__DIR__ . '/routes/routes.php');
         }
     }
 
