@@ -100,7 +100,8 @@ const loadPlans = async () => {
 }
 
 onMounted(async () => {
-    pricingPlans.value =  await loadPlans();
+    const plans = await loadPlans();
+    pricingPlans.value = plans?.sort((a: any, b: any) => a.raw_price - b.raw_price) ?? [];
 });
 </script>
 

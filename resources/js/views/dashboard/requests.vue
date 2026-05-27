@@ -231,10 +231,11 @@ import Modal from '@/views/componentes/Modal.vue';
 const authStore      = useAuthStore();
 const dashboardStore = useDashboardStore();
 
-const activeTab = ref('test');
 const tabs = [
-    { key: 'history', label: 'Histórico'  },
+    { key: 'history', label: 'Histórico' },
 ];
+
+const activeTab = ref(tabs[0].key);
 
 const loading      = ref(true);
 const currentPage  = ref(1);
@@ -247,14 +248,16 @@ const filters = reactive({ search: '', method: '', status: '' });
 const requests = computed(() => dashboardStore.requests);
 
 const filteredRequests = computed(() =>
-    requests.value.filter(req => {
-        const matchesSearch  = !filters.search  || req.endpoint?.toLowerCase().includes(filters.search.toLowerCase());
-        const matchesMethod  = !filters.method  || req.method === filters.method;
-        const matchesStatus  = !filters.status  ||
-            (filters.status === 'success' && req.response_code < 300) ||
-            (filters.status === 'error'   && req.response_code >= 400);
-        return matchesSearch && matchesMethod && matchesStatus;
-    })
+    requests.value
+        .filter(req => {
+            const matchesSearch  = !filters.search  || req.endpoint?.toLowerCase().includes(filters.search.toLowerCase());
+            const matchesMethod  = !filters.method  || req.method === filters.method;
+            const matchesStatus  = !filters.status  ||
+                (filters.status === 'success' && req.response_code < 300) ||
+                (filters.status === 'error'   && req.response_code >= 400);
+            return matchesSearch && matchesMethod && matchesStatus;
+        })
+        .sort((a, b) => new Date(b.requested_at) - new Date(a.requested_at))
 );
 
 const paginatedRequests = computed(() => {

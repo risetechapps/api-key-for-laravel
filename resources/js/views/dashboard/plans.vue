@@ -167,11 +167,13 @@ const billingCycleLabel = computed(() => {
 });
 
 const availablePlans = computed(() => {
-    return plans.value.map((plan) => ({
-        ...plan,
-        is_current: plan.id === currentPlan.value?.id,
-        is_recommended: plan.code === 'pro',
-    }));
+    return plans.value
+        .map((plan) => ({
+            ...plan,
+            is_current: plan.id === currentPlan.value?.id,
+            is_recommended: plan.code === 'pro',
+        }))
+        .sort((a, b) => a.raw_price - b.raw_price);
 });
 
 

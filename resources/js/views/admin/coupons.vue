@@ -5,9 +5,19 @@
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Cupons</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">Gerencie os cupons de desconto</p>
             </div>
-            <Button variant="primary" @click="openModal()">
-                <PhPlus :size="18" /> Novo Cupom
-            </Button>
+            <div class="flex items-center gap-2">
+                <button
+                    @click="refresh"
+                    :disabled="loading"
+                    class="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+                    title="Atualizar contagem de usos"
+                >
+                    <PhArrowsClockwise :size="18" class="text-slate-500" :class="{ 'animate-spin': loading }" />
+                </button>
+                <Button variant="primary" @click="openModal()">
+                    <PhPlus :size="18" /> Novo Cupom
+                </Button>
+            </div>
         </div>
 
         <Card>
@@ -37,7 +47,7 @@
                             <td class="py-3 px-4 font-mono font-semibold text-slate-900 dark:text-white">{{ coupon.code }}</td>
                             <td class="py-3 px-4 text-slate-700 dark:text-slate-300 capitalize">{{ coupon.type === 'percentage' ? 'Percentual' : 'Fixo' }}</td>
                             <td class="py-3 px-4 text-slate-700 dark:text-slate-300">{{ coupon.type === 'percentage' ? `${coupon.value}%` : `R$ ${Number(coupon.value).toFixed(2).replace('.', ',')}` }}</td>
-                            <td class="py-3 px-4 text-slate-700 dark:text-slate-300">{{ coupon.uses ?? 0 }} / {{ coupon.max_uses }}</td>
+                            <td class="py-3 px-4 text-slate-700 dark:text-slate-300">{{ coupon.usage?.current ?? 0 }} / {{ coupon.usage?.max ?? '∞' }}</td>
                             <td class="py-3 px-4 text-slate-700 dark:text-slate-300">{{ coupon.expires_at ? formatDate(coupon.expires_at) : 'Sem validade' }}</td>
                             <td class="py-3 px-4">
                                 <span :class="coupon.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'"
@@ -158,6 +168,8 @@ const form = ref(emptyForm());
 
 onMounted(() => adminStore.fetchCoupons());
 
+function refresh() { adminStore.fetchCoupons(); }
+
 function generateCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     form.value.code = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -166,7 +178,7 @@ function generateCode() {
 function openModal(coupon = null) {
     editing.value = coupon;
     form.value = coupon
-        ? { code: coupon.code, type: coupon.type, value: coupon.value, max_uses: coupon.max_uses, expires_at: coupon.expires_at?.substring(0, 10) ?? '', is_active: coupon.is_active }
+        ? { code: coupon.code, type: coupon.type, value: coupon.value, max_uses: coupon.usage?.max, expires_at: coupon.expires_at?.substring(0, 10) ?? '', is_active: coupon.is_active }
         : emptyForm();
     formError.value = '';
     showModal.value = true;
