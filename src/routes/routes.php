@@ -5,12 +5,12 @@ use Illuminate\Support\Facades\Route;
 use RiseTechApps\ApiKey\Http\Controllers\Authentication\AuthController;
 
 Route::middleware(['api', 'language'])->prefix('api/v1/')->group(function () {
-    // Authentication routes
+    // Public authentication routes
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
 
-    // Protected routes
-    Route::middleware(['plan'])->group(function () {
+    // Dashboard routes - authenticated via Sanctum Bearer token
+    Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
     });
 });
