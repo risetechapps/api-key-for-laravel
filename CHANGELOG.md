@@ -3,6 +3,11 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [1.0.8] - 2026-06-03
+
+### Corrigido
+- Criar/atualizar planos falhava com `SQLSTATE[42703]: column "features_description" does not exist` em ambientes que rodaram a migration `create_plans_table` antes de a coluna ser adicionada (11/05/2026); criada migration aditiva `add_features_description_to_plans_table` com guarda `Schema::hasColumn` (segura para instalações novas e existentes)
+
 ## [1.0.7] - 2026-05-27
 
 ### Corrigido
