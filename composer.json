@@ -21,7 +21,7 @@
     "require": {
         "php": "^8.4",
         "illuminate/support": "^12",
-        "mercadopago/dx-php": "^3.0",
+        "mercadopago/dx-php": "3.10.0",
         "laravel/pennant": "^1.20",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
