@@ -8,6 +8,9 @@ import login from '@/views/authentication/login.vue';
 import forgotPassword from '@/views/authentication/forgotPassword.vue';
 import resetPassword from '@/views/authentication/resetPassword.vue';
 import register from '@/views/authentication/register.vue';
+import terms from '@/views/legal/terms.vue';
+import privacy from '@/views/legal/privacy.vue';
+import support from '@/views/support/support.vue';
 import DashboardLayout from '@/layouts/DashboardLayout.vue';
 import dashboard from '@/views/dashboard/dashboard.vue';
 import requests from '@/views/dashboard/requests.vue';
@@ -29,6 +32,9 @@ const routes: RouteRecordRaw[] = [
             { path: 'register', name: 'register', component: register, meta: { guest: true } },
             { path: 'forgot-password', name: 'forgot-password', component: forgotPassword, meta: { guest: true } },
             { path: 'reset-password', name: 'reset-password', component: resetPassword, meta: { guest: true } },
+            { path: 'terms', name: 'terms', component: terms },
+            { path: 'privacy', name: 'privacy', component: privacy },
+            { path: 'support', name: 'support', component: support },
             ...appConfig.routes.extraPublicRoutes,
         ],
     },
