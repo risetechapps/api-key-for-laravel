@@ -24,6 +24,13 @@ class ApiKey extends Model
      */
     public ?string $plainKey = null;
 
+    /**
+     * Attributes excluded from HasToUpper normalization.
+     * The hashed key must never be uppercased, otherwise bcrypt
+     * verification (Hash::check) breaks and the key can never validate.
+     */
+    protected $no_upper = ['key'];
+
     protected $fillable = [
         'code',
         'key',
@@ -46,11 +53,14 @@ class ApiKey extends Model
     {
         parent::boot();
 
-        static::creating(function ($model) {
-            if (!empty($model->key)) {
-                // Store plain key temporarily
+        static::saving(function ($model) {
+            // Hash the key whenever it is set or changed (creation or regeneration).
+            // isDirty('key') is false on unrelated updates (e.g. toggling `active`),
+            // so an already-hashed key is never re-hashed.
+            if ($model->isDirty('key') && !empty($model->key)) {
+                // Keep the plain key in memory so it can be shown once to the user.
                 $model->plainKey = $model->key;
-                // Hash the key for storage
+                // Hash the key for storage.
                 $model->key = Hash::make($model->key);
             }
         });
