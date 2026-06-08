@@ -21,16 +21,22 @@
             $apiKeyUseVite = isset($apiKeyManifest['resources/js/app.ts']);
         }
     @endphp
+    @php
+        // Cache-bust the pre-built assets by their file mtime so a new publish is
+        // always picked up by the browser (the asset filenames are not hashed).
+        $apiKeyCssVer = file_exists(public_path('vendor/api-key/app.css')) ? filemtime(public_path('vendor/api-key/app.css')) : null;
+        $apiKeyJsVer  = file_exists(public_path('vendor/api-key/app.js'))  ? filemtime(public_path('vendor/api-key/app.js'))  : null;
+    @endphp
     @if($apiKeyUseVite)
         @vite(['resources/css/app.css', 'resources/js/app.ts'])
     @else
-        <link rel="stylesheet" href="{{ asset('vendor/api-key/app.css') }}">
+        <link rel="stylesheet" href="{{ asset('vendor/api-key/app.css') }}{{ $apiKeyCssVer ? '?v='.$apiKeyCssVer : '' }}">
     @endif
 </head>
 <body class="antialiased bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
     <div id="app"></div>
     @unless($apiKeyUseVite)
-        <script type="module" src="{{ asset('vendor/api-key/app.js') }}"></script>
+        <script type="module" src="{{ asset('vendor/api-key/app.js') }}{{ $apiKeyJsVer ? '?v='.$apiKeyJsVer : '' }}"></script>
     @endunless
 </body>
 </html>
