@@ -106,12 +106,14 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
 
     public function sendEmailVerificationNotification(): void
     {
-        $this->notify(new EmailVerifyNotification());
+        $notification = Config::get('api-key.notifications.email_verify', EmailVerifyNotification::class);
+        $this->notify(new $notification());
     }
 
     public function sendPasswordResetNotification($token): void
     {
-        $this->notify(new ResetPasswordNotification($token));
+        $notification = Config::get('api-key.notifications.reset_password', ResetPasswordNotification::class);
+        $this->notify(new $notification($token));
     }
 
     public function apiKey(): HasOne
@@ -255,8 +257,13 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
     /**
      * Log request usage and increment counter.
      * Optimized to use update for counter to avoid race conditions.
+     *
+     * @param int  $status     Código HTTP da resposta.
+     * @param bool $countUsage Se a requisição deve contar na cota do plano.
+     *                         Requisições bloqueadas por limite (429) são
+     *                         registradas no log, mas NÃO incrementam o contador.
      */
-    public function requestUsed(int $status = 0): void
+    public function requestUsed(int $status = 0, bool $countUsage = true): void
     {
         // Use a single query to get active plan ID without loading full model
         $activePlanId = UserPlan::where('authentication_id', $this->id)
@@ -276,6 +283,10 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
             'method' => request()->method(),
             'response_code' => $status,
         ]);
+
+        if (!$countUsage) {
+            return;
+        }
 
         // Atomic increment using update to avoid race conditions
         UserPlan::where('id', $activePlanId)->increment('requests_used');

@@ -34,18 +34,34 @@ class AuthenticationMeResource extends JsonResource
             'api_key' => $this->whenLoaded('apiKey', fn() => ApiKeyResource::make($this->apiKey)),
             'active_plan' => $this->whenLoaded('activePlan', fn() => UserPlanResource::make($this->activePlan)),
 
-            // Usage statistics
-            'usage' => [
-                'requests_used' => $this->countUsed(),
-                'requests_limit' => $this->requestLimit(),
-                'remaining_requests' => max(0, $this->requestLimit() - $this->countUsed()),
-            ],
+            // Usage statistics (requests_used nunca acima do limite)
+            'usage' => $this->usageStats(),
 
             // Payment gateway
             'mp_public_key' => config('api-key.mercadopago.public_key'),
 
             // Timestamps
             'created_at' => $this->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Estatísticas de uso com requests_used limitado ao teto do plano
+     * (requisições bloqueadas não contam, então nunca deve passar do limite).
+     */
+    private function usageStats(): array
+    {
+        $limit = (int) $this->requestLimit();
+        $used  = (int) $this->countUsed();
+
+        if ($limit > 0) {
+            $used = min($used, $limit);
+        }
+
+        return [
+            'requests_used'      => $used,
+            'requests_limit'     => $limit,
+            'remaining_requests' => $limit > 0 ? max(0, $limit - $used) : 0,
         ];
     }
 

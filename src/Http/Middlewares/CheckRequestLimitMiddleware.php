@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
@@ -48,12 +49,35 @@ class CheckRequestLimitMiddleware
                 );
             }
 
-            // Use dispatch to make logging asynchronous
+            // Registra a requisição bloqueada no log, mas NÃO conta na cota
+            // (countUsage = false) — assim o contador não ultrapassa o limite.
             dispatch(function () use ($user) {
-                $user->requestUsed(429);
+                $user->requestUsed(429, false);
             })->afterResponse();
 
             return response()->json(['error' => __('api-key::messages.request_limit_reached')], 429);
+        }
+
+        // Aviso de uso próximo do limite (ex.: 80%). Dispara em toda requisição
+        // dentro da faixa [threshold%, 100%); o listener faz throttle para enviar
+        // no máximo um e-mail por período do plano.
+        if ($requestsLimit > 0 && $activePlan && $activePlan->plan) {
+            $threshold = (int) config('api-key.request_limit.warning_threshold', 80);
+
+            if ($threshold > 0 && $threshold < 100) {
+                $warnAt = (int) ceil($requestsLimit * $threshold / 100);
+
+                if ($requestsMade >= $warnAt && $requestsMade < $requestsLimit) {
+                    PlanUsageThresholdReached::dispatch(
+                        $user,
+                        $activePlan,
+                        $activePlan->plan,
+                        $requestsMade,
+                        $requestsLimit,
+                        $threshold
+                    );
+                }
+            }
         }
 
         $response = $next($request);
