@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Plans;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\StorePlanRequest;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\UpdatePlanRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
@@ -13,6 +14,7 @@ use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 
 class PlansController extends Controller
 {
+    private const PLANS_CACHE_KEY = 'api_key:plans:active';
 
     public function __construct(protected readonly PlanRepository $planRepositor)
     {
@@ -23,9 +25,17 @@ class PlansController extends Controller
     {
         try {
 
-            $data = $this->planRepositor->findWhere(['is_active' => true]);
+            // Cache à prova de driver: guardamos o ARRAY já renderizado (escalares),
+            // não a Collection de objetos Eloquent. Serializar objetos quebra no
+            // transporte de cache deste ambiente (predis corrompe os bytes \0 de
+            // objetos); um array simples (texto puro) faz round-trip em qualquer driver.
+            $data = Cache::remember(self::PLANS_CACHE_KEY, now()->addMinutes(10), function () {
+                return PlansResource::collection(
+                    Plan::query()->where('is_active', true)->get()
+                )->resolve();
+            });
 
-            return response()->jsonSuccess(PlansResource::collection($data));
+            return response()->jsonSuccess($data);
 
         } catch (\Exception $e) {
             report($e);
@@ -41,6 +51,8 @@ class PlansController extends Controller
 
             $this->planRepositor->store($data);
 
+            Cache::forget(self::PLANS_CACHE_KEY);
+
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
@@ -53,7 +65,7 @@ class PlansController extends Controller
     {
         try {
 
-            $plan = $this->planRepositor->findById($plan);
+            $plan = Plan::find($plan);
 
             if (!is_null($plan)) {
                 return response()->jsonSuccess(PlansResource::make($plan));
@@ -73,11 +85,13 @@ class PlansController extends Controller
 
             $data = $request->validated();
 
-            $plan = $this->planRepositor->findById($plan);
+            $plan = Plan::find($plan);
 
             if (!is_null($plan)) {
 
                 $this->planRepositor->update($plan->getKey(), $data);
+
+                Cache::forget(self::PLANS_CACHE_KEY);
 
                 return response()->jsonSuccess();
             }
@@ -94,11 +108,13 @@ class PlansController extends Controller
 
         try {
 
-            $plan = $this->planRepositor->findById($plan);
+            $plan = Plan::find($plan);
 
             if (!is_null($plan)) {
 
-                $plan = $this->planRepositor->find($plan->getKey())->delete();
+                $plan->delete();
+
+                Cache::forget(self::PLANS_CACHE_KEY);
 
                 return response()->jsonSuccess();
             }
