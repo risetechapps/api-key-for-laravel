@@ -10,6 +10,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CheckPlanFeatureMiddleware
 {
+    public function __construct(
+        private readonly CheckRequestLimitMiddleware $requestLimit,
+    ) {}
+
     public function handle(Request $request, Closure $next, string ...$features): Response
     {
         if ($request->attributes->get('_internal')) {
@@ -39,6 +43,9 @@ class CheckPlanFeatureMiddleware
             return abort(402, "Upgrade required for: {$featuresList}");
         }
 
-        return $next($request);
+        // Feature liberada: aplica automaticamente o controle de limite/log/contador.
+        // O CheckRequestLimitMiddleware é idempotente (flag _request_limit_handled),
+        // então não há contagem dupla caso `check.limit.plan` também esteja na rota.
+        return $this->requestLimit->handle($request, $next);
     }
 }

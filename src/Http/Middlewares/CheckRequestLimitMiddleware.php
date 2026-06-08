@@ -18,6 +18,14 @@ class CheckRequestLimitMiddleware
             return $next($request);
         }
 
+        // Idempotência: garante que o controle de limite/log/contador rode uma única
+        // vez por request, mesmo quando este middleware é aplicado em mais de um ponto
+        // (ex.: presente no grupo `plan` E delegado pelo middleware `feature`).
+        if ($request->attributes->get('_request_limit_handled')) {
+            return $next($request);
+        }
+        $request->attributes->set('_request_limit_handled', true);
+
         /** @var Authentication $user */
         $user = $request->user();
 
