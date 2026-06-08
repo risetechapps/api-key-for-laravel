@@ -182,7 +182,7 @@ const activePlanInfo = computed(() => activePlan.value?.plan);
 const summaryStats = computed(() => [
     {
         name: 'Plano Atual',
-        value: activePlanInfo.value?.name || 'Gratuito',
+        value: activePlanInfo.value?.name || 'Sem plano ativo',
         icon: PhCrown,
         bgClass: 'bg-indigo-100 dark:bg-indigo-900/30',
         iconClass: 'text-indigo-600 dark:text-indigo-400',

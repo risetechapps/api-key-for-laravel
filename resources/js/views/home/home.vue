@@ -8,6 +8,8 @@
 
         <price-section/>
 
+        <docs-section/>
+
         <footer class="py-12 px-4 sm:px-6 lg:px-8 border-t border-slate-200 dark:border-slate-800">
             <div class="max-w-7xl mx-auto">
                 <div class="flex flex-col md:flex-row items-center justify-between gap-6">
@@ -25,7 +27,7 @@
                     </div>
 
                     <div class="flex items-center gap-8">
-                        <a href="#"
+                        <a href="#docs"
                            class="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600
                             dark:hover:text-indigo-400 transition-colors">Documentação</a>
                         <a href="#"
@@ -53,6 +55,7 @@ import {PhHexagon,} from '@phosphor-icons/vue';
 import HomeSection from "@/views/home/sections/home-section.vue";
 import FeaturesSection from "@/views/home/sections/features-section.vue";
 import PriceSection from "@/views/home/sections/price-section.vue";
+import DocsSection from "@/views/home/sections/docs-section.vue";
 
 const currentYear = new Date().getFullYear();
 

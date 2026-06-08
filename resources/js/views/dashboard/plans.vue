@@ -209,9 +209,10 @@ onMounted(async () => {
 });
 
 function planBullets(plan) {
-    if (plan.features?.length) return plan.features.map(f => f.name ?? f.key ?? f);
-    if (plan.features_description?.length) return plan.features_description;
-    return [];
+    if (!plan.features?.length) return [];
+    return plan.features
+        .map(f => (typeof f === 'string' ? f : f.name))
+        .filter(Boolean);
 }
 
 function billingCycleShort(cycle) {

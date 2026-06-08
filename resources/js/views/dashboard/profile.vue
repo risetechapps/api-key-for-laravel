@@ -32,6 +32,7 @@
                         v-model="form.name"
                         label="Nome completo"
                         required
+                        uppercase
                         :icon="PhUser"
                         :error="fieldErrors.name"
                     />
@@ -50,6 +51,7 @@
                         label="CPF"
                         placeholder="000.000.000-00"
                         required
+                        uppercase
                         :icon="PhIdentificationCard"
                         :error="fieldErrors.cpf"
                     />
@@ -57,6 +59,7 @@
                     <Input
                         v-model="form.rg"
                         label="RG"
+                        uppercase
                         :icon="PhIdentificationCard"
                         :error="fieldErrors.rg"
                     />
@@ -89,6 +92,7 @@
                         v-model="form.telephone"
                         label="Telefone"
                         placeholder="(00) 0000-0000"
+                        uppercase
                         :icon="PhPhone"
                         :error="fieldErrors.telephone"
                     />
@@ -97,6 +101,7 @@
                         v-model="form.cellphone"
                         label="Celular"
                         placeholder="(00) 00000-0000"
+                        uppercase
                         :icon="PhDeviceMobile"
                         :error="fieldErrors.cellphone"
                     />
@@ -105,6 +110,7 @@
                         v-model="form.nationality"
                         label="Nacionalidade"
                         placeholder="Brasileiro(a)"
+                        uppercase
                         :icon="PhGlobe"
                     />
 
@@ -112,6 +118,7 @@
                         v-model="form.naturalness"
                         label="Naturalidade"
                         placeholder="Cidade/UF"
+                        uppercase
                         :icon="PhMapPin"
                     />
 
@@ -139,6 +146,7 @@
                         v-model="form.address.zip_code"
                         label="CEP"
                         placeholder="00000-000"
+                        uppercase
                         :icon="PhMapPin"
                         @input="onCepInput"
                     />
@@ -146,6 +154,7 @@
                     <Input
                         v-model="form.address.country"
                         label="País"
+                        uppercase
                         :icon="PhGlobe"
                     />
 
@@ -166,24 +175,28 @@
                     <Input
                         v-model="form.address.city"
                         label="Cidade"
+                        uppercase
                         :icon="PhBuildings"
                     />
 
                     <Input
                         v-model="form.address.district"
                         label="Bairro"
+                        uppercase
                         :icon="PhBuildings"
                     />
 
                     <Input
                         v-model="form.address.address"
                         label="Endereço"
+                        uppercase
                         :icon="PhHouse"
                     />
 
                     <Input
                         v-model="form.address.number"
                         label="Número"
+                        uppercase
                         :icon="PhHash"
                     />
 
@@ -191,6 +204,7 @@
                         v-model="form.address.complement"
                         label="Complemento"
                         placeholder="Apto, Bloco, etc."
+                        uppercase
                         :icon="PhNote"
                     />
                 </div>
@@ -217,7 +231,7 @@
                         class="font-mono text-sm"
                     >
                         <template #suffix>
-                            <div class="flex items-center gap-1">
+                            <div v-if="hasGeneratedKey" class="flex items-center gap-1">
                                 <button
                                     type="button"
                                     @click="copyApiKey"
@@ -233,10 +247,20 @@
                 </div>
 
                 <div
+                    v-if="hasGeneratedKey"
                     class="flex items-center gap-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30">
                     <PhWarning :size="24" class="text-amber-500 flex-shrink-0"/>
                     <p class="text-sm text-amber-800 dark:text-amber-200">
-                        Mantenha sua API Key segura. Nunca compartilhe-a em código público.
+                        Copie sua API Key agora — por segurança ela é exibida <strong>apenas esta vez</strong> e não poderá ser recuperada depois.
+                    </p>
+                </div>
+
+                <div
+                    v-else
+                    class="flex items-center gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
+                    <PhWarning :size="24" class="text-slate-400 flex-shrink-0"/>
+                    <p class="text-sm text-slate-600 dark:text-slate-300">
+                        Por segurança, a chave fica armazenada de forma criptografada e não pode ser exibida novamente. Use <strong>Regenerar API Key</strong> para gerar uma nova.
                     </p>
                 </div>
 
@@ -425,13 +449,17 @@ const searchAddressByZipCode = async (cep) => {
 }
 
 
-const apiKey = computed(() => {
-    if (user.value?.api_key?.key) return user.value.api_key.key;
-    if (user.value?.apiKey?.key) return user.value.apiKey.key;
-    if (user.value?.api_key) return user.value.api_key;
-    if (user.value?.token) return user.value.token;
-    return '';
-});
+// The key is stored hashed on the server and can never be retrieved again.
+// It is shown in plain text only once, right after it is (re)generated.
+const generatedKey = ref('');
+const apiKeyMask = '••••••••••••••••••••••••••••••••';
+
+// Whether a freshly generated plain key is currently being shown.
+const hasGeneratedKey = computed(() => !!generatedKey.value);
+
+// What the (readonly) input displays: the real key once after regeneration,
+// otherwise a mask so the secret is never implied to be recoverable.
+const apiKey = computed(() => generatedKey.value || apiKeyMask);
 
 onMounted(async () => {
     await reloadProfile();
@@ -585,9 +613,10 @@ async function updateProfile() {
 }
 
 async function copyApiKey() {
-    if (!apiKey.value) return;
+    // Only the freshly generated plain key can be copied — never the mask.
+    if (!generatedKey.value) return;
     try {
-        await navigator.clipboard.writeText(apiKey.value);
+        await navigator.clipboard.writeText(generatedKey.value);
         copied.value = true;
         setTimeout(() => copied.value = false, 2000);
     } catch (err) {
@@ -600,7 +629,8 @@ async function regenerateKey() {
     try {
         const response = await axios.post('/dashboard/profile/regenerate-key');
         if (response.data?.data?.key) {
-            // Atualiza o usuário com a nova API key
+            // Show the new plain key once — it cannot be retrieved again.
+            generatedKey.value = response.data.data.key;
             await authStore.fetchProfile();
             regenerateSuccess.value = true;
             setTimeout(() => regenerateSuccess.value = false, 3000);

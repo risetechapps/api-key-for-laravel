@@ -69,45 +69,47 @@
                 <div class="space-y-6">
                     <div class="text-center">
                         <h4 class="text-xl font-bold text-slate-900 dark:text-white">
-                            {{ currentPlan?.name || 'Gratuito' }}
+                            {{ hasPlan ? currentPlan.name : 'Sem plano ativo' }}
                         </h4>
                         <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                            {{ currentPlan?.description || 'Plano básico para testes' }}
+                            {{ hasPlan ? currentPlan.description : 'Você ainda não possui um plano ativo. Escolha um plano para começar.' }}
                         </p>
                     </div>
 
-                    <div class="space-y-2">
-                        <div class="flex justify-between text-sm">
-                            <span class="text-slate-600 dark:text-slate-400">Requisições usadas</span>
-                            <span class="font-medium text-slate-900 dark:text-white">
-                                {{ usedRequests }} / {{ totalRequests }}
-                            </span>
+                    <template v-if="hasPlan">
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-600 dark:text-slate-400">Requisições usadas</span>
+                                <span class="font-medium text-slate-900 dark:text-white">
+                                    {{ usedRequests }} / {{ totalRequests }}
+                                </span>
+                            </div>
+                            <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                    class="h-full rounded-full transition-all duration-500"
+                                    :class="usageBarColor"
+                                    :style="{ width: `${usagePercentage}%` }"
+                                />
+                            </div>
                         </div>
-                        <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                            <div
-                                class="h-full rounded-full transition-all duration-500"
-                                :class="usageBarColor"
-                                :style="{ width: `${usagePercentage}%` }"
-                            />
-                        </div>
-                    </div>
 
-                    <div class="space-y-3">
-                        <div v-for="feature in planFeatures" :key="feature.name" class="flex items-center gap-3">
-                            <PhCheckCircle :size="20" weight="fill" class="text-emerald-500"/>
-                            <span class="text-sm text-slate-700 dark:text-slate-300">{{ feature.name }}</span>
+                        <div class="space-y-3">
+                            <div v-for="feature in planFeatures" :key="feature.name" class="flex items-center gap-3">
+                                <PhCheckCircle :size="20" weight="fill" class="text-emerald-500"/>
+                                <span class="text-sm text-slate-700 dark:text-slate-300">{{ feature.name }}</span>
+                            </div>
                         </div>
-                    </div>
+                    </template>
 
                     <router-link
                         to="/dashboard/plans"
                         class="block w-full text-center py-3 rounded-xl font-medium transition-colors"
-                        :class="currentPlan?.name === 'Gratuito'
+                        :class="!hasPlan
                             ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
                             : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 ' +
                              'text-slate-700 dark:text-slate-200'"
                     >
-                        {{ currentPlan?.name === 'Gratuito' ? 'Fazer Upgrade' : 'Gerenciar Plano' }}
+                        {{ !hasPlan ? 'Escolher Plano' : 'Gerenciar Plano' }}
                     </router-link>
                 </div>
             </Card>
@@ -223,6 +225,7 @@ const chartPeriod = ref('30');
 
 const user = computed(() => authStore.user);
 const currentPlan = computed(() => user.value?.active_plan?.plan);
+const hasPlan = computed(() => !!currentPlan.value);
 // Usa usage da estrutura do ProfileResource
 const usedRequests = computed(() => user.value?.usage?.requests_used || user.value?.active_plan?.requests_used || 0);
 const totalRequests = computed(() => user.value?.usage?.requests_limit || currentPlan.value?.request_limit || 0);

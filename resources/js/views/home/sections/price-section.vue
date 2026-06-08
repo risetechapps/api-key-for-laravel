@@ -11,7 +11,7 @@
                 <div
                     v-for="plan in pricingPlans"
                     :key="plan.name"
-                    class="relative p-8 rounded-2xl border-2 transition-all"
+                    class="relative p-8 rounded-2xl border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10"
                     :class="[
                             plan.highlighted
                                 ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20 shadow-xl ' +
@@ -28,12 +28,20 @@
                     <h3 class="text-xl font-bold text-slate-900 dark:text-white">{{ plan.name }}</h3>
                     <p class="text-slate-500 dark:text-slate-400 mt-2">{{ plan.description }}</p>
 
-                    <div class="mt-6 mb-8">
+                    <div class="mt-6 mb-6">
                         <span class="text-4xl font-bold text-slate-900 dark:text-white">{{ plan.price }}</span>
                         <span class="text-slate-500 dark:text-slate-400">/{{ billingCycleShort(plan.billing_cycle) }}</span>
                     </div>
 
+                    <div class="h-px bg-slate-200 dark:bg-slate-700 mb-6"></div>
+
                     <ul class="space-y-4 mb-8">
+                        <li class="flex items-center gap-3">
+                            <PhCheckCircle :size="20" weight="fill" class="text-emerald-500"/>
+                            <span class="text-slate-700 dark:text-slate-300">
+                                <strong>{{ plan.request_limit.toLocaleString('pt-BR') }}</strong> requisições/mês
+                            </span>
+                        </li>
                         <li v-for="feature in planFeatures(plan)" :key="feature" class="flex items-center gap-3">
                             <PhCheckCircle :size="20" weight="fill" class="text-emerald-500"/>
                             <span class="text-slate-700 dark:text-slate-300">{{ feature }}</span>
@@ -61,10 +69,10 @@ interface PricingPlan {
     name: string;
     description: string;
     price: string | number;
+    request_limit: number;
     billing_cycle: string;
     highlighted: boolean;
-    features: string[];
-    features_description: string[];
+    features: Array<string | { key: string; name: string; description?: string | null; icon?: string | null }>;
 }
 
 import {onMounted, ref} from "vue";
@@ -80,10 +88,11 @@ function billingCycleShort(cycle: string): string {
     return cycle;
 }
 
-function planFeatures(plan: PricingPlan & { features?: Array<string | { key: string; name: string }> }): string[] {
-    if (plan.features?.length) return plan.features.map(f => typeof f === 'string' ? f : (f.name ?? f.key));
-    if (plan.features_description?.length) return plan.features_description;
-    return [];
+function planFeatures(plan: PricingPlan): string[] {
+    if (!plan.features?.length) return [];
+    return plan.features
+        .map(f => (typeof f === 'string' ? f : f.name))
+        .filter((name): name is string => Boolean(name));
 }
 
 const loadPlans = async () => {

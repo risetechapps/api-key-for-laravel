@@ -14,7 +14,7 @@
                 :id="inputId"
                 :type="type"
                 :value="modelValue"
-                @input="$emit('update:modelValue', $event.target.value)"
+                @input="onInput"
                 :placeholder="placeholder"
                 :required="required"
                 :disabled="disabled"
@@ -26,6 +26,7 @@
                     'transition-all duration-200',
                     icon ? 'pl-10' : 'pl-4',
                     error ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                    uppercase ? 'uppercase' : '',
                     sizeClasses[size],
                 ]"
             />
@@ -85,9 +86,28 @@ const props = defineProps({
         default: 'md',
         validator: (v) => ['sm', 'md', 'lg'].includes(v),
     },
+    uppercase: {
+        type: Boolean,
+        default: false,
+    },
 });
 
-defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue']);
+
+function onInput(event) {
+    let value = event.target.value;
+
+    if (props.uppercase && typeof value === 'string') {
+        const upper = value.toUpperCase();
+        if (upper !== value) {
+            value = upper;
+            // Keep the DOM input in sync so the caret/value reflect the change.
+            event.target.value = upper;
+        }
+    }
+
+    emit('update:modelValue', value);
+}
 
 const inputId = computed(() => `input-${Math.random().toString(36).substr(2, 9)}`);
 
