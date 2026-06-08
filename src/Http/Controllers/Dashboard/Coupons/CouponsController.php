@@ -22,7 +22,10 @@ class CouponsController extends Controller
     public function index(Request $request):JsonResponse
     {
         try {
-            $data = $this->couponRepository->get();
+            // withoutCache(): o driver de cache do app (database) não suporta tags,
+            // então o repository não consegue invalidar a lista após criar/editar/excluir.
+            // Lê sempre fresh para evitar lista obsoleta sem precisar de cache:clear.
+            $data = $this->couponRepository->withoutCache()->get();
             return response()->jsonSuccess(CouponsResource::collection($data));
         }catch (\Exception $e){
             report($e);
@@ -85,7 +88,11 @@ class CouponsController extends Controller
         try {
             if (!is_null($coupon)) {
 
-                $this->couponRepository->findById($coupon->getKey())->delete();
+                // find() retorna o próprio repository (encadeável) e o delete() do
+                // repository dispara os eventos + clearCacheForEntity. findById()
+                // retornaria um Model (possivelmente cacheado) e o delete() do
+                // Eloquent puro não passaria pela camada do repository.
+                $this->couponRepository->find($coupon->getKey())->delete();
                 return response()->jsonSuccess();
             }
 
