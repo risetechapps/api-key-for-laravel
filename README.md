@@ -18,8 +18,8 @@ Gerenciamento de API keys, planos de assinatura e um painel SPA Vue 3 pronto par
 - **Sistema de Cupons** — limite de usos, data de expiração, descontos percentuais
 - **Validação de Origem** — proteção por API key similar ao CORS
 - **Throttling e Rate Limiting** — contadores atômicos por usuário
-- **Sistema de Eventos** — `PlanChanged`, `PlanExpired`, `GracePeriodStarted`, `UserStatusChanged`
-- **Notificações por E-mail** — alertas de carência, expiração de plano, redefinição de senha (pt-BR)
+- **Sistema de Eventos** — `PlanChanged`, `PlanExpired`, `PlanGracePeriodStarted`, `RequestLimitReached`, `PlanUsageThresholdReached`, `UserStatusChanged`
+- **Notificações por E-mail** — plano ativado, aviso de uso (80%), limite atingido, carência, expiração, verificação de e-mail e redefinição de senha (pt-BR) — todas substituíveis por config
 - **Fluxo de Redefinição de Senha** — ciclo completo de recuperação com URLs assinadas apontando para a SPA
 - **Verificação de E-mail** — redireciona para a SPA após o clique
 - **Integração MercadoPago** — checkout com Secure Fields, cartões salvos, webhook, estornos
@@ -126,7 +126,8 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 | `POST` | `api/v1/dashboard/cards` | Adicionar cartão |
 | `DELETE` | `api/v1/dashboard/cards/{id}` | Remover cartão |
 | `GET` | `api/v1/dashboard/history` | Histórico de assinaturas |
-| `GET` | `api/v1/dashboard/log` | Log de requisições |
+| `GET` | `api/v1/dashboard/log` | Log de requisições (ordenado do mais recente) |
+| `GET` | `api/v1/dashboard/stats` | Estatísticas agregadas do dashboard (uso, restantes, hoje) |
 
 Rotas exclusivas de admin (requerem middleware `admin`):
 
@@ -342,17 +343,79 @@ if ($coupon->isValid()) {
 
 ## Eventos e Notificações
 
-O pacote dispara eventos automaticamente. Os listeners embutidos enviam notificações por e-mail em português (pt-BR) por padrão.
+O pacote dispara eventos automaticamente e **já registra os listeners** que enviam notificações por e-mail em português (pt-BR). Não é preciso configurar nada para recebê-las.
 
-| Evento | Listener | Notificação |
-|--------|----------|-------------|
-| `PlanChanged` | — | *(implemente seu próprio listener)* |
-| `GracePeriodStarted` | `SendGracePeriodNotification` | `GracePeriodStartedNotification` |
-| `PlanExpired` | `SendPlanExpiredNotification` | `PlanExpiredNotification` |
-| `UserStatusChanged` | — | *(implemente seu próprio listener)* |
-| `RequestLimitReached` | — | *(implemente seu próprio listener)* |
+### Eventos disponíveis
 
-### Ouvindo eventos
+| Evento | Quando dispara |
+|--------|----------------|
+| `PlanChanged` | Assinatura ativada ou plano alterado |
+| `PlanGracePeriodStarted` | Plano expira e entra no período de carência |
+| `PlanExpired` | Período de carência encerrado (acesso suspenso) |
+| `PlanUsageThresholdReached` | Uso atinge o limiar de aviso (padrão 80%) |
+| `RequestLimitReached` | Limite de requisições do plano atingido (100%) |
+| `UserStatusChanged` | Status do usuário alterado |
+| `ApiKeyCreated` / `ApiKeyStatusChanged` | API key criada / ativada-desativada |
+
+### Notificações embutidas (e-mail, pt-BR)
+
+| Notificação | Gatilho | Throttle |
+|-------------|---------|----------|
+| `EmailVerifyNotification` | Registro / login sem verificação | — |
+| `ResetPasswordNotification` | `forgot-password` | — |
+| `PlanActivatedNotification` | `PlanChanged` | 1 por assinatura |
+| `UsageThresholdNotification` | `PlanUsageThresholdReached` | 1 por período do plano |
+| `RequestLimitReachedNotification` | `RequestLimitReached` | 1 a cada 24h |
+| `GracePeriodStartedNotification` | `PlanGracePeriodStarted` | — |
+| `PlanExpiredNotification` | `PlanExpired` | — |
+
+> O aviso de uso dispara no limiar definido por `API_KEY_USAGE_WARNING_THRESHOLD` (padrão `80`%). Requisições bloqueadas por limite (429) são **registradas no log, mas não contam** na cota.
+
+### Personalizando notificações
+
+Para trocar qualquer notificação pela sua, aponte a chave correspondente no mapa `notifications` da config para a **sua** classe. Ela deve manter a mesma assinatura de construtor (pode estender a do pacote e sobrescrever apenas o `toMail()`):
+
+```php
+// config/api-key.php
+'notifications' => [
+    'plan_expired' => \App\Notifications\MeuPlanoExpirou::class,
+    // as demais permanecem com o padrão do pacote
+],
+```
+
+```php
+namespace App\Notifications;
+
+use Illuminate\Notifications\Messages\MailMessage;
+use RiseTechApps\ApiKey\Notifications\PlanExpiredNotification as Base;
+
+class MeuPlanoExpirou extends Base
+{
+    public function toMail(object $notifiable): MailMessage
+    {
+        return (new MailMessage)
+            ->subject('Seu plano acabou')
+            ->line("O plano {$this->plan->name} expirou.")   // args herdados do construtor
+            ->action('Renovar', url('/planos'));
+    }
+}
+```
+
+Assinaturas de construtor de cada chave:
+
+| Chave | Construtor |
+|-------|------------|
+| `email_verify` | `()` |
+| `reset_password` | `($token)` |
+| `plan_activated` | `($plan, $userPlan, $previousPlan = null)` |
+| `usage_threshold` | `($plan, $userPlan, $used, $limit, $threshold)` |
+| `limit_reached` | `($plan, $userPlan, $used, $limit)` |
+| `grace_period` | `($plan, $userPlan, $graceDays, $graceEndDate)` |
+| `plan_expired` | `($plan, $userPlan)` |
+
+### Ouvindo eventos você mesmo
+
+Você também pode adicionar seus próprios listeners (rodam **junto** com os do pacote):
 
 ```php
 // app/Providers/EventServiceProvider.php
@@ -382,7 +445,7 @@ protected $listen = [
 | `api.key.origin` | `ApiKeyOriginValidatorMiddleware` | Valida o header `Origin` contra as origens permitidas |
 | `language` | `LanguageMiddleware` | Define o locale a partir do `Accept-Language` (`pt-BR` → `pt`) |
 | `admin` | `AdminMiddleware` | Exige `role = admin` |
-| `feature` | `CheckPlanFeatureMiddleware` | Exige feature específica no plano atual |
+| `feature` | `CheckPlanFeatureMiddleware` | Exige feature específica no plano atual; aplica automaticamente `check.limit.plan` (log + contagem) |
 | `plan` | *(grupo)* | Combina `api.key + check.active.plan + check.limit.plan + api.key.origin + language` |
 
 ---
@@ -415,6 +478,10 @@ return [
 
     'rate_limit' => [
         'cache_ttl' => 3600,
+    ],
+
+    'request_limit' => [
+        'warning_threshold' => 80,   // % de uso que dispara o e-mail de aviso (0 = desliga)
     ],
 
     'cache' => [
@@ -465,6 +532,18 @@ return [
     'demo_user_id'   => env('API_KEY_DEMO_USER_ID'),
     'internal_token' => env('API_INTERNAL_TOKEN'),
 
+    // Mapa de notificações — aponte qualquer chave para a sua classe para
+    // personalizar (mantendo a assinatura de construtor). Veja "Eventos e Notificações".
+    'notifications' => [
+        'email_verify'    => \RiseTechApps\ApiKey\Notifications\EmailVerifyNotification::class,
+        'reset_password'  => \RiseTechApps\ApiKey\Notifications\ResetPasswordNotification::class,
+        'plan_activated'  => \RiseTechApps\ApiKey\Notifications\PlanActivatedNotification::class,
+        'usage_threshold' => \RiseTechApps\ApiKey\Notifications\UsageThresholdNotification::class,
+        'limit_reached'   => \RiseTechApps\ApiKey\Notifications\RequestLimitReachedNotification::class,
+        'grace_period'    => \RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification::class,
+        'plan_expired'    => \RiseTechApps\ApiKey\Notifications\PlanExpiredNotification::class,
+    ],
+
     'spa' => [
         'enabled' => false,
     ],
@@ -481,6 +560,7 @@ return [
 | `API_KEY_CACHE_TTL_VALIDATION` | TTL do cache de validação (segundos) | `300` |
 | `API_KEY_CACHE_TTL_ORIGIN` | TTL do cache de origem (segundos) | `60` |
 | `API_KEY_RATE_LIMIT_CACHE_TTL` | TTL do contador de rate limit (segundos) | `3600` |
+| `API_KEY_USAGE_WARNING_THRESHOLD` | % de uso que dispara o e-mail de aviso (`0` desliga) | `80` |
 | `API_KEY_DISABLE_WEB_MIDDLEWARE` | Anexar `DisableRouteWebMiddleware` ao grupo `web` | `true` |
 | `API_KEY_AUTH_THROTTLE_ENABLED` | Habilitar throttle nos endpoints de autenticação | `true` |
 | `API_KEY_AUTH_THROTTLE_ATTEMPTS` | Máximo de tentativas de login/registro | `5` |
@@ -522,6 +602,7 @@ Tudo que pode ser alterado sem tocar no código Vue ou Blade:
 - **Mensagens de tradução** — publique `api-key-lang` e edite os arquivos PHP/JSON
 - **Shell Blade** — publique `api-key-views` para alterar título, meta tags, fontes ou injetar scripts
 - **Grupo de middlewares** — reordene ou substitua middlewares em `middleware_group.plan`
+- **Notificações** — substitua qualquer notificação pela sua no mapa `notifications` da config (mantendo a assinatura de construtor)
 - **Eventos** — registre seus próprios listeners para `PlanChanged`, `UserStatusChanged`, etc.
 
 ### Nível 2 — Customização completa do frontend (Node.js necessário)
