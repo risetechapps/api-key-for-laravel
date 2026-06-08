@@ -78,6 +78,22 @@ export const useDashboardStore = defineStore('dashboard', () => {
         }
     }
 
+    // Stats leves para polling em tempo real. Bate no /dashboard/stats (COUNT +
+    // contador do plano), nao carrega a lista de logs e nao mexe no loading
+    // (para nao piscar skeleton durante o auto-refresh).
+    async function fetchLiveStats() {
+        const { data } = await axios.get('/dashboard/stats');
+        const s = data?.data ?? data ?? {};
+
+        stats.value = {
+            ...stats.value,
+            today_requests:       s.today ?? 0,
+            month_requests:       s.used ?? 0,
+            remaining_requests:   s.remaining ?? 0,
+            total_requests_limit: s.limit ?? 0,
+        };
+    }
+
     function buildChartData(logs, days) {
         const counts = {};
         for (let i = days - 1; i >= 0; i--) {
@@ -233,6 +249,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         chartCategories,
         usagePercentage,
         fetchStats,
+        fetchLiveStats,
         fetchRequests,
         fetchPlans,
         subscribeToPlan,
