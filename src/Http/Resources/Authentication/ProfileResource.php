@@ -62,7 +62,12 @@ class ProfileResource extends JsonResource
             'role' => $this->role ?? 'user',
 
             // Relationships
-            'api_key' => $this->apiKey->key ?? '',
+            // The key is stored hashed and can never be shown again, so the real
+            // value is never exposed here — only a mask. The plain key is returned
+            // once on registration and on regeneration. `code` is a non-secret
+            // identifier for the key.
+            'api_key' => $this->apiKey ? str_repeat('•', 32) : '',
+            'api_key_code' => $this->apiKey?->code,
             'active_plan' => $this->whenLoaded('activePlan', fn() => UserPlanResource::make($this->activePlan)),
 
             // Usage Statistics
