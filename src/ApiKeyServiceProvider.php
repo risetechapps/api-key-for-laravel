@@ -6,8 +6,17 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use RiseTechApps\ApiKey\Events\PlanChanged;
+use RiseTechApps\ApiKey\Events\PlanExpired;
+use RiseTechApps\ApiKey\Events\PlanGracePeriodStarted;
+use RiseTechApps\ApiKey\Events\RequestLimitReached;
+use RiseTechApps\ApiKey\Listeners\SendGracePeriodNotification;
+use RiseTechApps\ApiKey\Listeners\SendPlanActivatedNotification;
+use RiseTechApps\ApiKey\Listeners\SendPlanExpiredNotification;
+use RiseTechApps\ApiKey\Listeners\SendRequestLimitReachedNotification;
 use RiseTechApps\ApiKey\Http\Middlewares\AdminMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\ApiKeyOriginValidatorMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
@@ -94,6 +103,8 @@ class ApiKeyServiceProvider extends ServiceProvider
         Config::set('auth.providers.users.model', \RiseTechApps\ApiKey\Models\Authentication\Authentication::class);
 
         $this->setRules($rulesRegistry);
+
+        $this->registerEventListeners();
 
         $this->app->booted(function () {
             if (file_exists(base_path('routes/routes.php'))) {
@@ -194,6 +205,20 @@ class ApiKeyServiceProvider extends ServiceProvider
             $this->app->bind(PlanRepository::class, Repositories\Plan\PlanEloquentRepository::class);
             $this->app->bind(Repositories\Coupon\CouponRepository::class, Repositories\Coupon\CouponEloquentRepository::class);
         }
+    }
+
+    /**
+     * Registra os listeners de notificação do pacote.
+     * Listeners em pacotes não são auto-descobertos (a auto-discovery do Laravel
+     * varre apenas o app/Listeners da aplicação host), então o vínculo
+     * evento → listener precisa ser explícito aqui.
+     */
+    protected function registerEventListeners(): void
+    {
+        Event::listen(PlanGracePeriodStarted::class, SendGracePeriodNotification::class);
+        Event::listen(PlanExpired::class, SendPlanExpiredNotification::class);
+        Event::listen(PlanChanged::class, SendPlanActivatedNotification::class);
+        Event::listen(RequestLimitReached::class, SendRequestLimitReachedNotification::class);
     }
 
     private function setRules(RulesRegistry $rulesRegistry): void
