@@ -10,7 +10,9 @@ class SendGracePeriodNotification
 {
     public function handle(PlanGracePeriodStarted $event): void
     {
-        $event->user->notify(new GracePeriodStartedNotification(
+        $notification = config('api-key.notifications.grace_period', GracePeriodStartedNotification::class);
+
+        $event->user->notify(new $notification(
             $event->plan,
             $event->userPlan,
             $event->gracePeriodDays,

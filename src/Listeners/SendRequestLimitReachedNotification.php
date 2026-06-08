@@ -21,7 +21,9 @@ class SendRequestLimitReachedNotification
             return;
         }
 
-        $event->user->notify(new RequestLimitReachedNotification(
+        $notification = config('api-key.notifications.limit_reached', RequestLimitReachedNotification::class);
+
+        $event->user->notify(new $notification(
             $event->plan,
             $event->userPlan,
             $event->requestsUsed,

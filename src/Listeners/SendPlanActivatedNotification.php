@@ -10,7 +10,9 @@ class SendPlanActivatedNotification
 {
     public function handle(PlanChanged $event): void
     {
-        $event->user->notify(new PlanActivatedNotification(
+        $notification = config('api-key.notifications.plan_activated', PlanActivatedNotification::class);
+
+        $event->user->notify(new $notification(
             $event->plan,
             $event->userPlan,
             $event->previousPlan

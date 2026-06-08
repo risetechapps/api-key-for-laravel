@@ -30,6 +30,42 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Request Limit Warning Threshold
+    |--------------------------------------------------------------------------
+    |
+    | Percentual de uso do limite do plano que dispara o e-mail de aviso
+    | (ex.: 80 = avisa quando o usuário atingir 80% das requisições do ciclo).
+    | O e-mail é enviado no máximo uma vez por período do plano. Use 0 para
+    | desabilitar o aviso prévio (o aviso de limite atingido em 100% continua).
+    |
+    */
+    'request_limit' => [
+        'warning_threshold' => env('API_KEY_USAGE_WARNING_THRESHOLD', 80),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Notifications
+    |--------------------------------------------------------------------------
+    |
+    | Mapa das classes de notificação usadas pelo pacote. Para personalizar
+    | qualquer notificação, aponte a chave para a SUA classe (ela deve manter
+    | a mesma assinatura de construtor da classe original — pode até estender
+    | a do pacote e sobrescrever apenas o toMail()).
+    |
+    */
+    'notifications' => [
+        'email_verify'    => \RiseTechApps\ApiKey\Notifications\EmailVerifyNotification::class,
+        'reset_password'  => \RiseTechApps\ApiKey\Notifications\ResetPasswordNotification::class,
+        'plan_activated'  => \RiseTechApps\ApiKey\Notifications\PlanActivatedNotification::class,
+        'usage_threshold' => \RiseTechApps\ApiKey\Notifications\UsageThresholdNotification::class,
+        'limit_reached'   => \RiseTechApps\ApiKey\Notifications\RequestLimitReachedNotification::class,
+        'grace_period'    => \RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification::class,
+        'plan_expired'    => \RiseTechApps\ApiKey\Notifications\PlanExpiredNotification::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Cache Configuration
     |--------------------------------------------------------------------------
     |

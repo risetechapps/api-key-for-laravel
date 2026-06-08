@@ -10,7 +10,9 @@ class SendPlanExpiredNotification
 {
     public function handle(PlanExpired $event): void
     {
-        $event->user->notify(new PlanExpiredNotification(
+        $notification = config('api-key.notifications.plan_expired', PlanExpiredNotification::class);
+
+        $event->user->notify(new $notification(
             $event->plan,
             $event->userPlan
         ));

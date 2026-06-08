@@ -12,11 +12,13 @@ use Illuminate\Support\ServiceProvider;
 use RiseTechApps\ApiKey\Events\PlanChanged;
 use RiseTechApps\ApiKey\Events\PlanExpired;
 use RiseTechApps\ApiKey\Events\PlanGracePeriodStarted;
+use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
 use RiseTechApps\ApiKey\Listeners\SendGracePeriodNotification;
 use RiseTechApps\ApiKey\Listeners\SendPlanActivatedNotification;
 use RiseTechApps\ApiKey\Listeners\SendPlanExpiredNotification;
 use RiseTechApps\ApiKey\Listeners\SendRequestLimitReachedNotification;
+use RiseTechApps\ApiKey\Listeners\SendUsageThresholdNotification;
 use RiseTechApps\ApiKey\Http\Middlewares\AdminMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\ApiKeyOriginValidatorMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
@@ -219,6 +221,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         Event::listen(PlanExpired::class, SendPlanExpiredNotification::class);
         Event::listen(PlanChanged::class, SendPlanActivatedNotification::class);
         Event::listen(RequestLimitReached::class, SendRequestLimitReachedNotification::class);
+        Event::listen(PlanUsageThresholdReached::class, SendUsageThresholdNotification::class);
     }
 
     private function setRules(RulesRegistry $rulesRegistry): void
