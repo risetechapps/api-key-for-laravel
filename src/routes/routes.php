@@ -1,16 +1,33 @@
 <?php
 
-
 use Illuminate\Support\Facades\Route;
-use RiseTechApps\ApiKey\Http\Controllers\Authentication\AuthController;
+use RiseTechApps\ApiKey\RoutesApiKey;
 
-Route::middleware(['api', 'language'])->prefix('api/v1/')->group(function () {
-    // Public authentication routes
-    Route::post('register', [AuthController::class, 'register']);
-    Route::post('login', [AuthController::class, 'login']);
+RoutesApiKey::register([
+    'prefix'     => 'api/v1',
+    'middleware' => ['api'],
+]);
 
-    // Dashboard routes - authenticated via Sanctum Bearer token
-    Route::middleware(['auth:sanctum'])->group(function () {
-        Route::get('auth/me', [AuthController::class, 'me']);
-    });
-});
+/*
+|--------------------------------------------------------------------------
+| Exemplo: protegendo suas próprias rotas
+|--------------------------------------------------------------------------
+|
+| Use o grupo `plan` para exigir API key válida + plano ativo + limite de
+| requisições (log/contagem) + validação de origem + idioma. Adicione
+| `feature:sua_feature` para restringir a planos que tenham a feature.
+|
+| Chame com o header:  X-API-KEY: <sua-chave>   (e Accept: application/json)
+|
+| Dica: prefixe com `api/...` para não colidir com a SPA quando ela estiver
+| habilitada (a rota catch-all serve tudo que NÃO começa com `api`).
+|
+*/
+
+// Route::prefix('api/v1')
+//     ->middleware(['plan', 'feature:notify-mail'])
+//     ->group(function () {
+//         Route::get('/ttt', function () {
+//             return response()->jsonSuccess([auth()->user()]);
+//         });
+//     });
