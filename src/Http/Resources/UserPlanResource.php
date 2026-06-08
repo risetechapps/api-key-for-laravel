@@ -4,6 +4,7 @@ namespace RiseTechApps\ApiKey\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use RiseTechApps\ApiKey\Support\FeatureResolver;
 
 class UserPlanResource extends JsonResource
 {
@@ -43,7 +44,7 @@ class UserPlanResource extends JsonResource
                 'billing_cycle' => $this->plan->billing_cycle?->value,
                 'price' => $this->plan->price,
                 'formatted_price' => $this->plan->formatted_price,
-                'features' => $this->plan->features,
+                'features' => FeatureResolver::resolve($this->plan->features),
             ]),
         ];
     }

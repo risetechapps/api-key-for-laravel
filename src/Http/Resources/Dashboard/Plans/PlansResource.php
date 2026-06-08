@@ -4,7 +4,7 @@ namespace RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use RiseTechApps\ApiKey\Services\FeatureRegistry;
+use RiseTechApps\ApiKey\Support\FeatureResolver;
 
 class PlansResource extends JsonResource
 {
@@ -20,46 +20,9 @@ class PlansResource extends JsonResource
             'raw_price'            => (float) $this->price,
             'billing_cycle'        => $this->billing_cycle?->value,
             'is_active'            => $this->is_active,
-            'features'             => $this->resolveFeatures(),
+            // Resolve as keys para {key, name, description, icon}; a key nunca
+            // é exibida como rótulo (ver FeatureResolver).
+            'features'             => FeatureResolver::resolve($this->features),
         ];
-    }
-
-    /**
-     * Resolve cada key de feature do plano para os metadados registrados
-     * (name/description/icon). A exibição usa apenas a informação da feature;
-     * a key nunca é mostrada como rótulo — quando falta metadado, ela é
-     * humanizada como último recurso.
-     */
-    private function resolveFeatures(): array
-    {
-        $keys = $this->features ?? [];
-
-        if (empty($keys)) {
-            return [];
-        }
-
-        $registry = app(FeatureRegistry::class);
-
-        return collect($keys)->map(function ($item) use ($registry) {
-            $key = is_array($item) ? ($item['key'] ?? null) : $item;
-
-            if (! is_string($key)) {
-                return null;
-            }
-
-            $meta = $registry->get($key) ?? [];
-
-            return [
-                'key'         => $key,
-                'name'        => $meta['name'] ?? $this->humanizeKey($key),
-                'description' => $meta['description'] ?? null,
-                'icon'        => $meta['icon'] ?? null,
-            ];
-        })->filter()->values()->all();
-    }
-
-    private function humanizeKey(string $key): string
-    {
-        return ucfirst(str_replace(['_', '-', '.'], ' ', $key));
     }
 }
