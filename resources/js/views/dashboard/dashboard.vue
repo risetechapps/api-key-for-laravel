@@ -94,7 +94,7 @@
                         </div>
 
                         <div class="space-y-3">
-                            <div v-for="feature in planFeatures" :key="feature.name" class="flex items-center gap-3">
+                            <div v-for="feature in planFeatures" :key="feature.key" class="flex items-center gap-3">
                                 <PhCheckCircle :size="20" weight="fill" class="text-emerald-500"/>
                                 <span class="text-sm text-slate-700 dark:text-slate-300">{{ feature.name }}</span>
                             </div>
@@ -201,7 +201,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import {format} from 'date-fns';
 import {ptBR} from 'date-fns/locale';
 import {useAuthStore} from '@/stores/auth';
@@ -226,9 +226,9 @@ const chartPeriod = ref('30');
 const user = computed(() => authStore.user);
 const currentPlan = computed(() => user.value?.active_plan?.plan);
 const hasPlan = computed(() => !!currentPlan.value);
-// Usa usage da estrutura do ProfileResource
-const usedRequests = computed(() => user.value?.usage?.requests_used || user.value?.active_plan?.requests_used || 0);
-const totalRequests = computed(() => user.value?.usage?.requests_limit || currentPlan.value?.request_limit || 0);
+// Lê das stats do poll (atualizam a cada 5s), com fallback no perfil/plano.
+const usedRequests = computed(() => dashboardStore.stats.month_requests ?? user.value?.usage?.requests_used ?? 0);
+const totalRequests = computed(() => dashboardStore.stats.total_requests_limit || user.value?.usage?.requests_limit || currentPlan.value?.request_limit || 0);
 const usagePercentage = computed(() => dashboardStore.usagePercentage);
 
 const usageBarColor = computed(() => {
@@ -289,11 +289,8 @@ const stats = computed(() => {
     ];
 });
 
-const planFeatures = [
-    {name: 'Módulo A', enabled: true},
-    {name: 'Módulo B', enabled: true},
-    {name: 'Módulo C', enabled: true},
-];
+// Features reais do plano ativo, resolvidas pelo backend ({ key, name, description, icon }).
+const planFeatures = computed(() => currentPlan.value?.features ?? []);
 
 const recentRequests = computed(() => dashboardStore.requests.slice(0, 10));
 
@@ -342,6 +339,45 @@ const chartOptions = computed(() => ({
 const chartSeries = computed(() => dashboardStore.chartSeries);
 const chartCategories = computed(() => dashboardStore.chartCategories);
 
+// --- Auto-refresh (polling) das stats em tempo real ---
+const POLL_MS = 5000;
+let pollTimer = null;
+let polling = false;
+
+async function pollStats() {
+    // não sobrepõe chamadas e não roda com a aba oculta
+    if (polling || document.hidden) return;
+    polling = true;
+    try {
+        await dashboardStore.fetchLiveStats();
+    } catch (_) {
+        // silencioso — é atualização de fundo
+    } finally {
+        polling = false;
+    }
+}
+
+function startPolling() {
+    stopPolling();
+    pollTimer = window.setInterval(pollStats, POLL_MS);
+}
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+function handleVisibility() {
+    if (document.hidden) {
+        stopPolling();
+    } else {
+        pollStats();      // atualiza na hora ao voltar para a aba
+        startPolling();
+    }
+}
+
 onMounted(async () => {
     await Promise.all([
         authStore.fetchProfile(),
@@ -349,6 +385,14 @@ onMounted(async () => {
         // dashboardStore.fetchRequests(),
     ]);
     loading.value = false;
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
+});
+
+onUnmounted(() => {
+    stopPolling();
+    document.removeEventListener('visibilitychange', handleVisibility);
 });
 
 const formatDate = (date) => {

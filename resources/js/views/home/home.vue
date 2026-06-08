@@ -30,15 +30,15 @@
                         <a href="#docs"
                            class="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600
                             dark:hover:text-indigo-400 transition-colors">Documentação</a>
-                        <a href="#"
+                        <router-link to="/support"
                            class="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600
-                           dark:hover:text-indigo-400 transition-colors">Status</a>
-                        <a href="#"
+                           dark:hover:text-indigo-400 transition-colors">Suporte</router-link>
+                        <router-link to="/privacy"
                            class="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600
-                           dark:hover:text-indigo-400 transition-colors">Suporte</a>
-                        <a href="#"
+                           dark:hover:text-indigo-400 transition-colors">Privacidade</router-link>
+                        <router-link to="/terms"
                            class="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600
-                           dark:hover:text-indigo-400 transition-colors">Termos</a>
+                           dark:hover:text-indigo-400 transition-colors">Termos</router-link>
                     </div>
 
                     <p class="text-sm text-slate-500 dark:text-slate-400">
