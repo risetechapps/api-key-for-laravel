@@ -3,6 +3,35 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [2.0.0]
+
+### Adicionado
+- Notificações de **plano ativado/alterado** (`PlanActivatedNotification` via `PlanChanged`), **aviso de uso** ao atingir o limiar (`UsageThresholdNotification`) e **limite atingido** (`RequestLimitReachedNotification`), com listeners registrados automaticamente
+- Novo evento `PlanUsageThresholdReached` e configuração `request_limit.warning_threshold` (env `API_KEY_USAGE_WARNING_THRESHOLD`, padrão `80`%) para o aviso de uso; throttle por período/24h evita e-mails repetidos
+- Mapa `notifications` em `config/api-key.php` — permite substituir qualquer uma das 7 notificações por uma classe própria (mantendo a assinatura de construtor)
+- Endpoint `GET /api/v1/dashboard/stats` com estatísticas agregadas leves (uso, restantes, hoje) e auto-refresh no dashboard (polling de 5s, com pausa em aba oculta e sem sobreposição)
+- Páginas públicas na SPA: Termos de Uso (`/terms`), Política de Privacidade (`/privacy`) e Suporte (`/support`); seção de Documentação (`#docs`) na home
+- Helper `FeatureResolver`, reutilizado por `PlansResource` e `UserPlanResource` para resolver features para `{key, name, description, icon}`
+
+### Alterado
+- Removido o campo manual `features_description` dos planos — a descrição exibida passa a vir 100% dos metadados das features registradas (`FeatureRegistry`); a key nunca é mostrada como rótulo (model, Resource, regras, formulário admin e migrations atualizados)
+- Middleware `feature` agora aplica automaticamente `check.limit.plan` (log + contagem de requisições); `CheckRequestLimitMiddleware` tornou-se idempotente para não contar em dobro quando também presente no grupo `plan`
+- `GET /api/v1/dashboard/log` agora retorna os registros ordenados do mais recente para o mais antigo
+- Cards de preço da home alinhados ao dashboard (linha de requisições/mês, efeito de elevação no hover e divisória)
+- Rodapé da home: "Documentação" → `#docs`, "Suporte" → `/support`, "Termos" → `/terms`, adicionado "Privacidade" e removido "Status"
+
+### Corrigido
+- Listeners `SendGracePeriodNotification` e `SendPlanExpiredNotification` nunca disparavam (não eram registrados — listeners de pacote não são auto-descobertos); registrados via `Event::listen`, restabelecendo os e-mails de **carência** e **expiração de plano**
+- Contagem de requisições ultrapassava o limite (ex.: `102/100`): requisições bloqueadas (429) ainda incrementavam `requests_used`; agora são registradas no log mas **não contam** na cota, e o uso exibido é limitado ao teto do plano (`/dashboard/stats` e `/auth/me`)
+- `RequestLog::requested_at` sem cast era serializado como string sem fuso e exibido com horário deslocado; adicionado cast `datetime` (ISO8601 com timezone)
+- Lista de cupons no painel ficava obsoleta até `cache:clear` — o cache do repository não invalida com driver `database`/`file` (sem suporte a tags); `index()` passou a usar `withoutCache()` e `delete()` agora passa pelo repository (`find()->delete()`)
+- Dashboard exibia features fictícias ("Módulo A/B/C") no card do plano; `UserPlanResource` agora resolve as features (name/description/icon) em vez de devolver as keys cruas, e o card lê os dados reais
+- Card "Requisições usadas" do dashboard só atualizava após F5; agora reflete o polling de stats (a cada 5s)
+- Menu "Docs" e links do rodapé eram `href="#"` (sem destino); seção `#docs` criada e links corrigidos
+
+### Removido
+- Coluna `features_description` da tabela `plans` (migration `drop_features_description_from_plans_table`) e o campo manual correspondente no formulário de planos do admin
+
 ## [1.0.8] - 2026-06-03
 
 ### Corrigido
