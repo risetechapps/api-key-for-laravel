@@ -33,6 +33,8 @@ class AuthController extends Controller
 
             return response()->jsonSuccess([
                 'message' => __('api-key::messages.registration_success'),
+                // The plain key is shown only once; afterwards only the hash is stored.
+                'api_key' => $user->apiKey?->plainKey,
             ]);
         } catch (Throwable $exception) {
             report($exception);
