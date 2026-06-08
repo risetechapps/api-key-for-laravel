@@ -21,10 +21,15 @@ class PlansResource extends JsonResource
             'billing_cycle'        => $this->billing_cycle?->value,
             'is_active'            => $this->is_active,
             'features'             => $this->resolveFeatures(),
-            'features_description' => $this->features_description ?? [],
         ];
     }
 
+    /**
+     * Resolve cada key de feature do plano para os metadados registrados
+     * (name/description/icon). A exibição usa apenas a informação da feature;
+     * a key nunca é mostrada como rótulo — quando falta metadado, ela é
+     * humanizada como último recurso.
+     */
     private function resolveFeatures(): array
     {
         $keys = $this->features ?? [];
@@ -42,13 +47,19 @@ class PlansResource extends JsonResource
                 return null;
             }
 
-            $meta = $registry->get($key);
+            $meta = $registry->get($key) ?? [];
 
             return [
-                'key'  => $key,
-                'name' => $meta['name'] ?? (is_array($item) ? ($item['name'] ?? $key) : $key),
-                'icon' => $meta['icon'] ?? (is_array($item) ? ($item['icon'] ?? null) : null),
+                'key'         => $key,
+                'name'        => $meta['name'] ?? $this->humanizeKey($key),
+                'description' => $meta['description'] ?? null,
+                'icon'        => $meta['icon'] ?? null,
             ];
         })->filter()->values()->all();
+    }
+
+    private function humanizeKey(string $key): string
+    {
+        return ucfirst(str_replace(['_', '-', '.'], ' ', $key));
     }
 }

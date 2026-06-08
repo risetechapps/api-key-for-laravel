@@ -20,7 +20,6 @@ class PlanRules implements RulesContract
                 'billing_cycle' => 'bail|required|in:' . implode(',', BillingCycle::values()),
                 'is_active' => 'bail|required|boolean',
                 'features' => 'bail|required|array',
-                'features_description' => 'bail|required|array',
             ],
         ];
     }
@@ -50,8 +49,6 @@ class PlanRules implements RulesContract
             'is_active.boolean'          => 'O status do plano deve ser verdadeiro ou falso.',
             'features.required'          => 'Selecione ao menos uma feature.',
             'features.array'             => 'As features devem ser uma lista.',
-            'features_description.required' => 'Adicione ao menos uma descrição de feature.',
-            'features_description.array'    => 'As descrições de features devem ser uma lista.',
         ];
     }
 }
