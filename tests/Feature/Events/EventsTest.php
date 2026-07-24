@@ -15,15 +15,34 @@ use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
-beforeEach(function () {
-    Event::fake();
+// Apenas os eventos de domínio são falsificados. Event::fake() sem argumentos
+// intercepta TAMBÉM os eventos de model do Eloquent (creating/saving), o que
+// impede o HasUuid de gerar o id e o ApiKey de hashear a key — quebrando toda
+// criação. Listando os eventos explicitamente, o ciclo de vida do model segue
+// normal e só as asserções de evento são capturadas.
+$domainEvents = [
+    UserStatusChanged::class,
+    ApiKeyCreated::class,
+    ApiKeyStatusChanged::class,
+    PlanChanged::class,
+    PlanExpired::class,
+    RequestLimitReached::class,
+    PlanGracePeriodStarted::class,
+];
+
+beforeEach(function () use ($domainEvents) {
     $this->user = Authentication::factory()->create();
     $this->plan = Plan::factory()->create();
+
+    Event::fake($domainEvents);
 });
 
 describe('User Status Changed Event', function () {
     it('dispatches when user status changes', function () {
-        $this->user->update(['status' => 'disabled']);
+        // status não está em $fillable (protegido de mass-assignment), então é
+        // atribuído diretamente antes de salvar.
+        $this->user->status = 'disabled';
+        $this->user->save();
 
         Event::assertDispatched(UserStatusChanged::class, function ($event) {
             return $event->user->id === $this->user->id
@@ -50,7 +69,7 @@ describe('Api Key Events', function () {
             'active' => true,
         ]);
 
-        Event::fake(); // Reset to capture only the update
+        Event::fake([ApiKeyStatusChanged::class]); // Reset to capture only the update
 
         $apiKey->update(['active' => false]);
 

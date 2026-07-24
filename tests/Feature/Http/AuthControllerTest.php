@@ -27,9 +27,11 @@ describe('Registration', function () {
                 ],
             ]);
 
+        // O HasToUpper normaliza o nome para maiúsculo ao persistir; o e-mail está
+        // no $no_upper e permanece como enviado.
         $this->assertDatabaseHas('authentications', [
             'email' => 'john@example.com',
-            'name' => 'John Doe',
+            'name' => 'JOHN DOE',
         ]);
     });
 
@@ -75,8 +77,10 @@ describe('Registration', function () {
             'password_confirmation' => 'different',
         ]);
 
+        // A regra é same:password sobre o campo password_confirmation, então o
+        // erro de validação é reportado nessa chave.
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['password']);
+            ->assertJsonValidationErrors(['password_confirmation']);
     });
 });
 
@@ -146,14 +150,12 @@ describe('Login', function () {
 
 describe('Me', function () {
     it('returns authenticated user data', function () {
+        // A rota /auth/me é protegida por auth:sanctum, então autenticamos com um
+        // token Sanctum (não com a API key, que serve às rotas do grupo 'plan').
         $user = Authentication::factory()->create();
-        $apiKey = \RiseTechApps\ApiKey\Models\ApiKey\ApiKey::factory()->create([
-            'authentication_id' => $user->id,
-        ]);
+        \Laravel\Sanctum\Sanctum::actingAs($user);
 
-        $response = $this->withHeaders([
-            'X-API-KEY' => $apiKey->plainKey,
-        ])->getJson('/api/v1/auth/me');
+        $response = $this->getJson('/api/v1/auth/me');
 
         $response->assertStatus(200)
             ->assertJsonStructure([

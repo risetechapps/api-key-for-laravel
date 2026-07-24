@@ -81,7 +81,8 @@ describe('Check Active Plan Middleware', function () {
             'authentication_id' => $this->user->id,
             'plan_id' => $this->plan->id,
             'active' => true,
-            'end_date' => now()->subDay(),
+            // Além do grace period (3 dias): completamente expirado → 403.
+            'end_date' => now()->subDays(5),
             'start_date' => now()->subDays(30),
         ]);
 

@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Facades\Hash;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
@@ -16,7 +15,10 @@ class ApiKeyFactory extends Factory
         return [
             'authentication_id' => Authentication::factory(),
             'code' => $this->faker->uuid(),
-            'key' => Hash::make(bin2hex(random_bytes(64))),
+            // Plain key, exactly as production passes it: the model's saving hook
+            // is what hashes it and derives the lookup hash. Pre-hashing here meant
+            // the value was bcrypted twice and plainKey held a hash, not a key.
+            'key' => bin2hex(random_bytes(64)),
             'expires_at' => null,
             'active' => true,
             'allowed_origins' => [],

@@ -113,10 +113,11 @@ describe('Key Hashing', function () {
         $plainKey = bin2hex(random_bytes(64));
 
         $apiKey = new ApiKey([
-            'authentication_id' => $this->user->id,
             'key' => $plainKey,
             'active' => true,
         ]);
+        // authentication_id não está em $fillable (protegido de mass-assignment).
+        $apiKey->authentication_id = $this->user->id;
 
         $apiKey->save();
 
@@ -130,10 +131,11 @@ describe('Key Hashing', function () {
         $plainKey = bin2hex(random_bytes(64));
 
         $apiKey = new ApiKey([
-            'authentication_id' => $this->user->id,
             'key' => $plainKey,
             'active' => true,
         ]);
+        // authentication_id não está em $fillable (protegido de mass-assignment).
+        $apiKey->authentication_id = $this->user->id;
 
         // Before saving, plainKey should be set
         expect($apiKey->plainKey)->toBe($plainKey);

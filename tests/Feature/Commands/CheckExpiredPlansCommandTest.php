@@ -10,11 +10,15 @@ use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
 beforeEach(function () {
-    Event::fake();
+    // Cria os models ANTES de falsificar, e falsifica apenas os eventos de
+    // domínio — Event::fake() sem argumentos intercepta os eventos de model do
+    // Eloquent e impede o HasUuid de gerar o id.
     $this->user = Authentication::factory()->create();
     $this->plan = Plan::factory()->create();
 
     config(['api-key.grace_period_days' => 3]);
+
+    Event::fake([PlanExpired::class, \RiseTechApps\ApiKey\Events\PlanGracePeriodStarted::class]);
 });
 
 describe('Check Expired Plans Command', function () {
