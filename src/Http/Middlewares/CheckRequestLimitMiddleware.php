@@ -4,9 +4,10 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
+use RiseTechApps\ApiKey\Jobs\LogApiRequestJob;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use Symfony\Component\HttpFoundation\Response;
@@ -30,16 +31,27 @@ class CheckRequestLimitMiddleware
         /** @var Authentication $user */
         $user = $request->user();
 
-        // Load active plan with eager loading to avoid N+1
         /** @var UserPlan|null $activePlan */
-        $activePlan = $user->activePlan()->with(['plan'])->first();
+        $activePlan = $this->resolveActivePlan($request, $user);
 
-        $requestsMade = $activePlan?->requests_used ?? 0;
         $requestsLimit = $activePlan?->plan?->request_limit ?? 0;
 
-        if ($requestsLimit > 0 && $requestsMade >= $requestsLimit) {
-            // Dispatch event when request limit is reached
-            if ($activePlan && $activePlan->plan) {
+        // Quota is claimed up front with a conditional atomic UPDATE, so the
+        // decision and the increment are one operation the database serialises.
+        //
+        // Reading the counter and incrementing it after the response let every
+        // concurrent request observe the same pre-increment value: N simultaneous
+        // requests all passed the check and the quota was overrun by N-1.
+        if ($activePlan && ! $this->reserveQuota($activePlan, $requestsLimit)) {
+            $requestsMade = $requestsLimit;
+
+            // Dispatch event when request limit is reached.
+            // O listener já deduplica com Cache::add (um e-mail por período), mas
+            // sem este gate cada requisição bloqueada enfileiraria um job de
+            // listener. Checar a mesma chave aqui evita esse enfileiramento no
+            // caso comum (após o primeiro aviso). A dedup final continua no
+            // listener — a chave espelha SendRequestLimitReachedNotification.
+            if ($activePlan->plan && ! Cache::has('api-key:limit-notified:'.$activePlan->getKey())) {
                 RequestLimitReached::dispatch(
                     $user,
                     $activePlan,
@@ -49,11 +61,9 @@ class CheckRequestLimitMiddleware
                 );
             }
 
-            // Registra a requisição bloqueada no log, mas NÃO conta na cota
-            // (countUsage = false) — assim o contador não ultrapassa o limite.
-            dispatch(function () use ($user) {
-                $user->requestUsed(429, false);
-            })->afterResponse();
+            // A requisição bloqueada entra no log, mas não consumiu cota: o
+            // UPDATE condicional não alterou nenhuma linha.
+            $this->logRequest($request, $user, $activePlan, 429);
 
             return response()->json(['error' => __('api-key::messages.request_limit_reached')], 429);
         }
@@ -63,11 +73,19 @@ class CheckRequestLimitMiddleware
         // no máximo um e-mail por período do plano.
         if ($requestsLimit > 0 && $activePlan && $activePlan->plan) {
             $threshold = (int) config('api-key.request_limit.warning_threshold', 80);
+            // Post-claim value: this request already counts towards the quota.
+            $requestsMade = (int) $activePlan->requests_used;
 
             if ($threshold > 0 && $threshold < 100) {
                 $warnAt = (int) ceil($requestsLimit * $threshold / 100);
 
-                if ($requestsMade >= $warnAt && $requestsMade < $requestsLimit) {
+                // Gate igual ao do limite atingido: o evento dispararia em toda
+                // requisição dentro da faixa de aviso. Após o primeiro e-mail do
+                // período (chave gravada por SendUsageThresholdNotification), nem
+                // enfileira o listener. Cache::add no listener continua sendo a
+                // dedup autoritativa contra corrida.
+                if ($requestsMade >= $warnAt && $requestsMade < $requestsLimit
+                    && ! Cache::has('api-key:usage-threshold-notified:'.$activePlan->getKey())) {
                     PlanUsageThresholdReached::dispatch(
                         $user,
                         $activePlan,
@@ -82,16 +100,117 @@ class CheckRequestLimitMiddleware
 
         $response = $next($request);
 
-        $userId = $user->id;
-        $statusCode = $response->getStatusCode();
-
-        dispatch(function () use ($userId, $statusCode) {
-            $user = Authentication::find($userId);
-            if ($user) {
-                $user->requestUsed($statusCode);
-            }
-        })->afterResponse();
+        // The counter was already incremented by reserveQuota(); only the log
+        // entry is deferred.
+        $this->logRequest($request, $user, $activePlan, $response->getStatusCode());
 
         return $response;
+    }
+
+    /**
+     * Claim one request from the plan's quota.
+     *
+     * A single conditional UPDATE: the row is incremented only while the stored
+     * counter is still below the limit, and the affected-row count tells us
+     * whether this request got a slot. Concurrent callers are serialised by the
+     * database on the row lock, so exactly `limit` requests can ever succeed.
+     *
+     * A limit of 0 means unlimited: the counter still moves (the dashboard
+     * reports usage for those plans too), it just never blocks.
+     *
+     * Returns false only when the quota is exhausted.
+     */
+    private function reserveQuota(UserPlan $activePlan, int $limit): bool
+    {
+        $query = UserPlan::whereKey($activePlan->getKey());
+
+        if ($limit > 0) {
+            $query->where('requests_used', '<', $limit);
+        }
+
+        $claimed = $query->increment('requests_used');
+
+        if ($claimed > 0) {
+            // Keep the in-memory model in step with the row for the threshold
+            // check and for anything downstream reading the relation.
+            $activePlan->requests_used = $activePlan->requests_used + 1;
+            $activePlan->syncOriginal();
+        }
+
+        return $claimed > 0;
+    }
+
+    /**
+     * Record the request in the log.
+     *
+     * Two delivery modes:
+     *   - Queue (`api-key.request_log.queue` set): a LogApiRequestJob is pushed
+     *     so a queue worker absorbs the INSERT and the web worker is free for the
+     *     next request. Preferred under load.
+     *   - afterResponse (default): the write runs in this same process after the
+     *     response is flushed. Off the response's critical path, but still on the
+     *     web worker — kept as the zero-configuration default for setups without a
+     *     queue worker.
+     */
+    private function logRequest(Request $request, ?Authentication $user, ?UserPlan $activePlan, int $status): void
+    {
+        if (! $user) {
+            return;
+        }
+
+        $planId = $activePlan?->getKey();
+        $path = $request->path();
+        $method = $request->method();
+
+        $queue = config('api-key.request_log.queue');
+
+        if ($queue !== null && $queue !== '') {
+            try {
+                $job = new LogApiRequestJob((string) $user->getKey(), $planId, $path, $method, $status)
+                    ->onQueue($queue);
+
+                // Força a conexão (por padrão redis) para o Horizon processar o job.
+                // Sem isto ele usaria o QUEUE_CONNECTION default (database) e ficaria
+                // fora do alcance do Horizon.
+                $connection = config('api-key.request_log.connection');
+                if ($connection !== null && $connection !== '') {
+                    $job->onConnection($connection);
+                }
+
+                // dispatch() sem capturar: o PendingDispatch é destruído ainda
+                // dentro deste statement (logo, dentro do try), então uma falha de
+                // fila é capturada aqui em vez de estourar no destrutor.
+                dispatch($job);
+            } catch (\Throwable $e) {
+                // O log é best-effort. A resposta da API já foi gerada; uma
+                // indisponibilidade da fila (ex.: redis fora) não pode transformar
+                // uma requisição bem-sucedida em 500. Registra e segue.
+                report($e);
+            }
+
+            return;
+        }
+
+        dispatch(function () use ($user, $status, $planId, $path, $method) {
+            $user->requestUsed($status, false, $planId, $path, $method);
+        })->afterResponse();
+    }
+
+    /**
+     * The active plan, preferring the instance CheckActivePlanMiddleware already
+     * resolved. That one includes the grace period, so the stricter "not expired"
+     * condition of activePlan() is reapplied here in memory rather than as a
+     * second query. Falls back to querying when this middleware runs on its own
+     * (for example when reached through CheckPlanFeatureMiddleware).
+     */
+    private function resolveActivePlan(Request $request, ?Authentication $user): ?UserPlan
+    {
+        if ($request->attributes->has('user_plan')) {
+            $plan = $request->attributes->get('user_plan');
+
+            return $plan && ! $plan->isExpired() ? $plan : null;
+        }
+
+        return $user?->activePlan()->with(['plan'])->first();
     }
 }

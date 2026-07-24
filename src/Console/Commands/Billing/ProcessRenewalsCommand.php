@@ -3,138 +3,67 @@
 namespace RiseTechApps\ApiKey\Console\Commands\Billing;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
-use MercadoPago\Client\Payment\PaymentClient;
-use MercadoPago\MercadoPagoConfig;
-use RiseTechApps\ApiKey\Models\UserCard\UserCard;
+use RiseTechApps\ApiKey\Jobs\ProcessPlanRenewalJob;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
-use RiseTechApps\ApiKey\Services\MpCustomerService;
 
 class ProcessRenewalsCommand extends Command
 {
     protected $signature = 'billing:process-renewals
-                            {--dry-run : List due plans without charging}';
+                            {--dry-run : List due plans without charging}
+                            {--sync : Charge inline instead of dispatching to the queue}';
 
     protected $description = 'Process automatic plan renewals for subscriptions expiring today';
 
-    public function handle(MpCustomerService $mpService): int
+    /**
+     * Dispatches one job per due subscription.
+     *
+     * The command itself only reads ids, in chunks — it never holds the full set
+     * of due plans in memory, and it does not block on Mercado Pago. The actual
+     * charging happens in ProcessPlanRenewalJob, which queue workers run in
+     * parallel; previously every charge was serial inside this command, so the
+     * run time grew linearly with the subscriber base.
+     */
+    public function handle(): int
     {
-        $duePlans = UserPlan::where('active', true)
-            ->whereDate('end_date', today())
-            ->with(['authentication', 'plan'])
-            ->get();
+        $queue = config('api-key.billing.queue');
+        $dryRun = $this->option('dry-run');
+        $sync = $this->option('sync');
 
-        if ($duePlans->isEmpty()) {
+        $dispatched = 0;
+
+        UserPlan::where('active', true)
+            ->whereBetween('end_date', [today()->startOfDay(), today()->endOfDay()])
+            ->with(['authentication:id,email', 'plan:id,name'])
+            ->chunkById(200, function ($plans) use ($dryRun, $sync, $queue, &$dispatched) {
+                foreach ($plans as $userPlan) {
+                    if ($dryRun) {
+                        $this->line("  - {$userPlan->authentication?->email} → {$userPlan->plan?->name}");
+                        $dispatched++;
+                        continue;
+                    }
+
+                    $job = new ProcessPlanRenewalJob($userPlan->getKey());
+
+                    $sync
+                        ? dispatch_sync($job)
+                        : dispatch($queue ? $job->onQueue($queue) : $job);
+
+                    $dispatched++;
+                }
+            });
+
+        if ($dispatched === 0) {
             $this->info('No renewals due today.');
+
             return Command::SUCCESS;
         }
 
-        $this->info("Found {$duePlans->count()} plan(s) expiring today.");
-
-        if ($this->option('dry-run')) {
-            foreach ($duePlans as $userPlan) {
-                $this->line("  - {$userPlan->authentication->email} → {$userPlan->plan->name}");
-            }
-            return Command::SUCCESS;
-        }
-
-        MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
-        $paymentClient = new PaymentClient();
-
-        $succeeded = 0;
-        $failed    = 0;
-
-        foreach ($duePlans as $userPlan) {
-            try {
-                $this->processRenewal($userPlan, $mpService, $paymentClient)
-                    ? $succeeded++
-                    : $failed++;
-            } catch (\Exception $e) {
-                $failed++;
-                Log::error('billing:process-renewals unexpected error', [
-                    'user_plan_id' => $userPlan->getKey(),
-                    'error'        => $e->getMessage(),
-                ]);
-            }
-        }
-
-        $this->info("Done. Succeeded: {$succeeded} | Failed: {$failed}");
+        $this->info(match (true) {
+            $dryRun => "{$dispatched} renewal(s) due today (dry run, nothing charged).",
+            $sync => "Processed {$dispatched} renewal(s) inline.",
+            default => "Queued {$dispatched} renewal(s) for processing.",
+        });
 
         return Command::SUCCESS;
-    }
-
-    private function processRenewal(UserPlan $userPlan, MpCustomerService $mpService, PaymentClient $paymentClient): bool
-    {
-        $user = $userPlan->authentication;
-        $plan = $userPlan->plan;
-
-        $card = UserCard::where('authentication_id', $user->getKey())
-            ->where('is_default', true)
-            ->whereNotNull('mp_card_id')
-            ->first();
-
-        if (! $card) {
-            $this->warn("  [{$user->email}] No default card with mp_card_id — skipping.");
-            Log::warning('billing:process-renewals no default card', [
-                'user_id'      => $user->getKey(),
-                'user_plan_id' => $userPlan->getKey(),
-            ]);
-            return false;
-        }
-
-        $token  = $mpService->tokenizeRecurring($card->mp_customer_id, $card->mp_card_id);
-        $amount = (float) $plan->price;
-
-        $payment = $paymentClient->create([
-            'transaction_amount' => $amount,
-            'token'              => $token,
-            'installments'       => 1,
-            'payment_method_id'  => $card->brand,
-            'payer'              => [
-                'id'    => $card->mp_customer_id,
-                'email' => strtolower($user->email),
-            ],
-            'description'        => "Renovação do plano {$plan->name}",
-            'external_reference'   => "renewal|{$user->getKey()}|{$plan->getKey()}|{$userPlan->getKey()}",
-            'statement_descriptor' => mb_substr(config('app.name'), 0, 22),
-            'additional_info'      => [
-                'items' => [
-                    [
-                        'id'          => (string) $plan->getKey(),
-                        'title'       => "Renovação do plano {$plan->name}",
-                        'description' => $plan->description ?? "Renovação do plano {$plan->name}",
-                        'category_id' => 'services',
-                        'quantity'    => 1,
-                        'unit_price'  => $amount,
-                    ],
-                ],
-            ],
-        ]);
-
-        if ($payment->status === 'approved') {
-            $newPlan = $user->subscribeToPlan($plan);
-            $newPlan->update([
-                'payment_id'     => (string) $payment->id,
-                'payment_amount' => $amount,
-            ]);
-
-            $this->info("  [{$user->email}] Renewed → {$plan->name} (payment {$payment->id})");
-            Log::info('billing:process-renewals approved', [
-                'user_id'    => $user->getKey(),
-                'plan'       => $plan->name,
-                'payment_id' => $payment->id,
-            ]);
-            return true;
-        }
-
-        $this->error("  [{$user->email}] Payment {$payment->status} ({$payment->status_detail})");
-        Log::warning('billing:process-renewals payment not approved', [
-            'user_id'       => $user->getKey(),
-            'user_plan_id'  => $userPlan->getKey(),
-            'status'        => $payment->status,
-            'status_detail' => $payment->status_detail,
-        ]);
-
-        return false;
     }
 }

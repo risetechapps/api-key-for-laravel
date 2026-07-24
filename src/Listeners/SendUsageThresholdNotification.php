@@ -2,13 +2,31 @@
 
 namespace RiseTechApps\ApiKey\Listeners;
 
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Notifications\UsageThresholdNotification;
 
-class SendUsageThresholdNotification
+// Enfileirado: o evento dispara no hot path (toda requisição na faixa de aviso),
+// e o envio do e-mail (SMTP) não pode bloquear a resposta HTTP.
+class SendUsageThresholdNotification implements ShouldQueue
 {
+    use InteractsWithQueue;
+
+    // Roteia para a conexão observada pelo Horizon (por padrão redis); sem isto
+    // o job iria para o QUEUE_CONNECTION default (database) e não seria processado.
+    public function viaConnection(): ?string
+    {
+        return config('api-key.queue.connection');
+    }
+
+    public function viaQueue(): ?string
+    {
+        return config('api-key.queue.name');
+    }
+
     public function handle(PlanUsageThresholdReached $event): void
     {
         // O evento dispara em toda requisição dentro da faixa de aviso (ex.: 80-99%).

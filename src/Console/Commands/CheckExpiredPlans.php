@@ -18,27 +18,31 @@ class CheckExpiredPlans extends Command
         $graceDays = Config::get('api-key.grace_period_days', 3);
 
         if ($this->option('grace-only')) {
-            // Only notify about plans entering grace period today
-            $graceStartPlans = UserPlan::where('active', true)
-                ->whereDate('end_date', '=', now()->toDateString())
+            // Only notify about plans entering grace period today.
+            // Chunked, and with a sargable range instead of whereDate(), which
+            // wraps the column in a function and defeats the index.
+            UserPlan::where('active', true)
+                ->whereBetween('end_date', [now()->startOfDay(), now()->endOfDay()])
                 ->with(['authentication', 'plan'])
-                ->get();
+                ->chunkById(200, function ($plans) use ($graceDays) {
+                    foreach ($plans as $userPlan) {
+                        if (!$userPlan->authentication || !$userPlan->plan) {
+                            continue;
+                        }
 
-            foreach ($graceStartPlans as $userPlan) {
-                if ($userPlan->authentication && $userPlan->plan) {
-                    PlanGracePeriodStarted::dispatch(
-                        $userPlan->authentication,
-                        $userPlan,
-                        $userPlan->plan,
-                        $graceDays,
-                        now()->addDays($graceDays)
-                    );
+                        PlanGracePeriodStarted::dispatch(
+                            $userPlan->authentication,
+                            $userPlan,
+                            $userPlan->plan,
+                            $graceDays,
+                            now()->addDays($graceDays)
+                        );
 
-                    $this->info(
-                        "Plan grace period started: {$userPlan->plan->name} for user {$userPlan->authentication->email}"
-                    );
-                }
-            }
+                        $this->info(
+                            "Plan grace period started: {$userPlan->plan->name} for user {$userPlan->authentication->email}"
+                        );
+                    }
+                });
 
             return self::SUCCESS;
         }
@@ -46,39 +50,40 @@ class CheckExpiredPlans extends Command
         // Get plans that are completely expired (past grace period)
         $gracePeriodEndDate = now()->subDays($graceDays);
 
-        $expiredPlans = UserPlan::where('active', true)
-            ->where('end_date', '<', $gracePeriodEndDate)
-            ->with(['authentication', 'plan'])
-            ->get();
-
         $count = 0;
-        foreach ($expiredPlans as $userPlan) {
-            // Check if completely expired (past grace period)
-            if ($userPlan->isCompletelyExpired()) {
-                // Deactivate the plan
-                $userPlan->update(['active' => false]);
 
-                // Disable the API key
-                if ($userPlan->authentication?->apiKey) {
-                    $userPlan->authentication->apiKey->update(['active' => false]);
-                }
+        // Chunked: a backlog (a few missed runs, or a first run on an existing
+        // database) would otherwise load every expired plan, with its user and
+        // plan eager loaded, into memory at once.
+        //
+        // The SQL predicate already guarantees the grace period has passed, so
+        // the previous isCompletelyExpired() re-check in PHP was redundant.
+        UserPlan::where('active', true)
+            ->where('end_date', '<', $gracePeriodEndDate)
+            ->with(['authentication.apiKey', 'plan'])
+            ->chunkById(200, function ($plans) use (&$count) {
+                foreach ($plans as $userPlan) {
+                    $userPlan->update(['active' => false]);
 
-                // Fire the PlanExpired event
-                if ($userPlan->authentication && $userPlan->plan) {
-                    PlanExpired::dispatch(
-                        $userPlan->authentication,
-                        $userPlan,
-                        $userPlan->plan,
-                        now()
+                    if ($userPlan->authentication?->apiKey) {
+                        $userPlan->authentication->apiKey->update(['active' => false]);
+                    }
+
+                    if ($userPlan->authentication && $userPlan->plan) {
+                        PlanExpired::dispatch(
+                            $userPlan->authentication,
+                            $userPlan,
+                            $userPlan->plan,
+                            now()
+                        );
+                        $count++;
+                    }
+
+                    $this->info(
+                        "Deactivated expired plan: {$userPlan->plan?->name} for user {$userPlan->authentication?->email}"
                     );
-                    $count++;
                 }
-
-                $this->info(
-                    "Deactivated expired plan: {$userPlan->plan->name} for user {$userPlan->authentication?->email}"
-                );
-            }
-        }
+            });
 
         $this->info("Processed {$count} completely expired plans.");
 

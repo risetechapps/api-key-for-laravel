@@ -3,10 +3,27 @@
 namespace RiseTechApps\ApiKey\Notifications;
 
 use Illuminate\Auth\Notifications\ResetPassword as BaseResetPassword;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 
-class ResetPasswordNotification extends BaseResetPassword
+// Enviada diretamente (não via listener), então é enfileirada aqui para não
+// bloquear a requisição de "esqueci minha senha" no envio do e-mail.
+class ResetPasswordNotification extends BaseResetPassword implements ShouldQueue
 {
+    use Queueable;
+
+    public function __construct($token)
+    {
+        parent::__construct($token);
+
+        // Mesma conexão do Horizon (por padrão redis); sem isto a notificação
+        // enfileiraria no QUEUE_CONNECTION default (database) e nunca sairia.
+        $this->connection = config('api-key.queue.connection');
+        $this->queue = config('api-key.queue.name');
+    }
+
+    #[\Override]
     public function toMail(mixed $notifiable): MailMessage
     {
         $url = $this->resetUrl($notifiable);

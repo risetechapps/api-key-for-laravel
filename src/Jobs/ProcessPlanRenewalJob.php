@@ -87,18 +87,18 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
         $token  = $mpService->tokenizeRecurring($card->mp_customer_id, $card->mp_card_id);
         $amount = (float) $plan->price;
 
-        $payment = (new PaymentClient())->create([
+        $payment = new PaymentClient()->create([
             'transaction_amount' => $amount,
             'token'              => $token,
             'installments'       => 1,
             'payment_method_id'  => $card->brand,
             'payer'              => [
                 'id'    => $card->mp_customer_id,
-                'email' => strtolower($user->email),
+                'email' => strtolower((string) $user->email),
             ],
             'description'          => __('api-key::messages.plan_renewal_description', ['plan' => $plan->name]),
             'external_reference'   => "renewal|{$user->getKey()}|{$plan->getKey()}|{$userPlan->getKey()}",
-            'statement_descriptor' => mb_substr(config('app.name') ?: 'Assinatura', 0, 22),
+            'statement_descriptor' => mb_substr((string) config('app.name') ?: 'Assinatura', 0, 22),
             'additional_info'      => [
                 'items' => [
                     [

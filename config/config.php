@@ -1,5 +1,13 @@
 <?php
 
+use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
+use RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification;
+use RiseTechApps\ApiKey\Notifications\PlanActivatedNotification;
+use RiseTechApps\ApiKey\Notifications\PlanExpiredNotification;
+use RiseTechApps\ApiKey\Notifications\RequestLimitReachedNotification;
+use RiseTechApps\ApiKey\Notifications\ResetPasswordNotification;
+use RiseTechApps\ApiKey\Notifications\UsageThresholdNotification;
+
 /*
  * You can place your custom package configuration in here.
  */
@@ -55,13 +63,13 @@ return [
     |
     */
     'notifications' => [
-        'email_verify'    => \RiseTechApps\ApiKey\Notifications\EmailVerifyNotification::class,
-        'reset_password'  => \RiseTechApps\ApiKey\Notifications\ResetPasswordNotification::class,
-        'plan_activated'  => \RiseTechApps\ApiKey\Notifications\PlanActivatedNotification::class,
-        'usage_threshold' => \RiseTechApps\ApiKey\Notifications\UsageThresholdNotification::class,
-        'limit_reached'   => \RiseTechApps\ApiKey\Notifications\RequestLimitReachedNotification::class,
-        'grace_period'    => \RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification::class,
-        'plan_expired'    => \RiseTechApps\ApiKey\Notifications\PlanExpiredNotification::class,
+        'email_verify' => EmailVerifyNotification::class,
+        'reset_password' => ResetPasswordNotification::class,
+        'plan_activated' => PlanActivatedNotification::class,
+        'usage_threshold' => UsageThresholdNotification::class,
+        'limit_reached' => RequestLimitReachedNotification::class,
+        'grace_period' => GracePeriodStartedNotification::class,
+        'plan_expired' => PlanExpiredNotification::class,
     ],
 
     /*
@@ -91,6 +99,90 @@ return [
     'cache_ttl' => [
         'validation' => env('API_KEY_CACHE_TTL_VALIDATION', 300),    // API key validation
         'origin' => env('API_KEY_CACHE_TTL_ORIGIN', 60),              // Origin validation
+        'invalid' => env('API_KEY_CACHE_TTL_INVALID', 30),            // Negative cache for rejected keys
+        'stats' => env('API_KEY_CACHE_TTL_STATS', 30),                // Dashboard stats endpoint
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | API Key Lookup Secret
+    |--------------------------------------------------------------------------
+    |
+    | Secret used to derive the deterministic `lookup_hash` that lets an API key
+    | be found with a single indexed query instead of a bcrypt scan over every
+    | active key. Defaults to the application key.
+    |
+    | Changing this value invalidates every stored lookup_hash: keys keep working
+    | (validation falls back to the legacy scan and re-backfills), but the first
+    | request for each key after the change is slow. Rotate only when necessary.
+    |
+    */
+    'lookup_secret' => env('API_KEY_LOOKUP_SECRET'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Request Log Retention
+    |--------------------------------------------------------------------------
+    |
+    | The `request_logs` table grows by one row per authenticated API request and
+    | is read on every dashboard visit. `api-key:prune-logs` deletes entries older
+    | than the retention window; it is scheduled automatically when enabled.
+    | Set days to 0 to keep logs forever (not recommended).
+    |
+    */
+    'request_log' => [
+        'retention_days' => env('API_KEY_LOG_RETENTION_DAYS', 90),
+        'prune_enabled' => env('API_KEY_LOG_PRUNE_ENABLED', true),
+        'prune_chunk' => env('API_KEY_LOG_PRUNE_CHUNK', 5000),
+
+        // Fila usada para gravar o log de cada requisição fora do worker web.
+        // Deixe null para gravar no próprio processo após a resposta
+        // (afterResponse), sem exigir um worker de fila. Defina o nome de uma
+        // fila (ex.: 'logs') para descarregar o INSERT em um worker dedicado —
+        // recomendado sob carga alta, onde a escrita síncrona reduz o throughput.
+        'queue' => env('API_KEY_LOG_QUEUE', 'logs'),
+
+        // Conexão de fila do job de log. O Horizon só observa a conexão `redis`;
+        // como o QUEUE_CONNECTION padrão da app é `database`, sem isto o job iria
+        // para a fila do banco e o Horizon nunca o processaria. null = usa a
+        // conexão default do app.
+        'connection' => env('API_KEY_LOG_CONNECTION', 'redis'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Legacy Key Scan
+    |--------------------------------------------------------------------------
+    |
+    | Orçamento de tempo (em segundos) para o fallback que valida API keys
+    | criadas antes da coluna `lookup_hash`. Cada verificação é um bcrypt, então
+    | um backlog grande de keys não migradas poderia transformar uma única
+    | requisição de autenticação em um scan de minutos. Ao esgotar o orçamento
+    | sem encontrar a key, a requisição é tratada como não autenticada e um aviso
+    | é registrado. Keys migram sozinhas no primeiro uso (backfill); para um
+    | backlog grande, rotacione as keys legadas. Use 0 para desabilitar o limite.
+    |
+    */
+    'legacy_scan' => [
+        'max_seconds' => env('API_KEY_LEGACY_SCAN_MAX_SECONDS', 3),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Queue (listeners e notificações)
+    |--------------------------------------------------------------------------
+    |
+    | Conexão/fila usadas pelos listeners enfileirados (aviso de uso, limite
+    | atingido, grace period, plano expirado/ativado) e pelas notificações
+    | enviadas diretamente (verificação de e-mail e reset de senha). Mesmo motivo
+    | do log: o Horizon só observa a conexão `redis`, mas o QUEUE_CONNECTION
+    | default da app é `database` — sem forçar a conexão, esses jobs iriam para o
+    | banco e nunca seriam processados. null = usa a conexão/fila default do app.
+    |
+    */
+    'queue' => [
+        'connection' => env('API_KEY_QUEUE_CONNECTION', 'redis'),
+        'name' => env('API_KEY_QUEUE_NAME'),
     ],
 
     /*
@@ -133,6 +225,19 @@ return [
     |
     */
     'header_name' => env('API_KEY_HEADER_NAME', 'X-API-KEY'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Override the Auth User Model
+    |--------------------------------------------------------------------------
+    |
+    | The package points auth.providers.users.model at its own Authentication
+    | model, which its routes, middlewares and notifications rely on. Set this to
+    | false if the host application manages its own user model and only wants the
+    | API key primitives.
+    |
+    */
+    'override_auth_provider' => env('API_KEY_OVERRIDE_AUTH_PROVIDER', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -187,9 +292,24 @@ return [
     |
     */
     'mercadopago' => [
-        'public_key'     => env('MP_PUBLIC_KEY'),
-        'access_token'   => env('MP_ACCESS_TOKEN'),
+        'public_key' => env('MP_PUBLIC_KEY'),
+        'access_token' => env('MP_ACCESS_TOKEN'),
         'webhook_secret' => env('MP_WEBHOOK_SECRET'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Billing
+    |--------------------------------------------------------------------------
+    |
+    | Queue used by `billing:process-renewals`. Each due subscription is charged
+    | in its own job so workers can process them in parallel. Leave null to use
+    | the default queue; a dedicated queue is recommended so a billing backlog
+    | does not delay other work.
+    |
+    */
+    'billing' => [
+        'queue' => env('API_KEY_BILLING_QUEUE'),
     ],
 
     /*

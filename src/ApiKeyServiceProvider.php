@@ -35,6 +35,7 @@ use RiseTechApps\ApiKey\Rules\SignatureRules;
 use RiseTechApps\ApiKey\Console\Commands\Billing\ProcessRenewalsCommand;
 use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
 use RiseTechApps\ApiKey\Console\Commands\MakeAdminCommand;
+use RiseTechApps\ApiKey\Console\Commands\PruneRequestLogsCommand;
 use RiseTechApps\FormRequest\RulesRegistry;
 
 class ApiKeyServiceProvider extends ServiceProvider
@@ -70,7 +71,7 @@ class ApiKeyServiceProvider extends ServiceProvider
             ], 'api-key-lang');
 
             $this->publishes([
-                $packageRoot . '/resources/js'  => resource_path('js'),
+                $packageRoot . '/resources/js' => resource_path('js'),
                 $packageRoot . '/resources/css' => resource_path('css'),
             ], 'api-key-frontend');
 
@@ -79,9 +80,9 @@ class ApiKeyServiceProvider extends ServiceProvider
             ], 'api-key-views');
 
             $this->publishes([
-                $packageRoot . '/stubs/package.json'   => base_path('package.json'),
+                $packageRoot . '/stubs/package.json' => base_path('package.json'),
                 $packageRoot . '/stubs/vite.config.ts' => base_path('vite.config.ts'),
-                $packageRoot . '/stubs/tsconfig.json'  => base_path('tsconfig.json'),
+                $packageRoot . '/stubs/tsconfig.json' => base_path('tsconfig.json'),
             ], 'api-key-build');
 
             $this->publishes([
@@ -93,16 +94,23 @@ class ApiKeyServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__ . '/lang', 'api-key');
         $this->loadViewsFrom($packageRoot . '/resources/views', 'api-key');
 
-        ResetPassword::createUrlUsing(function ($notifiable, string $token) {
-            return url('/reset-password?token=' . $token . '&email=' . urlencode($notifiable->getEmailForPasswordReset()));
-        });
+        ResetPassword::createUrlUsing(fn($notifiable, string $token) => url('/reset-password?token=' . $token . '&email=' . urlencode((string)$notifiable->getEmailForPasswordReset())));
 
         $this->registerRouter();
         $this->registerRepository();
         $this->registerSpaRoute();
 
 
-        Config::set('auth.providers.users.model', \RiseTechApps\ApiKey\Models\Authentication\Authentication::class);
+        // Replacing the host application's user model is a big thing for a package
+        // to do, and it used to happen unconditionally and silently. Still on by
+        // default (the package's routes and middlewares assume it), but an app that
+        // has its own user model can now opt out.
+        if (config('api-key.override_auth_provider', true)) {
+            Config::set(
+                'auth.providers.users.model',
+                \RiseTechApps\ApiKey\Models\Authentication\Authentication::class
+            );
+        }
 
         $this->setRules($rulesRegistry);
 
@@ -121,23 +129,30 @@ class ApiKeyServiceProvider extends ServiceProvider
                 ->withoutOverlapping()
                 ->onOneServer()
                 ->appendOutputTo(storage_path('logs/renewals.log'));
+
+            if (config('api-key.request_log.prune_enabled', true)) {
+                // Off-peak: the batched delete competes with the writes that the
+                // request path is still doing against this table.
+                $schedule->command('api-key:prune-logs')
+                    ->dailyAt('03:30')
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->appendOutputTo(storage_path('logs/prune-logs.log'));
+            }
         });
     }
 
     /**
      * Register the application services.
      */
+    #[\Override]
     public function register(): void
     {
-        $this->app->singleton('apikey', function ($app) {
-            return new \RiseTechApps\ApiKey\FeatureManager();
-        });
+        $this->app->singleton('apikey', fn($app) => new \RiseTechApps\ApiKey\FeatureManager());
 
-        $this->app->singleton('apikey.features', function ($app) {
-            return new \RiseTechApps\ApiKey\Services\FeatureRegistry(
-                $app->make('apikey')
-            );
-        });
+        $this->app->singleton('apikey.features', fn($app) => new \RiseTechApps\ApiKey\Services\FeatureRegistry(
+            $app->make('apikey')
+        ));
 
         $this->app->alias('apikey.features', \RiseTechApps\ApiKey\Services\FeatureRegistry::class);
 
@@ -151,6 +166,7 @@ class ApiKeyServiceProvider extends ServiceProvider
                 CheckExpiredPlans::class,
                 MakeAdminCommand::class,
                 ProcessRenewalsCommand::class,
+                PruneRequestLogsCommand::class,
             ]);
         }
     }
