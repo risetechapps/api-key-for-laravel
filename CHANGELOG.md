@@ -3,6 +3,34 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [2.1.0] - 2026-07-24
+
+### Adicionado
+- **Validação de API key O(1)**: coluna `lookup_hash` (HMAC-SHA256 com chave) localiza a key com um SELECT indexado + 1 bcrypt, em vez de varrer todas as keys ativas. Migration `add_lookup_hash_to_api_keys_table`; secret configurável via `API_KEY_LOOKUP_SECRET` (padrão `app.key`)
+- **Log de requisições assíncrono via fila**: `request_log.queue`/`request_log.connection` (env `API_KEY_LOG_QUEUE`/`API_KEY_LOG_CONNECTION`) descarregam o INSERT do worker web para um worker dedicado; sem fila configurada, mantém a gravação `afterResponse`. O dispatch é best-effort — indisponibilidade da fila (ex.: redis fora) não derruba a requisição
+- **Retenção de logs**: comando `api-key:prune-logs` (agendado às 03:30) apaga em lotes os registros além de `request_log.retention_days` (padrão 90); env `API_KEY_LOG_RETENTION_DAYS`, `API_KEY_LOG_PRUNE_ENABLED`, `API_KEY_LOG_PRUNE_CHUNK`
+- **Billing por fila**: `ProcessPlanRenewalJob` (1 job por assinatura, `ShouldBeUnique`, `tries=1` para evitar cobrança dupla); `billing:process-renewals` apenas despacha os jobs. Fila configurável via `API_KEY_BILLING_QUEUE`
+- **Fila para listeners e notificações (Horizon)**: config `queue.connection`/`queue.name` (env `API_KEY_QUEUE_CONNECTION`/`API_KEY_QUEUE_NAME`, padrão `redis`) roteia os listeners de notificação e as notificações de verificação de e-mail/reset de senha para a conexão observada pelo Horizon
+- **Índices de performance**: `user_plans (authentication_id, active, end_date)`, `request_logs (authentication_id, requested_at)`, `user_cards (authentication_id, is_default)` e índices trigram (`pg_trgm`) para a busca de usuários no admin
+- **Curinga de subdomínio em origens**: `allowed_origins` agora aceita `*.example.com` (casa qualquer subdomínio e o domínio base), além do curinga à direita
+- **Suíte de testes automatizados** (Pest 4) rodando em SQLite: `TestCase` com providers e configuração completos e factories ligadas aos models do pacote
+
+### Alterado
+- Notificações não bloqueiam mais a resposta HTTP: o envio de e-mail passou a ser enfileirado (aviso de uso, limite atingido, carência, expiração, plano ativado, verificação de e-mail e reset de senha)
+- `CheckRequestLimitMiddleware` deixou de despachar os eventos de aviso/limite a cada requisição depois do primeiro e-mail do período (checa a chave de dedup no cache antes de enfileirar o listener)
+- Datas de `user_plans` migradas de `date` para `timestamp` — a truncagem para meia-noite expirava assinaturas até um dia antes
+
+### Corrigido
+- Fallback de compatibilidade de keys legadas (sem `lookup_hash`) agora tem orçamento de tempo (`legacy_scan.max_seconds`, env `API_KEY_LEGACY_SCAN_MAX_SECONDS`, padrão 3s): impede que uma migração v1→v2 com muitas keys transforme uma autenticação em um scan de minutos
+- `Plan::features` retorna `[]` (em vez de `null`) quando não há features
+- `Authentication` e `Coupon`: campos controlados (`email`, `status`, `role`, `locale`, `gateway_coupon_id`) protegidos da normalização em maiúsculo do `HasToUpper`, evitando quebra de enum de status/role e de identificadores externos (ex.: id de cupom do gateway)
+- Migrations tornadas compatíveis com SQLite (guards por driver para recursos exclusivos do PostgreSQL: `citext`, `gen_random_uuid()`, `ALTER COLUMN ... USING`), sem alterar o comportamento em PostgreSQL
+
+### Notas de atualização
+- Rode as migrations: `php artisan migrate` (adiciona `lookup_hash`, os índices e altera os tipos de data de `user_plans`)
+- **Filas**: para os ganhos de latência, mantenha um worker processando as filas configuradas (`queue.name` e `request_log.queue`) na conexão `queue.connection` (padrão `redis`, alinhado ao Horizon). Sem worker, use `QUEUE_CONNECTION=sync` **ou** deixe `request_log.queue` nulo (grava via `afterResponse`)
+- **Agendador**: garanta o `schedule:run` no cron para `billing:process-renewals` (08:00) e `api-key:prune-logs` (03:30)
+
 ## [2.0.0]
 
 ### Adicionado
