@@ -21,7 +21,11 @@ class CheckActivePlanMiddleware
             return response()->json(['error' => __('api-key::messages.unauthorized')], 401);
         }
 
-        $userPlan = $user->activePlanWithGracePeriod;
+        // Resolved once here with the plan eager loaded, then shared with
+        // CheckRequestLimitMiddleware, which used to re-select the same row plus
+        // its plan on every request.
+        $userPlan = $user->activePlanWithGracePeriod()->with('plan')->first();
+        $request->attributes->set('user_plan', $userPlan);
 
         if (! $userPlan) {
             $expiredPlan = $user->userPlan()

@@ -25,9 +25,13 @@ class ApiKeyOriginValidatorMiddleware
             return $next($request);
         }
 
-        $key = $request->header('X-API-KEY') ?? $request->get('api_key');
+        // AuthenticateApiKey already resolved and validated this model; reading it
+        // back from the request avoids a second SELECT on api_keys per request.
+        $apiKey = $request->attributes->get('api_key_model') ?? auth()->user()?->apiKey;
 
-        $apiKey = auth()->user()->apiKey;
+        if (!$apiKey) {
+            return response()->json(['message' => 'Unauthorized: Request origin/IP not permitted.'], Response::HTTP_FORBIDDEN);
+        }
 
         $requestOrigin = $request->header('Origin') ?? Device::getClientPublicIp();
 

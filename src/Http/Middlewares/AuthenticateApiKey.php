@@ -34,7 +34,22 @@ class AuthenticateApiKey
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
-        auth()->setUser($apiKey->authentication);
+        $user = $apiKey->authentication;
+
+        // The owner can be gone while the key row survives (soft-deleted user,
+        // or a key detached from its account). Without this the request would
+        // reach setUser(null) and fail with a 500 instead of a 401.
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        // Both sides of the relation are already in memory. Priming them stops
+        // the downstream middlewares from re-selecting the same two rows.
+        $user->setRelation('apiKey', $apiKey);
+        $apiKey->setRelation('authentication', $user);
+        $request->attributes->set('api_key_model', $apiKey);
+
+        auth()->setUser($user);
 
         return $next($request);
     }
