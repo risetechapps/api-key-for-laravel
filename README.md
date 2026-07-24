@@ -391,6 +391,7 @@ use RiseTechApps\ApiKey\Notifications\PlanExpiredNotification as Base;
 
 class MeuPlanoExpirou extends Base
 {
+    #[\Override]
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
@@ -460,11 +461,24 @@ php artisan apikey:check-expired
 php artisan apikey:check-expired --grace-only
 
 # Processar renovações agendadas (roda automaticamente todo dia às 08:00)
+# Cada assinatura vira um ProcessPlanRenewalJob; use --dry-run para listar sem cobrar
 php artisan billing:process-renewals
+
+# Apagar logs de requisição além da janela de retenção (roda automaticamente às 03:30)
+php artisan api-key:prune-logs
+php artisan api-key:prune-logs --dry-run          # apenas relata quantas linhas seriam apagadas
+php artisan api-key:prune-logs --days=30          # sobrescreve a retenção configurada
 
 # Promover um usuário a admin
 php artisan apikey:make-admin {email}
 ```
+
+> **Filas e agendamento.** A partir da 2.1.0, listeners de notificação, o log de
+> requisições (quando `request_log.queue` está definido) e o billing rodam em fila.
+> Para os ganhos de latência, mantenha um worker ativo (`php artisan queue:work` /
+> Horizon) na conexão `queue.connection` (padrão `redis`) e garanta o `schedule:run`
+> no cron. Sem worker de fila: use `QUEUE_CONNECTION=sync` **ou** deixe
+> `API_KEY_LOG_QUEUE` nulo (o log volta a gravar via `afterResponse`).
 
 ---
 
@@ -493,6 +507,36 @@ return [
     'cache_ttl' => [
         'validation' => 300,    // cache de validação de API key
         'origin'     => 60,     // cache de validação de origem
+        'invalid'    => 30,     // cache negativo p/ keys rejeitadas
+        'stats'      => 30,     // endpoint /dashboard/stats
+    ],
+
+    // Secret p/ derivar o lookup_hash (busca O(1) de API key). Padrão: app.key.
+    'lookup_secret' => env('API_KEY_LOOKUP_SECRET'),
+
+    // Orçamento de tempo do fallback de keys legadas (sem lookup_hash). 0 = sem limite.
+    'legacy_scan' => [
+        'max_seconds' => 3,
+    ],
+
+    // Retenção e gravação do log de requisições.
+    'request_log' => [
+        'retention_days' => 90,     // api-key:prune-logs apaga registros mais antigos (0 = manter tudo)
+        'prune_enabled'  => true,
+        'prune_chunk'    => 5000,
+        'queue'          => env('API_KEY_LOG_QUEUE', 'logs'),        // fila do INSERT; null = grava afterResponse
+        'connection'     => env('API_KEY_LOG_CONNECTION', 'redis'),  // conexão da fila (Horizon observa redis)
+    ],
+
+    // Conexão/fila dos listeners e notificações enfileirados (Horizon).
+    'queue' => [
+        'connection' => env('API_KEY_QUEUE_CONNECTION', 'redis'),
+        'name'       => env('API_KEY_QUEUE_NAME'),   // null = fila default da conexão
+    ],
+
+    // Fila do comando billing:process-renewals (null = fila default).
+    'billing' => [
+        'queue' => env('API_KEY_BILLING_QUEUE'),
     ],
 
     'disable_web_middleware' => [
@@ -559,8 +603,20 @@ return [
 | `API_KEY_CACHE_TTL` | TTL do cache geral (segundos) | `300` |
 | `API_KEY_CACHE_TTL_VALIDATION` | TTL do cache de validação (segundos) | `300` |
 | `API_KEY_CACHE_TTL_ORIGIN` | TTL do cache de origem (segundos) | `60` |
+| `API_KEY_CACHE_TTL_INVALID` | TTL do cache negativo p/ keys rejeitadas (segundos) | `30` |
+| `API_KEY_CACHE_TTL_STATS` | TTL do cache do endpoint `/dashboard/stats` (segundos) | `30` |
 | `API_KEY_RATE_LIMIT_CACHE_TTL` | TTL do contador de rate limit (segundos) | `3600` |
 | `API_KEY_USAGE_WARNING_THRESHOLD` | % de uso que dispara o e-mail de aviso (`0` desliga) | `80` |
+| `API_KEY_LOOKUP_SECRET` | Secret p/ derivar o `lookup_hash` (busca O(1) de API key) | `app.key` |
+| `API_KEY_LEGACY_SCAN_MAX_SECONDS` | Orçamento do fallback de keys legadas (`0` = sem limite) | `3` |
+| `API_KEY_LOG_RETENTION_DAYS` | Dias de retenção do log de requisições (`0` = manter tudo) | `90` |
+| `API_KEY_LOG_PRUNE_ENABLED` | Agendar `api-key:prune-logs` automaticamente | `true` |
+| `API_KEY_LOG_PRUNE_CHUNK` | Tamanho do lote de exclusão do prune | `5000` |
+| `API_KEY_LOG_QUEUE` | Fila do log de requisições (`null` = grava `afterResponse`) | `logs` |
+| `API_KEY_LOG_CONNECTION` | Conexão da fila do log (Horizon observa `redis`) | `redis` |
+| `API_KEY_QUEUE_CONNECTION` | Conexão dos listeners/notificações enfileirados | `redis` |
+| `API_KEY_QUEUE_NAME` | Fila dos listeners/notificações (`null` = default da conexão) | — |
+| `API_KEY_BILLING_QUEUE` | Fila do comando `billing:process-renewals` | — |
 | `API_KEY_DISABLE_WEB_MIDDLEWARE` | Anexar `DisableRouteWebMiddleware` ao grupo `web` | `true` |
 | `API_KEY_AUTH_THROTTLE_ENABLED` | Habilitar throttle nos endpoints de autenticação | `true` |
 | `API_KEY_AUTH_THROTTLE_ATTEMPTS` | Máximo de tentativas de login/registro | `5` |
