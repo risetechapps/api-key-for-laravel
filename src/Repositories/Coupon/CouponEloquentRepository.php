@@ -16,6 +16,7 @@ class CouponEloquentRepository extends BaseRepository implements CouponRepositor
         return new Coupon();
     }
 
+    #[\Override]
     public function registerViews(): array
     {
         return [];

@@ -10,15 +10,12 @@ class UpdatePlanRequest extends FormRequest
 {
     use HasFormValidation;
 
-    public ValidationRuleRepository $ruleRepository;
-
     public array $result = [];
 
-    public function __construct(ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
+    public function __construct(public ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
     {
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
 
-        $this->ruleRepository = $ruleRepository;
         $this->result = $this->ruleRepository->getRules('plan', ['id' => request()->route('plan')]);
     }
 
@@ -32,6 +29,7 @@ class UpdatePlanRequest extends FormRequest
         return auth()->check();
     }
 
+    #[\Override]
     public function messages(): array
     {
         return array_merge($this->result['messages'] ?? [], \RiseTechApps\ApiKey\Rules\PlanRules::messages());

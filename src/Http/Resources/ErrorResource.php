@@ -16,10 +16,10 @@ class ErrorResource extends JsonResource
      * @param string|null $error_code Application-specific error code
      */
     public function __construct(
-        string $message,
-        private int $code = 500,
-        private array $errors = [],
-        private ?string $error_code = null
+        string                 $message,
+        private readonly int   $code = 500,
+        private readonly array $errors = [],
+        private readonly ?string $error_code = null
     ) {
         parent::__construct(['message' => $message]);
     }
@@ -27,6 +27,7 @@ class ErrorResource extends JsonResource
     /**
      * Transform the resource into an array.
      */
+    #[\Override]
     public function toArray(Request $request): array
     {
         $response = [
@@ -57,6 +58,7 @@ class ErrorResource extends JsonResource
     /**
      * Customize the response with proper status code.
      */
+    #[\Override]
     public function withResponse($request, $response): void
     {
         $response->setStatusCode($this->code);

@@ -9,6 +9,7 @@ use RiseTechApps\ApiKey\Http\Resources\UserPlanResource;
 
 class AuthenticationMeResource extends JsonResource
 {
+    #[\Override]
     public function toArray(Request $request): array
     {
         return [
@@ -78,7 +79,7 @@ class AuthenticationMeResource extends JsonResource
             }
 
             return $photo->getFullUrl();
-        } catch (\Exception $e) {
+        } catch (\Exception) {
             return null;
         }
     }

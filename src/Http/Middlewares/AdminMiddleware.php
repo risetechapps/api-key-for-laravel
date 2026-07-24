@@ -10,7 +10,7 @@ class AdminMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! auth()->check() || strtolower(auth()->user()->role) !== 'admin') {
+        if (! auth()->check() || strtolower((string) auth()->user()->role) !== 'admin') {
             return response()->json([
                 'success' => false,
                 'message' => 'Acesso negado. Área restrita a administradores.',

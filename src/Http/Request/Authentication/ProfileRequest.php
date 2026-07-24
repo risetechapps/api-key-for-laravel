@@ -10,20 +10,16 @@ class ProfileRequest extends FormRequest
 {
     use HasFormValidation;
 
-    protected ValidationRuleRepository $repository;
-
-    public function __construct(ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
+    public function __construct(public ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
     {
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
-
-        $this->repository = $ruleRepository;
     }
 
     public function rules(): array
     {
         $userId = optional($this->user())->getKey();
 
-        return $this->repository->getRules('profile', ['id' => $userId])['rules'];
+        return $this->ruleRepository->getRules('profile', ['id' => $userId])['rules'];
     }
 
     public function authorize(): bool
@@ -31,6 +27,7 @@ class ProfileRequest extends FormRequest
         return auth()->check();
     }
 
+    #[\Override]
     public function messages(): array
     {
         return [

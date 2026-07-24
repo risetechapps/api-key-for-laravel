@@ -15,9 +15,9 @@ class SuccessResource extends JsonResource
      * @param int $code HTTP status code
      */
     public function __construct(
-        $data = [],
-        private ?string $message = null,
-        private int $code = 200
+                                 $data = [],
+        private readonly ?string $message = null,
+        private readonly int $code = 200
     ) {
         parent::__construct($data);
     }
@@ -25,6 +25,7 @@ class SuccessResource extends JsonResource
     /**
      * Transform the resource into an array.
      */
+    #[\Override]
     public function toArray(Request $request): array
     {
         $response = [
@@ -63,6 +64,7 @@ class SuccessResource extends JsonResource
     /**
      * Customize the response with proper status code.
      */
+    #[\Override]
     public function withResponse($request, $response): void
     {
         $response->setStatusCode($this->code);

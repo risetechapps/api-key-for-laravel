@@ -14,7 +14,7 @@ use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 
 class PlansController extends Controller
 {
-    private const PLANS_CACHE_KEY = 'api_key:plans:active';
+    private const string PLANS_CACHE_KEY = 'api_key:plans:active';
 
     public function __construct(protected readonly PlanRepository $planRepositor)
     {
@@ -29,11 +29,9 @@ class PlansController extends Controller
             // não a Collection de objetos Eloquent. Serializar objetos quebra no
             // transporte de cache deste ambiente (predis corrompe os bytes \0 de
             // objetos); um array simples (texto puro) faz round-trip em qualquer driver.
-            $data = Cache::remember(self::PLANS_CACHE_KEY, now()->addMinutes(10), function () {
-                return PlansResource::collection(
-                    Plan::query()->where('is_active', true)->get()
-                )->resolve();
-            });
+            $data = Cache::remember(self::PLANS_CACHE_KEY, now()->addMinutes(10), fn() => PlansResource::collection(
+                Plan::query()->where('is_active', true)->get()
+            )->resolve());
 
             return response()->jsonSuccess($data);
 

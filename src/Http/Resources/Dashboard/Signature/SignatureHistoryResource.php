@@ -8,6 +8,7 @@ use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
 
 class SignatureHistoryResource extends JsonResource
 {
+    #[\Override]
     public function toArray(Request $request): array
     {
         return [

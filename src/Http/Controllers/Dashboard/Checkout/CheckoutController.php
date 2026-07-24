@@ -132,23 +132,20 @@ class CheckoutController extends Controller
                 $payerData['id'] = $savedCard->mp_customer_id;
             }
 
-            Log::debug('MP checkout payer sent', [
-                'payer'          => $payerData,
-                'raw_payer_input'=> $request->input('payer'),
-            ]);
-
             $authUser  = auth()->user();
             $nameParts = explode(' ', $authUser->name ?? '', 2);
+
+            $description = __('api-key::messages.plan_subscription_description', ['plan' => $plan->name]);
 
             $paymentPayload = [
                 'transaction_amount'   => $transactionAmount,
                 'token'                => $token,
-                'description'          => "Assinatura do plano {$plan->name}",
+                'description'          => $description,
                 'installments'         => 1,
                 'payment_method_id'    => $validated['payment_method_id'],
                 'payer'                => $payerData,
                 'external_reference'   => auth()->id() . '|' . $plan->getKey(),
-                'statement_descriptor' => mb_substr(config('app.name') ?: 'Assinatura', 0, 22),
+                'statement_descriptor' => mb_substr((string) config('app.name') ?: 'Assinatura', 0, 22),
                 'additional_info'      => [
                     'payer' => [
                         'first_name'               => $nameParts[0] ?? '',
@@ -160,8 +157,8 @@ class CheckoutController extends Controller
                     'items' => [
                         [
                             'id'          => (string) $plan->getKey(),
-                            'title'       => "Assinatura do plano {$plan->name}",
-                            'description' => $plan->description ?? "Assinatura do plano {$plan->name}",
+                            'title'       => $description,
+                            'description' => $plan->description ?? $description,
                             'category_id' => 'services',
                             'quantity'    => 1,
                             'unit_price'  => $transactionAmount,
@@ -176,11 +173,13 @@ class CheckoutController extends Controller
 
             $payment = $client->create($paymentPayload);
 
+            // Only the fields needed to trace a payment. The full $payment object
+            // carries cardholder name, last four digits and the payer document —
+            // none of which belongs in an application log.
             Log::info('MP payment response', [
                 'status'        => $payment->status,
                 'status_detail' => $payment->status_detail,
                 'id'            => $payment->id,
-                'payment' => $payment
             ]);
 
             if ($payment->status === 'approved') {
@@ -261,53 +260,113 @@ class CheckoutController extends Controller
     {
         $secret = config('api-key.mercadopago.webhook_secret');
 
-        if ($secret) {
-            $xSignature = $request->header('x-signature', '');
-            $xRequestId = $request->header('x-request-id', '');
-            $dataId     = $request->query('data_id', $request->input('data.id', ''));
+        // Fail closed. An unsigned webhook endpoint accepts any caller's claim
+        // that a payment happened, so a missing secret is a misconfiguration to
+        // reject loudly, not a check to skip.
+        if (! $secret) {
+            Log::error('MP webhook rejected: no webhook secret configured');
 
-            $ts   = $this->extractSignaturePart($xSignature, 'ts');
-            $v1   = $this->extractSignaturePart($xSignature, 'v1');
-            $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$xRequestId};ts:{$ts};", $secret);
+            return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
+        }
 
-            if (! hash_equals($hash, $v1)) {
-                return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
-            }
+        $xSignature = $request->header('x-signature', '');
+        $xRequestId = $request->header('x-request-id', '');
+        $dataId     = $request->query('data_id', $request->input('data.id', ''));
+
+        $ts   = $this->extractSignaturePart($xSignature, 'ts');
+        $v1   = $this->extractSignaturePart($xSignature, 'v1');
+        $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$xRequestId};ts:{$ts};", (string) $secret);
+
+        if (! hash_equals($hash, $v1)) {
+            return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
         }
 
         $type = $request->input('type') ?? $request->input('topic');
 
-        if ($type === 'payment') {
-            $paymentId = $request->input('data.id') ?? $request->input('id');
-
-            MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
-            $client  = new PaymentClient();
-            $payment = $client->get((int) $paymentId);
-
-            if ($payment->status === 'approved' && $payment->external_reference) {
-                [$userId, $planId] = explode('|', $payment->external_reference, 2);
-
-                if ($planId === 'card_validation') {
-                    return response()->json(['message' => 'ok']);
-                }
-
-                $user = Authentication::find($userId);
-                $plan = $this->planRepository->findById($planId);
-
-                if ($user && $plan) {
-                    $alreadySubscribed = $user->userPlan()
-                        ->where('plan_id', $plan->getKey())
-                        ->where('active', true)
-                        ->exists();
-
-                    if (! $alreadySubscribed) {
-                        $user->subscribeToPlan($plan);
-                    }
-                }
-            }
+        if ($type !== 'payment') {
+            return response()->json(['message' => 'ok']);
         }
 
+        $paymentId = $request->input('data.id') ?? $request->input('id');
+
+        MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
+        $client  = new PaymentClient();
+        $payment = $client->get((int) $paymentId);
+
+        if ($payment->status !== 'approved' || ! $payment->external_reference) {
+            return response()->json(['message' => 'ok']);
+        }
+
+        $reference = $this->parseExternalReference((string) $payment->external_reference);
+
+        if (! $reference) {
+            Log::warning('MP webhook: unrecognised external_reference', [
+                'external_reference' => $payment->external_reference,
+                'payment_id'         => $payment->id,
+            ]);
+
+            return response()->json(['message' => 'ok']);
+        }
+
+        if ($reference['plan_id'] === 'card_validation') {
+            return response()->json(['message' => 'ok']);
+        }
+
+        $user = Authentication::find($reference['user_id']);
+        $plan = $this->planRepository->findById($reference['plan_id']);
+
+        if (! $user || ! $plan) {
+            return response()->json(['message' => 'ok']);
+        }
+
+        $alreadySubscribed = $user->userPlan()
+            ->where('plan_id', $plan->getKey())
+            ->where('active', true)
+            ->where('payment_id', (string) $payment->id)
+            ->exists();
+
+        if ($alreadySubscribed) {
+            return response()->json(['message' => 'ok']);
+        }
+
+        $userPlan = $user->subscribeToPlan($plan);
+
+        // The direct checkout flow records these; the webhook flow used not to,
+        // which left webhook-confirmed subscriptions with no payment trail and
+        // invisible to the refund screen (it filters on payment_id).
+        $userPlan->update([
+            'payment_id'     => (string) $payment->id,
+            'payment_amount' => (float) $payment->transaction_amount,
+        ]);
+
         return response()->json(['message' => 'ok']);
+    }
+
+    /**
+     * Split a Mercado Pago external_reference into its parts.
+     *
+     * Two shapes are emitted by this package:
+     *   "<userId>|<planId>"                        — checkout and card validation
+     *   "renewal|<userId>|<planId>|<userPlanId>"   — automatic renewal
+     *
+     * The previous parser always split into two pieces, so a renewal reference
+     * yielded userId = "renewal" and every renewal webhook was silently dropped.
+     *
+     * @return array{user_id: string, plan_id: string}|null
+     */
+    private function parseExternalReference(string $reference): ?array
+    {
+        $parts = explode('|', $reference);
+
+        if (($parts[0] ?? null) === 'renewal') {
+            return isset($parts[1], $parts[2])
+                ? ['user_id' => $parts[1], 'plan_id' => $parts[2]]
+                : null;
+        }
+
+        return isset($parts[0], $parts[1]) && $parts[0] !== ''
+            ? ['user_id' => $parts[0], 'plan_id' => $parts[1]]
+            : null;
     }
 
     private function extractSignaturePart(string $signature, string $key): string
@@ -319,22 +378,21 @@ class CheckoutController extends Controller
         return '';
     }
 
+    /**
+     * Turn a Mercado Pago status_detail into a message for the buyer.
+     *
+     * Looked up in the translation files rather than matched inline, so the text
+     * follows the request locale like every other message in the package.
+     */
     private function translateStatusDetail(string $detail): string
     {
-        return match ($detail) {
-            'cc_rejected_bad_filled_card_number'   => 'Número do cartão inválido.',
-            'cc_rejected_bad_filled_date'          => 'Data de validade inválida.',
-            'cc_rejected_bad_filled_other'         => 'Dado inválido. Verifique as informações do cartão.',
-            'cc_rejected_bad_filled_security_code' => 'Código de segurança inválido.',
-            'cc_rejected_blacklist'                => 'Cartão não permitido.',
-            'cc_rejected_call_for_authorize'       => 'Entre em contato com seu banco para autorizar o pagamento.',
-            'cc_rejected_card_disabled'            => 'Cartão desativado. Entre em contato com seu banco.',
-            'cc_rejected_duplicated_payment'       => 'Pagamento duplicado detectado.',
-            'cc_rejected_high_risk'                => 'Pagamento recusado por motivos de segurança.',
-            'cc_rejected_insufficient_amount'      => 'Saldo insuficiente.',
-            'cc_rejected_invalid_installments'     => 'Número de parcelas inválido.',
-            'cc_rejected_max_attempts'             => 'Número máximo de tentativas atingido. Tente outro cartão.',
-            default                                => 'Pagamento recusado. Verifique os dados e tente novamente.',
-        };
+        $key = "api-key::messages.payment_rejected.{$detail}";
+        $message = __($key);
+
+        // __() echoes the key back when there is no entry for it, which is how an
+        // unmapped status_detail is detected.
+        return $message === $key
+            ? __('api-key::messages.payment_rejected.default')
+            : $message;
     }
 }

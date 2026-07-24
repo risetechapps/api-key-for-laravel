@@ -23,7 +23,7 @@ class AdminController extends Controller
         MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
 
         try {
-            $payment = (new PaymentClient())->get((int) $userPlan->payment_id);
+            $payment = new PaymentClient()->get((int) $userPlan->payment_id);
             $client  = new PaymentRefundClient();
             $refund  = $client->refund((int) $userPlan->payment_id, (float) $payment->transaction_amount);
 
@@ -87,10 +87,15 @@ class AdminController extends Controller
     {
         $search = $request->get('search');
 
+        // Escaped so a % or _ typed by the operator is matched literally instead
+        // of turning into a wildcard. The LOWER(col) LIKE shape is kept because
+        // that is what the pg_trgm indexes are built on.
+        $term = $search ? '%' . addcslashes(strtolower((string) $search), '%_\\') . '%' : null;
+
         $users = Authentication::with(['activePlan.plan'])
-            ->when($search, fn($q) => $q->where(function ($q) use ($search) {
-                $q->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%'])
-                  ->orWhereRaw('LOWER(email) LIKE ?', ['%' . strtolower($search) . '%']);
+            ->when($term, fn($q) => $q->where(function ($q) use ($term) {
+                $q->whereRaw('LOWER(name) LIKE ?', [$term])
+                  ->orWhereRaw('LOWER(email) LIKE ?', [$term]);
             }))
             ->latest()
             ->paginate(20);

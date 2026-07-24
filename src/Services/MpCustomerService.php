@@ -10,7 +10,7 @@ use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 class MpCustomerService
 {
     private string $baseUrl = 'https://api.mercadopago.com';
-    private string $accessToken;
+    private readonly string $accessToken;
 
     public function __construct()
     {

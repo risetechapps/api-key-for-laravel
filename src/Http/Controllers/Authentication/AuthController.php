@@ -50,7 +50,7 @@ class AuthController extends Controller
 
         $user = Authentication::find($request->route('id'));
 
-        if (!$user || !hash_equals((string)$request->route('hash'), sha1($user->getEmailForVerification()))) {
+        if (!$user || !hash_equals((string)$request->route('hash'), sha1((string) $user->getEmailForVerification()))) {
             return redirect('/login?error=invalid_link');
         }
 

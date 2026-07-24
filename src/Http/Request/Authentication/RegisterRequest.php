@@ -10,15 +10,13 @@ class RegisterRequest extends FormRequest
 {
     use HasFormValidation;
 
-    protected ValidationRuleRepository $ruleRepository;
-
     protected array $result = [];
 
-    public function __construct(ValidationRuleRepository $ruleRepository,  array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
+    public function __construct(public ValidationRuleRepository $ruleRepository,  array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
     {
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
 
-        $this->ruleRepository = $ruleRepository;
+
 
         $this->result = $this->ruleRepository->getRules('register');
     }
@@ -33,6 +31,7 @@ class RegisterRequest extends FormRequest
         return true;
     }
 
+    #[\Override]
     public function messages(): array
     {
         return [

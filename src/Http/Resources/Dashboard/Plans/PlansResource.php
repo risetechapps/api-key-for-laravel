@@ -8,6 +8,7 @@ use RiseTechApps\ApiKey\Support\FeatureResolver;
 
 class PlansResource extends JsonResource
 {
+    #[\Override]
     public function toArray(Request $request): array
     {
         return [

@@ -18,6 +18,7 @@ class PlanEloquentRepository extends BaseRepository implements PlanRepository
         return new Plan();
     }
 
+    #[\Override]
     public function registerViews(): array
     {
         return [];

@@ -20,14 +20,7 @@ class CheckPlanFeatureMiddleware
             return $next($request);
         }
 
-        $hasAccess = false;
-
-        foreach ($features as $feature) {
-            if (ApiKeyFacade::resolve($feature)) {
-                $hasAccess = true;
-                break;
-            }
-        }
+        $hasAccess = array_any($features, fn($feature) => ApiKeyFacade::resolve($feature));
 
         if (!$hasAccess) {
             $featuresList = implode(', ', $features);

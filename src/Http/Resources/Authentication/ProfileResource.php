@@ -9,6 +9,7 @@ use RiseTechApps\ApiKey\Http\Resources\UserPlanResource;
 
 class ProfileResource extends JsonResource
 {
+    #[\Override]
     public function toArray(Request $request): array
     {
         return [

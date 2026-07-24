@@ -20,7 +20,7 @@ class RoutesApiKey
 
         $prefix = config('api-key.routes.prefix', '');
         if (!empty($prefix)) {
-            $options['prefix'] = ($options['prefix'] ?? '') . '/' . trim($prefix, '/');
+            $options['prefix'] = ($options['prefix'] ?? '') . '/' . trim((string) $prefix, '/');
         }
 
         Route::group($options, function () use ($options) {
