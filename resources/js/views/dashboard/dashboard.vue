@@ -340,7 +340,10 @@ const chartSeries = computed(() => dashboardStore.chartSeries);
 const chartCategories = computed(() => dashboardStore.chartCategories);
 
 // --- Auto-refresh (polling) das stats em tempo real ---
-const POLL_MS = 5000;
+// 5s por aba aberta batia em /dashboard/stats com muito mais frequencia do que o
+// numero muda. O contador do plano e agregado no servidor com cache curto, entao
+// 30s dao a mesma leitura por uma fracao da carga.
+const POLL_MS = 30000;
 let pollTimer = null;
 let polling = false;
 

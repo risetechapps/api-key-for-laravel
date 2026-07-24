@@ -2,7 +2,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import axios from 'axios';
-import {useAuthStore} from "@/stores/auth";
 
 export const useDashboardStore = defineStore('dashboard', () => {
     const stats = ref({
@@ -28,54 +27,54 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return Math.round(((stats.value.total_requests_limit - stats.value.remaining_requests) / stats.value.total_requests_limit) * 100);
     });
 
-    // Dentro do useAuthStore
+    // Contadores, série do gráfico e primeira página do log.
+    //
+    // A versão anterior baixava /dashboard/log inteiro e contava as linhas no
+    // browser — uma leitura da tabela completa por carregamento de página. Agora
+    // a agregação vem pronta do servidor e o log chega paginado.
     async function fetchStats(days = 30) {
         loading.value = true;
-        // Bug 2 fix: usar authStore em vez de "this"
-        const authStore = useAuthStore();
 
-        // Bug 1 fix: REMOVIDO o "return" solto que impedia a execução do try/catch
         try {
-            const response = await axios.get('/dashboard/log');
-            const logs = response.data?.data || [];
+            const [statsResponse, logResponse] = await Promise.all([
+                axios.get('/dashboard/stats', { params: { days } }),
+                axios.get('/dashboard/log', { params: { per_page: 20 } }),
+            ]);
 
-            // 1. Calcular o total de hoje com base nos logs
-            const todayStr = new Date().toISOString().split('T')[0];
-            const todayCount = logs.filter(log =>
-                log.request?.requested_at?.startsWith(todayStr)
-            ).length;
+            const s = statsResponse.data?.data ?? statsResponse.data ?? {};
 
-            // 2. Bug 2 fix: usar authStore.user em vez de this.user
-            const used      = authStore.user?.usage?.requests_used       || 0;
-            const limit     = authStore.user?.usage?.requests_limit      || 0;
-            const remaining = authStore.user?.usage?.remaining_requests  || 0;
-
-            // 3. Bug 3 fix: usar stats.value e requests.value (refs locais da store)
             stats.value = {
-                today_requests:     todayCount,
-                month_requests:     used,
-                remaining_requests: remaining,
-                total_requests_limit: limit,
+                today_requests:       s.today ?? 0,
+                month_requests:       s.used ?? 0,
+                remaining_requests:   s.remaining ?? 0,
+                total_requests_limit: s.limit ?? 0,
                 cache_hit_rate: 85,
             };
 
-            requests.value = logs.map(log => ({
-                id:            log.id,
-                endpoint:      log.request?.endpoint,
-                method:        log.request?.method,
-                response_code: log.response?.code,
-                requested_at:  log.request?.requested_at,
-            }));
+            requests.value = mapLogs(logResponse.data?.data?.data ?? []);
 
-            const last30 = buildChartData(logs, days);
-            chartCategories.value = last30.labels;
-            chartSeries.value = [{ name: 'Requisições', data: last30.counts }];
+            const series = s.series ?? [];
+            chartCategories.value = series.map(p => {
+                const [, m, d] = p.date.split('-');
+                return `${d}/${m}`;
+            });
+            chartSeries.value = [{ name: 'Requisições', data: series.map(p => p.total) }];
 
         } catch (err) {
             console.error('Erro ao atualizar estatísticas:', err);
         } finally {
             loading.value = false;
         }
+    }
+
+    function mapLogs(logs) {
+        return logs.map(log => ({
+            id:            log.id,
+            endpoint:      log.request?.endpoint,
+            method:        log.request?.method,
+            response_code: log.response?.code,
+            requested_at:  log.request?.requested_at,
+        }));
     }
 
     // Stats leves para polling em tempo real. Bate no /dashboard/stats (COUNT +
@@ -94,40 +93,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
         };
     }
 
-    function buildChartData(logs, days) {
-        const counts = {};
-        for (let i = days - 1; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            counts[d.toISOString().split('T')[0]] = 0;
-        }
-        logs.forEach(log => {
-            const date = log.request?.requested_at?.substring(0, 10);
-            if (date && counts[date] !== undefined) counts[date]++;
-        });
-        const keys = Object.keys(counts).sort();
-        return {
-            labels: keys.map(k => { const [, m, d] = k.split('-'); return `${d}/${m}`; }),
-            counts: keys.map(k => counts[k]),
-        };
-    }
-
     async function fetchRequests(params = {}) {
         loading.value = true;
         try {
             const response = await axios.get('/dashboard/log', { params: { per_page: 20, ...params } });
-            const logs = response.data?.data || response.data || [];
+            const payload = response.data?.data ?? {};
 
-            // Mapear igual ao fetchStats, senão os campos chegam undefined na view
-            requests.value = logs.map(log => ({
-                id:            log.id,
-                endpoint:      log.request?.endpoint,
-                method:        log.request?.method,
-                response_code: log.response?.code,
-                requested_at:  log.request?.requested_at,
-            }));
+            requests.value = mapLogs(payload.data ?? []);
 
-            return response.data;
+            return payload;
         } catch (err) {
             error.value = err.response?.data?.message || 'Erro ao carregar requisições';
             throw err;
@@ -207,8 +181,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
         loading.value = true;
         try {
             const response = await axios.get('/dashboard/history');
-            billingHistory.value = response.data?.data || response.data || [];
-            return response.data;
+            const payload = response.data?.data ?? {};
+            billingHistory.value = payload.data ?? [];
+            return payload;
         } catch (err) {
             error.value = err.response?.data?.message || 'Erro ao carregar histórico';
             throw err;
