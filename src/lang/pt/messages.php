@@ -75,6 +75,28 @@ return [
     // Admin
     'error_processing_refund' => 'Erro ao processar estorno.',
 
+    // Billing
+    'plan_subscription_description' => 'Assinatura do plano :plan',
+    'plan_renewal_description' => 'Renovação do plano :plan',
+
+    // Motivos de recusa do Mercado Pago (status_detail)
+    'payment_rejected' => [
+        'cc_rejected_bad_filled_card_number' => 'Número do cartão inválido.',
+        'cc_rejected_bad_filled_date' => 'Data de validade inválida.',
+        'cc_rejected_bad_filled_other' => 'Dado inválido. Verifique as informações do cartão.',
+        'cc_rejected_bad_filled_security_code' => 'Código de segurança inválido.',
+        'cc_rejected_blacklist' => 'Cartão não permitido.',
+        'cc_rejected_call_for_authorize' => 'Entre em contato com seu banco para autorizar o pagamento.',
+        'cc_rejected_card_disabled' => 'Cartão desativado. Entre em contato com seu banco.',
+        'cc_rejected_card_error' => 'Não foi possível processar o cartão. Tente novamente.',
+        'cc_rejected_duplicated_payment' => 'Pagamento duplicado detectado.',
+        'cc_rejected_high_risk' => 'Pagamento recusado por motivos de segurança.',
+        'cc_rejected_insufficient_amount' => 'Saldo insuficiente.',
+        'cc_rejected_invalid_installments' => 'Número de parcelas inválido.',
+        'cc_rejected_max_attempts' => 'Número máximo de tentativas atingido. Tente outro cartão.',
+        'default' => 'Pagamento recusado. Verifique os dados e tente novamente.',
+    ],
+
     // Billing Cycle
     'billing_cycle_weekly' => 'Semanal',
     'billing_cycle_monthly' => 'Mensal',

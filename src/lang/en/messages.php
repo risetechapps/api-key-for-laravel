@@ -75,6 +75,28 @@ return [
     // Admin
     'error_processing_refund' => 'Error processing refund.',
 
+    // Billing
+    'plan_subscription_description' => ':plan plan subscription',
+    'plan_renewal_description' => ':plan plan renewal',
+
+    // Mercado Pago rejection reasons (status_detail)
+    'payment_rejected' => [
+        'cc_rejected_bad_filled_card_number' => 'Invalid card number.',
+        'cc_rejected_bad_filled_date' => 'Invalid expiry date.',
+        'cc_rejected_bad_filled_other' => 'Invalid data. Check your card details.',
+        'cc_rejected_bad_filled_security_code' => 'Invalid security code.',
+        'cc_rejected_blacklist' => 'Card not allowed.',
+        'cc_rejected_call_for_authorize' => 'Contact your bank to authorise this payment.',
+        'cc_rejected_card_disabled' => 'Card disabled. Contact your bank.',
+        'cc_rejected_card_error' => 'The card could not be processed. Please try again.',
+        'cc_rejected_duplicated_payment' => 'Duplicate payment detected.',
+        'cc_rejected_high_risk' => 'Payment declined for security reasons.',
+        'cc_rejected_insufficient_amount' => 'Insufficient funds.',
+        'cc_rejected_invalid_installments' => 'Invalid number of installments.',
+        'cc_rejected_max_attempts' => 'Too many attempts. Try a different card.',
+        'default' => 'Payment declined. Check your details and try again.',
+    ],
+
     // Billing Cycle
     'billing_cycle_weekly' => 'Weekly',
     'billing_cycle_monthly' => 'Monthly',
