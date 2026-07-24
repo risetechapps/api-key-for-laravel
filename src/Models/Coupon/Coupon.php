@@ -2,13 +2,14 @@
 
 namespace RiseTechApps\ApiKey\Models\Coupon;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use RiseTechApps\HasUuid\Traits\HasUuid;
 use RiseTechApps\ToUpper\Traits\HasToUpper;
 
 class Coupon extends Model
 {
-    use HasUuid, HasToUpper;
+    use HasFactory, HasUuid, HasToUpper;
 
     protected $fillable = [
         'code',
@@ -34,7 +35,10 @@ class Coupon extends Model
         'updated_at',
     ];
 
-    protected array $no_upper = ['type'];
+    // type é vocabulário controlado ('percentage'/'fixed') e gateway_coupon_id é
+    // um identificador externo (Stripe/Mercado Pago) case-sensitive — nenhum dos
+    // dois pode ser normalizado para maiúsculo pelo HasToUpper.
+    protected array $no_upper = ['type', 'gateway_coupon_id'];
     /**
      * Checks if the coupon is valid for use.
      *

@@ -2,6 +2,7 @@
 
 namespace RiseTechApps\ApiKey\Models\UserPlan;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Config;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
@@ -9,7 +10,7 @@ use RiseTechApps\HasUuid\Traits\HasUuid;
 
 class UserPlan extends Model
 {
-    use HasUuid;
+    use HasFactory, HasUuid;
 
     protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id', 'payment_amount'];
 

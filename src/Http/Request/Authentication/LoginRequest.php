@@ -10,17 +10,13 @@ class LoginRequest extends FormRequest
 {
     use HasFormValidation;
 
-    protected ValidationRuleRepository $repository;
-
     protected array $result = [];
 
-    public function __construct(ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
+    public function __construct(public ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
     {
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
 
-        $this->repository = $ruleRepository;
-
-        $this->result = $this->repository->getRules('login');
+        $this->result = $this->ruleRepository->getRules('login');
     }
 
     public function rules(): array
@@ -33,6 +29,7 @@ class LoginRequest extends FormRequest
         return true;
     }
 
+    #[\Override]
     public function messages(): array
     {
         $messages = $this->result['messages'] ?? [];

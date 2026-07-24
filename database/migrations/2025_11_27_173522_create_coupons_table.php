@@ -12,7 +12,7 @@ return new class extends Migration {
             $table->string('code')->unique();
             $table->enum('type', ['percentage', 'fixed']);
             $table->decimal('value', 8, 2);
-            $table->unsignedInteger('max_uses')->default(1);
+            $table->unsignedInteger('max_uses')->nullable()->default(1);
             $table->unsignedInteger('uses')->default(0);
             $table->timestamp('expires_at')->nullable();
             $table->boolean('is_active')->default(true);

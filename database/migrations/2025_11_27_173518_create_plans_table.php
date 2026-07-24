@@ -2,7 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use RiseTechApps\ApiKey\Enums\BillingCycle;
-use Tpetry\PostgresqlEnhanced\Schema\Blueprint;
+use Illuminate\Database\Schema\Blueprint;
 use Tpetry\PostgresqlEnhanced\Support\Facades\Schema;
 
 return new class extends Migration {
@@ -10,7 +10,9 @@ return new class extends Migration {
     {
         Schema::create('plans', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->codeGenerate();
+            // nullable pelo mesmo motivo do api_keys: code-generate não suporta o
+            // sqlite dos testes; em produção (pgsql) o code é sempre preenchido.
+            $table->codeGenerate()->nullable();
             if (DB::getDriverName() === 'pgsql') {
                 $table->caseInsensitiveText('name')->unique();
             } else {

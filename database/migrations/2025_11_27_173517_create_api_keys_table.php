@@ -9,7 +9,10 @@ return new class extends Migration {
     {
         Schema::create('api_keys', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->codeGenerate();
+            // nullable: em produção o code é sempre gerado (driver pgsql do pacote
+            // code-generate), mas esse gerador não suporta sqlite, então nos testes
+            // o model pode ser criado sem code. Não afeta o preenchimento em prod.
+            $table->codeGenerate()->nullable();
             $table->string('key')->unique();
             $table->foreignUuid('authentication_id')->constrained()->onDelete('cascade');
             $table->timestamp('expires_at')->nullable();

@@ -1,14 +1,23 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Tpetry\PostgresqlEnhanced\Schema\Blueprint;
+// Tipado pelo Blueprint core (que o Blueprint do tpetry estende): no pgsql o
+// runtime recebe o Blueprint do tpetry — os métodos pg-específicos seguem
+// disponíveis — e no SQLite dos testes recebe o core, sem TypeError.
+use Illuminate\Database\Schema\Blueprint;
 use Tpetry\PostgresqlEnhanced\Support\Facades\Schema;
 use RiseTechApps\ApiKey\Services\AuthService;
 
 return new class extends Migration {
     public function up(): void
     {
-        Schema::createExtensionIfNotExists('citext');
+        // citext é uma extensão exclusiva do PostgreSQL. Fora do pgsql (ex.: o
+        // SQLite usado nos testes) o método createExtensionIfNotExists nem existe
+        // no builder, então o guard de driver evita quebrar toda a suíte — o
+        // caseInsensitiveText do email já é protegido do mesmo jeito abaixo.
+        if (DB::getDriverName() === 'pgsql') {
+            Schema::createExtensionIfNotExists('citext');
+        }
 
         Schema::create('authentications', function (Blueprint $table) {
             $table->uuid('id')->primary();

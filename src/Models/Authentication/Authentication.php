@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Models\Authentication;
 
 use Illuminate\Auth\MustVerifyEmail;
 use Illuminate\Contracts\Translation\HasLocalePreference;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -24,17 +25,17 @@ use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\ApiKey\Notifications\ResetPasswordNotification;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
+use RiseTechApps\Media\Contracts\MediaContract;
 use RiseTechApps\Media\Models\Media;
-use RiseTechApps\Media\Traits\HasConversionsMedia\HasConversionsMedia;
+use RiseTechApps\Media\Traits\HasMediaSuite\HasMediaSuite;
 use RiseTechApps\ToUpper\Traits\HasToUpper;
-use Spatie\MediaLibrary\HasMedia;
 
-class Authentication extends Authenticatable implements HasLocalePreference, HasMedia
+class Authentication extends Authenticatable implements HasLocalePreference, MediaContract
 {
 
-    use SoftDeletes, HasUuid, HasToUpper, Notifiable;
+    use HasFactory, SoftDeletes, HasUuid, HasToUpper, Notifiable;
     use MustVerifyEmail, HasApiTokens, HasAddress, HasCodeGenerate;
-    use HasConversionsMedia;
+    use HasMediaSuite;
 
     protected $fillable = [
         'code',
@@ -52,11 +53,11 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
         'locale',
     ];
 
-    protected $guarded = [
-        'email_verified_at',
-        'status',
-        'role',
-    ];
+    // No $guarded here on purpose: Eloquent honours $fillable and ignores
+    // $guarded when both are set, so listing email_verified_at / status / role
+    // there read as protection that was never in effect. They are protected by
+    // their absence from $fillable, and must only be set through forceFill(),
+    // markEmailAsVerified() or an explicit assignment.
 
     protected $hidden = [
         'id',
@@ -70,6 +71,14 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
         'password' => 'hashed',
     ];
 
+    // HasToUpper normaliza strings para maiúsculo, mas estes são identificadores /
+    // vocabulário controlado comparados com constantes lowercase
+    // (AuthService::$ENABLE = 'enabled', $CLIENT = 'client') e com o e-mail de
+    // login. Uppercase aqui violaria o enum de status/role (CHECK/enum no banco) e
+    // quebraria o match — inclusive em produção quando o status é alterado.
+    protected array $no_upper = ['email', 'status', 'role', 'locale'];
+
+    #[\Override]
     protected static function booted(): void
     {
         static::updated(function ($user) {
@@ -99,17 +108,19 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
             }
 
             return $photo;
-        } catch (\Exception $e) {
+        } catch (\Exception) {
             return null;
         }
     }
 
+    #[\Override]
     public function sendEmailVerificationNotification(): void
     {
         $notification = Config::get('api-key.notifications.email_verify', EmailVerifyNotification::class);
         $this->notify(new $notification());
     }
 
+    #[\Override]
     public function sendPasswordResetNotification($token): void
     {
         $notification = Config::get('api-key.notifications.reset_password', ResetPasswordNotification::class);
@@ -256,17 +267,29 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
 
     /**
      * Log request usage and increment counter.
-     * Optimized to use update for counter to avoid race conditions.
      *
-     * @param int  $status     Código HTTP da resposta.
-     * @param bool $countUsage Se a requisição deve contar na cota do plano.
-     *                         Requisições bloqueadas por limite (429) são
-     *                         registradas no log, mas NÃO incrementam o contador.
+     * @param int         $status     Código HTTP da resposta.
+     * @param bool        $countUsage Se a requisição deve contar na cota do plano.
+     *                                O CheckRequestLimitMiddleware já reserva a cota
+     *                                de forma atômica antes de processar a requisição,
+     *                                então ele passa false e usa este método apenas
+     *                                para o log. Mantido para chamadas fora do ciclo
+     *                                de request.
+     * @param string|null $planId     Plano ativo já resolvido pelo middleware. Quando
+     *                                informado, evita reconsultar user_plans.
+     * @param string|null $endpoint   Caminho da requisição. Passado explicitamente
+     *                                porque este método roda depois da resposta, onde
+     *                                depender do helper request() é frágil.
+     * @param string|null $method     Método HTTP da requisição.
      */
-    public function requestUsed(int $status = 0, bool $countUsage = true): void
-    {
-        // Use a single query to get active plan ID without loading full model
-        $activePlanId = UserPlan::where('authentication_id', $this->id)
+    public function requestUsed(
+        int $status = 0,
+        bool $countUsage = true,
+        ?string $planId = null,
+        ?string $endpoint = null,
+        ?string $method = null
+    ): void {
+        $activePlanId = $planId ?? UserPlan::where('authentication_id', $this->id)
             ->where('active', true)
             ->where('end_date', '>=', now())
             ->value('id');
@@ -275,12 +298,11 @@ class Authentication extends Authenticatable implements HasLocalePreference, Has
             return;
         }
 
-        // Use insert for better performance (no model events)
         RequestLog::create([
             'authentication_id' => $this->id,
-            'endpoint' => request()->path(),
+            'endpoint' => $endpoint ?? request()->path(),
             'requested_at' => now(),
-            'method' => request()->method(),
+            'method' => $method ?? request()->method(),
             'response_code' => $status,
         ]);
 

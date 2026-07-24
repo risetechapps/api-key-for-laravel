@@ -2,7 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\Schema;
-use Tpetry\PostgresqlEnhanced\Schema\Blueprint;
+use Illuminate\Database\Schema\Blueprint;
 
 return new class extends Migration {
     /**
