@@ -29,7 +29,7 @@
         "risetechapps/code-generate": "^2.0.0",
         "risetechapps/form-request-for-laravel": "^2.3.0",
         "risetechapps/has-uuid-for-laravel": "^1.2.0",
-        "risetechapps/media-for-laravel": "^3.1.0",
+        "risetechapps/media-for-laravel": "^3.2.0",
         "risetechapps/repository-for-laravel": "^4.0.1",
         "risetechapps/risetools": "^3.0.2",
         "risetechapps/to-upper-for-laravel": "^1.2.0",
@@ -84,5 +84,5 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "version": "2.1.0"
+    "version": "2.2.0"
 }
