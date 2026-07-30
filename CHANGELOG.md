@@ -3,6 +3,15 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [2.2.2] - 2026-07-30
+
+### Adicionado
+- **Logs estratégicos** em todo o pacote: `AuthController` (register, login, logout, forgot/reset password), `UserRegistrationService`, `AuthenticateApiKey` (key missing/invalid/sem dono), `CheckActivePlanMiddleware` (plano expirado, sem plano, grace period), `CheckRequestLimitMiddleware` (limite e threshold atingidos)
+- Log detalhado no `verifyEmail` com contexto completo (URL, app_url, app_key_hash, expires) para debug de falhas de assinatura
+
+### Corrigido
+- **Verificação de email quebrada atrás de proxy reverso**: `URL::hasValidSignature` falhava porque `$request->url()` retornava `http://` (proxy termina SSL) enquanto a URL assinada usava `https://` do `APP_URL`. Adicionado `middleware->trustProxies()` no `bootstrap/app.php` para confiar nos headers `X-Forwarded-*`
+
 ## [2.2.1] - 2026-07-28
 - Atualizado packages
 
