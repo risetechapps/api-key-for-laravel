@@ -4,6 +4,7 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanExpired;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -21,11 +22,10 @@ class CheckActivePlanMiddleware
             return response()->json(['error' => __('api-key::messages.unauthorized')], 401);
         }
 
-        // Resolved once here with the plan eager loaded, then shared with
-        // CheckRequestLimitMiddleware, which used to re-select the same row plus
-        // its plan on every request.
         $userPlan = $user->activePlanWithGracePeriod()->with('plan')->first();
         $request->attributes->set('user_plan', $userPlan);
+
+        $context = ['user_id' => $user->getKey(), 'url' => $request->url()];
 
         if (! $userPlan) {
             $expiredPlan = $user->userPlan()
@@ -34,6 +34,10 @@ class CheckActivePlanMiddleware
                 ->first();
 
             if ($expiredPlan?->isCompletelyExpired()) {
+                Log::info('Plan completely expired, deactivating', [
+                    'plan_id' => $expiredPlan->plan_id, ...$context
+                ]);
+
                 $expiredPlan->update(['active' => false]);
                 $user->apiKey?->update(['active' => false]);
 
@@ -47,11 +51,18 @@ class CheckActivePlanMiddleware
                 ], 403);
             }
 
+            Log::warning('No active plan found', $context);
             return response()->json(['error' => __('api-key::messages.plan_expired_or_inactive')], 403);
         }
 
         if ($userPlan->isExpired()) {
             $remainingDays = $userPlan->getGracePeriodRemainingDays();
+
+            Log::info('Plan in grace period', [
+                'plan_id' => $userPlan->plan_id,
+                'remaining_days' => $remainingDays,
+                ...$context,
+            ]);
 
             $response = $next($request);
             $response->header('X-Plan-Status', 'grace-period');

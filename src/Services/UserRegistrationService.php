@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RuntimeException;
@@ -22,6 +23,12 @@ class UserRegistrationService
             $user = $this->createUser($data);
             $this->createApiKey($user);
             $this->generateAndStoreAvatar($user, $data['name']);
+
+            Log::info('User created in registration service', [
+                'user_id' => $user->getKey(),
+                'email' => $user->email,
+                'has_api_key' => !is_null($user->apiKey),
+            ]);
 
             return $user;
         });

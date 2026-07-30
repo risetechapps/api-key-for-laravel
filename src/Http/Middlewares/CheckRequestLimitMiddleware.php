@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
 use RiseTechApps\ApiKey\Jobs\LogApiRequestJob;
@@ -45,6 +46,13 @@ class CheckRequestLimitMiddleware
         if ($activePlan && ! $this->reserveQuota($activePlan, $requestsLimit)) {
             $requestsMade = $requestsLimit;
 
+            Log::warning('Request limit reached', [
+                'user_id' => $user?->getKey(),
+                'plan_id' => $activePlan->plan_id,
+                'requests_limit' => $requestsLimit,
+                'url' => $request->url(),
+            ]);
+
             // Dispatch event when request limit is reached.
             // O listener já deduplica com Cache::add (um e-mail por período), mas
             // sem este gate cada requisição bloqueada enfileiraria um job de
@@ -79,21 +87,25 @@ class CheckRequestLimitMiddleware
             if ($threshold > 0 && $threshold < 100) {
                 $warnAt = (int) ceil($requestsLimit * $threshold / 100);
 
-                // Gate igual ao do limite atingido: o evento dispararia em toda
-                // requisição dentro da faixa de aviso. Após o primeiro e-mail do
-                // período (chave gravada por SendUsageThresholdNotification), nem
-                // enfileira o listener. Cache::add no listener continua sendo a
-                // dedup autoritativa contra corrida.
-                if ($requestsMade >= $warnAt && $requestsMade < $requestsLimit
-                    && ! Cache::has('api-key:usage-threshold-notified:'.$activePlan->getKey())) {
-                    PlanUsageThresholdReached::dispatch(
-                        $user,
-                        $activePlan,
-                        $activePlan->plan,
-                        $requestsMade,
-                        $requestsLimit,
-                        $threshold
-                    );
+                if ($requestsMade >= $warnAt && $requestsMade < $requestsLimit) {
+                    Log::info('Usage threshold reached', [
+                        'user_id' => $user?->getKey(),
+                        'plan_id' => $activePlan->plan_id,
+                        'requests_used' => $requestsMade,
+                        'requests_limit' => $requestsLimit,
+                        'threshold' => $threshold,
+                    ]);
+
+                    if (! Cache::has('api-key:usage-threshold-notified:'.$activePlan->getKey())) {
+                        PlanUsageThresholdReached::dispatch(
+                            $user,
+                            $activePlan,
+                            $activePlan->plan,
+                            $requestsMade,
+                            $requestsLimit,
+                            $threshold
+                        );
+                    }
                 }
             }
         }
