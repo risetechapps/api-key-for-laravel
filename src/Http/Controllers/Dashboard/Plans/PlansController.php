@@ -16,10 +16,7 @@ class PlansController extends Controller
 {
     private const string PLANS_CACHE_KEY = 'api_key:plans:active';
 
-    public function __construct(protected readonly PlanRepository $planRepositor)
-    {
-
-    }
+    public function __construct(protected readonly PlanRepository $planRepositor) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -29,7 +26,7 @@ class PlansController extends Controller
             // não a Collection de objetos Eloquent. Serializar objetos quebra no
             // transporte de cache deste ambiente (predis corrompe os bytes \0 de
             // objetos); um array simples (texto puro) faz round-trip em qualquer driver.
-            $data = Cache::remember(self::PLANS_CACHE_KEY, now()->addMinutes(10), fn() => PlansResource::collection(
+            $data = Cache::remember(self::PLANS_CACHE_KEY, now()->addMinutes(10), fn () => PlansResource::collection(
                 Plan::query()->where('is_active', true)->get()
             )->resolve());
 
@@ -37,6 +34,7 @@ class PlansController extends Controller
 
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_loading_plans'));
         }
     }
@@ -54,18 +52,19 @@ class PlansController extends Controller
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_creating_plan'));
 
         }
     }
 
-    public function show(Request $request,string $plan): JsonResponse
+    public function show(Request $request, string $plan): JsonResponse
     {
         try {
 
             $plan = Plan::find($plan);
 
-            if (!is_null($plan)) {
+            if (! is_null($plan)) {
                 return response()->jsonSuccess(PlansResource::make($plan));
             }
 
@@ -73,6 +72,7 @@ class PlansController extends Controller
 
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_loading_plan'));
         }
     }
@@ -85,30 +85,40 @@ class PlansController extends Controller
 
             $plan = Plan::find($plan);
 
-            if (!is_null($plan)) {
+            if (! is_null($plan)) {
 
-                $this->planRepositor->update($plan->getKey(), $data);
+                // Update direto no model, e não pelo repository: a detecção de
+                // mudanças do BaseRepository faz `(string) $model->getAttribute($key)`
+                // em cada campo enviado, e `billing_cycle` é cast para o enum
+                // BillingCycle — que não converte para string. O resultado era um
+                // Error (não Exception, logo fora do catch abaixo) e 500 em toda
+                // edição de plano. O repository não cacheia leituras de plano
+                // (findActiveById consulta o Eloquent direto) e a vitrine é
+                // invalidada logo abaixo, então nada se perde neste caminho.
+                $plan->update($data);
 
                 Cache::forget(self::PLANS_CACHE_KEY);
 
                 return response()->jsonSuccess();
             }
+
             return response()->jsonGone(__('api-key::messages.error_updating_plan'));
 
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_updating_plan'));
         }
     }
 
-    public function delete(Request $request,string $plan): JsonResponse
+    public function delete(Request $request, string $plan): JsonResponse
     {
 
         try {
 
             $plan = Plan::find($plan);
 
-            if (!is_null($plan)) {
+            if (! is_null($plan)) {
 
                 $plan->delete();
 
@@ -121,8 +131,8 @@ class PlansController extends Controller
         } catch (\Exception $e) {
 
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_deleting_plan'));
         }
     }
-
 }

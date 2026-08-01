@@ -66,6 +66,7 @@ return [
     // Cards
     'card_already_registered' => 'This card is already registered.',
     'card_not_found' => 'Card not found.',
+    'card_saved' => 'Card saved successfully.',
     'cvv_required' => 'CVV is required.',
 
     // Checkout & Payment

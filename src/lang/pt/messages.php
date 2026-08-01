@@ -66,6 +66,7 @@ return [
     // Cards
     'card_already_registered' => 'Este cartão já está cadastrado.',
     'card_not_found' => 'Cartão não encontrado.',
+    'card_saved' => 'Cartão salvo com sucesso.',
     'cvv_required' => 'CVV obrigatório.',
 
     // Checkout & Pagamento
