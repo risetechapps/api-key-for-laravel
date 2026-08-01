@@ -62,6 +62,17 @@ return [
     'subscription_cancelled' => 'Renovação cancelada. Seu acesso continua até o fim do período já pago e nenhuma nova cobrança será feita.',
     'subscription_resumed' => 'Renovação reativada. Sua assinatura será renovada normalmente no vencimento.',
     'subscription_cannot_resume' => 'Esta assinatura já venceu e não pode ser reativada. Contrate um plano novamente.',
+    'subscription_refunded' => 'Assinatura cancelada e valor devolvido. O acesso foi encerrado agora, e o crédito aparece na fatura do cartão conforme o prazo da operadora.',
+
+    // Motivos de recusa do estorno automático
+    'refund' => [
+        'eligible' => 'Você tem direito ao estorno do valor pago.',
+        'refund_disabled' => 'Este serviço não oferece estorno automático no cancelamento.',
+        'nothing_to_refund' => 'Não há valor a devolver nesta assinatura.',
+        'already_refunded' => 'O valor desta assinatura já foi devolvido.',
+        'window_expired' => 'O prazo para estorno desta assinatura já passou.',
+        'usage_exceeded' => 'O estorno não se aplica porque boa parte das requisições do plano já foi utilizada.',
+    ],
     'error_loading_signature_history' => 'Não foi possível carregar histórico de planos',
     'error_loading_request_log' => 'Não foi possível carregar histórico de requisições',
 

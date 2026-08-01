@@ -107,11 +107,19 @@ describe('Processing a refund', function () {
 
         $this->actingAs($this->admin, 'sanctum');
 
+        // refund_id sai como string, igual a payment_id e à coluna que o guarda.
         $this->postJson("/api/v1/dashboard/admin/refunds/{$userPlan->getKey()}")
             ->assertStatus(200)
-            ->assertJsonPath('data.refund_id', 987);
+            ->assertJsonPath('data.refund_id', '987');
 
-        expect($userPlan->fresh()->active)->toBeFalse();
+        $fresh = $userPlan->fresh();
+
+        // O painel passou a gravar o mesmo rastro do estorno automático: antes só
+        // marcava active = false, e não havia como distinguir uma assinatura
+        // encerrada de uma devolvida.
+        expect($fresh->active)->toBeFalse()
+            ->and($fresh->refunded_at)->not->toBeNull()
+            ->and($fresh->refund_id)->toBe('987');
     });
 
     it('refunds the amount the gateway reports, not the one stored locally', function () {

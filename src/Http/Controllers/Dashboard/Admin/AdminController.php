@@ -7,33 +7,31 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use MercadoPago\Client\Payment\PaymentClient;
-use MercadoPago\Client\Payment\PaymentRefundClient;
-use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Facades\FeatureRegistry;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
+use RiseTechApps\ApiKey\Services\RefundService;
 
 class AdminController extends Controller
 {
+    public function __construct(protected readonly RefundService $refundService) {}
+
     public function processRefund(string $id): JsonResponse
     {
         $userPlan = UserPlan::whereNotNull('payment_id')->findOrFail($id);
 
-        MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
-
         try {
-            $payment = new PaymentClient()->get((int) $userPlan->payment_id);
-            $client = new PaymentRefundClient;
-            $refund = $client->refund((int) $userPlan->payment_id, (float) $payment->transaction_amount);
-
-            $userPlan->update(['active' => false]);
+            // Mesmo serviço do estorno automático, para que os dois caminhos
+            // gravem `refunded_at` e `refund_id`. Antes o painel só marcava
+            // `active = false`, e não havia como distinguir uma assinatura
+            // encerrada de uma devolvida nem impedir um segundo estorno.
+            $refundId = $this->refundService->refund($userPlan);
 
             return response()->jsonSuccess([
-                'refund_id' => $refund->id,
-                'status' => $refund->status ?? 'processed',
+                'refund_id' => $refundId,
+                'status' => 'processed',
             ]);
         } catch (\Exception $e) {
             // A correlation code goes to the panel, the detail goes to the log.

@@ -62,6 +62,17 @@ return [
     'subscription_cancelled' => 'Renewal cancelled. Your access continues until the end of the period you already paid for, and you will not be charged again.',
     'subscription_resumed' => 'Renewal resumed. Your subscription will renew normally on its due date.',
     'subscription_cannot_resume' => 'This subscription has already lapsed and cannot be resumed. Please subscribe again.',
+    'subscription_refunded' => 'Subscription cancelled and refunded. Access ended now, and the credit appears on your card statement according to your issuer.',
+
+    // Automatic refund refusal reasons
+    'refund' => [
+        'eligible' => 'You are entitled to a refund of the amount paid.',
+        'refund_disabled' => 'This service does not offer automatic refunds on cancellation.',
+        'nothing_to_refund' => 'There is nothing to refund on this subscription.',
+        'already_refunded' => 'This subscription has already been refunded.',
+        'window_expired' => 'The refund window for this subscription has passed.',
+        'usage_exceeded' => 'No refund applies because much of the plan allowance has already been used.',
+    ],
     'error_loading_signature_history' => 'Unable to load subscribed plan history',
     'error_loading_request_log' => 'Unable to load request history',
 

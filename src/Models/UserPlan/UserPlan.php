@@ -27,6 +27,8 @@ use RiseTechApps\HasUuid\Traits\HasUuid;
  * @property string|null $payment_id
  * @property string|null $payment_amount
  * @property string|null $credit_applied
+ * @property \Illuminate\Support\Carbon|null $refunded_at
+ * @property string|null $refund_id
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
  * @property-read Plan|null $plan
@@ -36,12 +38,13 @@ class UserPlan extends Model
 {
     use HasFactory, HasUuid;
 
-    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id', 'payment_amount', 'credit_applied', 'cancelled_at'];
+    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id', 'payment_amount', 'credit_applied', 'cancelled_at', 'refunded_at', 'refund_id'];
 
     protected $casts = [
         'start_date' => 'datetime',
         'end_date' => 'datetime',
         'cancelled_at' => 'datetime',
+        'refunded_at' => 'datetime',
         'active' => 'boolean',
         'payment_amount' => 'decimal:2',
         'credit_applied' => 'decimal:2',

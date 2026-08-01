@@ -5,6 +5,7 @@ use RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification;
 use RiseTechApps\ApiKey\Notifications\PlanActivatedNotification;
 use RiseTechApps\ApiKey\Notifications\PlanCancelledNotification;
 use RiseTechApps\ApiKey\Notifications\PlanExpiredNotification;
+use RiseTechApps\ApiKey\Notifications\PlanRefundedNotification;
 use RiseTechApps\ApiKey\Notifications\RequestLimitReachedNotification;
 use RiseTechApps\ApiKey\Notifications\ResetPasswordNotification;
 use RiseTechApps\ApiKey\Notifications\UsageThresholdNotification;
@@ -54,6 +55,33 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Reembolso no cancelamento
+    |--------------------------------------------------------------------------
+    |
+    | Janela de arrependimento. Quando o assinante cancela dentro de
+    | `window_days` da PRIMEIRA vez que contratou aquele plano, e desde que
+    | tenha consumido no máximo `max_usage_percent` das requisições do ciclo,
+    | o pacote estorna o valor pago e encerra o acesso na hora.
+    |
+    | `window_days` = 0 DESLIGA o estorno automático (padrão). Mover dinheiro
+    | sozinho não pode ser comportamento herdado por quem só atualizou o
+    | pacote: quem quiser a política liga explicitamente.
+    |
+    | A janela conta da primeira assinatura do plano, não de cada renovação —
+    | senão todo ciclo renovado abriria uma janela nova e daria para assinar,
+    | usar abaixo do teto e cancelar no último dia, todo mês.
+    |
+    | O teto de consumo não se aplica a plano ilimitado (`request_limit` = 0):
+    | não existe percentual de um limite que não existe.
+    |
+    */
+    'refund' => [
+        'window_days' => env('API_KEY_REFUND_WINDOW_DAYS', 0),
+        'max_usage_percent' => env('API_KEY_REFUND_MAX_USAGE_PERCENT', 50),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Notifications
     |--------------------------------------------------------------------------
     |
@@ -72,6 +100,7 @@ return [
         'grace_period' => GracePeriodStartedNotification::class,
         'plan_expired' => PlanExpiredNotification::class,
         'plan_cancelled' => PlanCancelledNotification::class,
+        'plan_refunded' => PlanRefundedNotification::class,
     ],
 
     /*

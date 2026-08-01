@@ -83,6 +83,7 @@ class RoutesApiKey
                 Route::delete('/dashboard/cards/{id}', [CardController::class, 'destroy']);
 
                 Route::post('/dashboard/signature', [SignatureController::class, 'signature']);
+                Route::get('/dashboard/signature/refund-preview', [SignatureController::class, 'refundPreview']);
                 Route::post('/dashboard/signature/cancel', [SignatureController::class, 'cancel']);
                 Route::post('/dashboard/signature/resume', [SignatureController::class, 'resume']);
                 Route::get('/dashboard/history', [SignatureController::class, 'history']);

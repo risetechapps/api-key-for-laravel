@@ -9,15 +9,64 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanCancelled;
+use RiseTechApps\ApiKey\Events\PlanRefunded;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Signature\SignatureRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Signature\LogHistoryResource;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Signature\SignatureHistoryResource;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
+use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
+use RiseTechApps\ApiKey\Services\RefundPolicy;
+use RiseTechApps\ApiKey\Services\RefundService;
 
 class SignatureController extends Controller
 {
-    public function __construct(protected readonly PlanRepository $planRepository) {}
+    public function __construct(
+        protected readonly PlanRepository $planRepository,
+        protected readonly RefundPolicy $refundPolicy,
+        protected readonly RefundService $refundService,
+    ) {}
+
+    /**
+     * Executa o estorno concedido pela política.
+     *
+     * Falhar aqui não desfaz o cancelamento: o assinante pediu para sair e essa
+     * parte já valeu. O que se perde é a devolução automática, que vira tarefa
+     * do painel admin — por isso o log carrega tudo que o operador precisa para
+     * concluí-la à mão.
+     */
+    private function grantRefund(Authentication $user, UserPlan $userPlan, float $amount): bool
+    {
+        try {
+            $refundId = $this->refundService->refund($userPlan, $amount);
+
+            if ($userPlan->plan) {
+                PlanRefunded::dispatch($user, $userPlan, $userPlan->plan, $amount, $refundId);
+            }
+
+            Log::info('Subscription refunded on cancellation', [
+                'user_id' => $user->getKey(),
+                'user_plan_id' => $userPlan->getKey(),
+                'plan_id' => $userPlan->plan_id,
+                'amount' => $amount,
+                'refund_id' => $refundId,
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Automatic refund failed on cancellation', [
+                'user_id' => $user->getKey(),
+                'user_plan_id' => $userPlan->getKey(),
+                'payment_id' => $userPlan->payment_id,
+                'amount' => $amount,
+                'exception' => $e->getMessage(),
+            ]);
+
+            report($e);
+
+            return false;
+        }
+    }
 
     /**
      * Activate a free plan for the authenticated user.
@@ -100,6 +149,20 @@ class SignatureController extends Controller
                 /** @var Authentication $user */
                 $user = auth()->user();
 
+                $decision = $this->refundPolicy->decide($userPlan);
+
+                if ($decision->eligible && $this->grantRefund($user, $userPlan, $decision->amount)) {
+                    return response()->jsonSuccess([
+                        'cancelled_at' => $userPlan->cancelled_at?->toIso8601String(),
+                        'refunded' => true,
+                        'refunded_amount' => $decision->amount,
+                        // Acesso encerrado agora, e não no end_date: o valor foi
+                        // devolvido, então manter o período seria entregá-lo de graça.
+                        'access_until' => null,
+                        'message' => __('api-key::messages.subscription_refunded'),
+                    ]);
+                }
+
                 if ($userPlan->plan && $userPlan->end_date) {
                     PlanCancelled::dispatch(
                         $user,
@@ -114,19 +177,74 @@ class SignatureController extends Controller
                     'user_plan_id' => $userPlan->getKey(),
                     'plan_id' => $userPlan->plan_id,
                     'access_until' => $userPlan->end_date?->toIso8601String(),
+                    'refund_refused' => $decision->reason,
                     'ip' => $request->ip(),
+                ]);
+
+                return response()->jsonSuccess([
+                    'cancelled_at' => $userPlan->cancelled_at?->toIso8601String(),
+                    'access_until' => $userPlan->end_date?->toIso8601String(),
+                    'refunded' => false,
+                    // O motivo acompanha a resposta porque "fora da janela" e
+                    // "consumo acima do teto" levam o cliente a conclusões
+                    // diferentes; devolver só `false` transforma as duas na mesma
+                    // dúvida no suporte.
+                    'refund_refused_reason' => $decision->reason,
+                    'message' => __('api-key::messages.subscription_cancelled'),
                 ]);
             }
 
             return response()->jsonSuccess([
                 'cancelled_at' => $userPlan->cancelled_at?->toIso8601String(),
                 'access_until' => $userPlan->end_date?->toIso8601String(),
+                'refunded' => $userPlan->refunded_at !== null,
                 'message' => __('api-key::messages.subscription_cancelled'),
             ]);
         } catch (\Exception $e) {
             report($e);
 
             return response()->jsonGone(__('api-key::messages.error_cancelling_signature'));
+        }
+    }
+
+    /**
+     * O que vai acontecer se o assinante cancelar agora.
+     *
+     * Existe para a tela poder dizer a verdade na confirmação. Sem isto o painel
+     * só descobre que houve estorno — e que o acesso acabou — depois de o
+     * cancelamento já ter sido feito, e a única saída seria prometer "você não
+     * perde o acesso agora" para todo mundo, o que é falso justamente para quem
+     * tem direito à devolução.
+     */
+    public function refundPreview(Request $request): JsonResponse
+    {
+        try {
+            $userPlan = auth()->user()->activePlanWithGracePeriod()->with('plan')->first();
+
+            if (! $userPlan) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('api-key::messages.no_active_subscription'),
+                ], 404);
+            }
+
+            $decision = $this->refundPolicy->decide($userPlan);
+
+            return response()->jsonSuccess([
+                'eligible' => $decision->eligible,
+                'reason' => $decision->reason,
+                'message' => $decision->message(),
+                'amount' => $decision->amount,
+                // Null quando há estorno: o acesso termina no ato, não no
+                // vencimento.
+                'access_until' => $decision->eligible
+                    ? null
+                    : $userPlan->end_date?->toIso8601String(),
+            ]);
+        } catch (\Exception $e) {
+            report($e);
+
+            return response()->jsonGone(__('api-key::messages.error_loading_signature_history'));
         }
     }
 
