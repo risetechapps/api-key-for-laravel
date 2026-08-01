@@ -23,4 +23,9 @@ class PlanEloquentRepository extends BaseRepository implements PlanRepository
     {
         return [];
     }
+
+    public function findActiveById(string $id): ?Plan
+    {
+        return Plan::query()->where('is_active', true)->find($id);
+    }
 }

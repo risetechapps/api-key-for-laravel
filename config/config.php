@@ -3,6 +3,7 @@
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification;
 use RiseTechApps\ApiKey\Notifications\PlanActivatedNotification;
+use RiseTechApps\ApiKey\Notifications\PlanCancelledNotification;
 use RiseTechApps\ApiKey\Notifications\PlanExpiredNotification;
 use RiseTechApps\ApiKey\Notifications\RequestLimitReachedNotification;
 use RiseTechApps\ApiKey\Notifications\ResetPasswordNotification;
@@ -70,6 +71,7 @@ return [
         'limit_reached' => RequestLimitReachedNotification::class,
         'grace_period' => GracePeriodStartedNotification::class,
         'plan_expired' => PlanExpiredNotification::class,
+        'plan_cancelled' => PlanCancelledNotification::class,
     ],
 
     /*

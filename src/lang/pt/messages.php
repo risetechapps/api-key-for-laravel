@@ -53,6 +53,13 @@ return [
 
     // Signature Messages
     'error_creating_signature' => 'Não foi possível completar a assinatura no momento, por favor tente novamente mais tarde',
+    'error_cancelling_signature' => 'Não foi possível cancelar a assinatura no momento, por favor tente novamente mais tarde',
+    'error_resuming_signature' => 'Não foi possível reativar a renovação no momento, por favor tente novamente mais tarde',
+    'no_active_subscription' => 'Nenhuma assinatura ativa encontrada.',
+    'no_cancelled_subscription' => 'Nenhuma assinatura cancelada para reativar.',
+    'subscription_cancelled' => 'Renovação cancelada. Seu acesso continua até o fim do período já pago e nenhuma nova cobrança será feita.',
+    'subscription_resumed' => 'Renovação reativada. Sua assinatura será renovada normalmente no vencimento.',
+    'subscription_cannot_resume' => 'Esta assinatura já venceu e não pode ser reativada. Contrate um plano novamente.',
     'error_loading_signature_history' => 'Não foi possível carregar histórico de planos',
     'error_loading_request_log' => 'Não foi possível carregar histórico de requisições',
 
@@ -63,9 +70,11 @@ return [
 
     // Checkout & Pagamento
     'plan_not_found' => 'Plano não encontrado.',
+    'plan_requires_payment' => 'Este plano exige pagamento. Conclua a assinatura pelo checkout.',
     'coupon_invalid_or_expired' => 'Cupom inválido ou expirado.',
     'invalid_payment_data' => 'Dados de pagamento inválidos.',
     'subscription_activated_full_discount' => 'Assinatura ativada com cupom de desconto total.',
+    'subscription_activated_with_credit' => 'Assinatura ativada. O crédito do plano anterior cobriu o valor integral.',
     'payment_approved' => 'Pagamento aprovado! Sua assinatura foi ativada.',
     'payment_pending' => 'Pagamento em análise. Você será notificado em breve.',
     'payment_declined' => 'Pagamento recusado.',
@@ -73,7 +82,7 @@ return [
     'invalid_webhook_signature' => 'Assinatura inválida.',
 
     // Admin
-    'error_processing_refund' => 'Erro ao processar estorno.',
+    'error_processing_refund' => 'Não foi possível processar o estorno. O pagamento não foi alterado e a assinatura segue ativa. Procure o código :id no log da aplicação para ver o motivo.',
 
     // Billing
     'plan_subscription_description' => 'Assinatura do plano :plan',

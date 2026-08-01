@@ -10,6 +10,7 @@ use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\CodeGenerate\CodeGenerateServiceProvider;
 use RiseTechApps\FormRequest\FormRequestServiceProvider;
 use RiseTechApps\Media\MediaServiceProvider;
+use RiseTechApps\Repository\RepositoryServiceProvider;
 use RiseTechApps\RiseTools\RiseToolsServiceProvider;
 use RiseTechApps\ToUpper\ToUpperServiceProvider;
 
@@ -49,6 +50,12 @@ abstract class TestCase extends BaseTestCase
             // Sanctum registra o driver do guard 'sanctum' (usado por auth:sanctum
             // no /me e pelo createToken) e a migration de personal_access_tokens.
             SanctumServiceProvider::class,
+            // Antes do ApiKeyServiceProvider de propósito: o boot() dele só liga
+            // PlanRepository/CouponRepository às implementações Eloquent quando
+            // este provider já está carregado. Sem ele, qualquer controller que
+            // receba um repository por injeção é irresolvível ("Target
+            // [PlanRepository] is not instantiable") e não pode ser testado.
+            RepositoryServiceProvider::class,
             ApiKeyServiceProvider::class,
         ];
     }
@@ -111,6 +118,17 @@ abstract class TestCase extends BaseTestCase
         // + language) sem depender das rotas reais do pacote.
         $router->middleware('plan')->get('/api/v1/test-endpoint', function () {
             return response()->json(['message' => 'ok']);
+        });
+
+        // Falha do servidor: a cota reservada antes do request tem que voltar.
+        $router->middleware('plan')->get('/api/v1/test-endpoint-server-error', function () {
+            abort(500);
+        });
+
+        // Erro do cliente: a cota continua consumida, senão bastaria mandar
+        // requisição malformada para nunca gastar o plano.
+        $router->middleware('plan')->get('/api/v1/test-endpoint-client-error', function () {
+            abort(422);
         });
     }
 }

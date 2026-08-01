@@ -9,6 +9,20 @@ use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
 use RiseTechApps\ToUpper\Traits\HasToUpper;
 
+/**
+ * @property string $id
+ * @property string|null $code
+ * @property string $name
+ * @property string|null $description
+ * @property int $request_limit
+ * @property BillingCycle|null $billing_cycle
+ * @property float $price
+ * @property bool $is_active
+ * @property array $features
+ * @property-read string $formatted_price
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ */
 class Plan extends Model
 {
     use HasFactory, HasUuid, HasCodeGenerate, HasToUpper;

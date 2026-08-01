@@ -8,16 +8,40 @@ use Illuminate\Support\Facades\Config;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\HasUuid\Traits\HasUuid;
 
+/**
+ * As colunas anotadas porque a análise estática não tem como descobrir o schema
+ * de um model sozinha — sem isto todo acesso a property vira "undefined". Vale
+ * também para o autocomplete da IDE.
+ *
+ * @property string $id
+ * @property string $authentication_id
+ * @property string $plan_id
+ * @property \Illuminate\Support\Carbon|null $start_date
+ * @property \Illuminate\Support\Carbon|null $end_date
+ * @property \Illuminate\Support\Carbon|null $cancelled_at
+ * @property bool $active
+ * @property int $requests_used
+ * @property string|null $payment_id
+ * @property string|null $payment_amount
+ * @property string|null $credit_applied
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property-read Plan|null $plan
+ * @property-read \RiseTechApps\ApiKey\Models\Authentication\Authentication|null $authentication
+ */
 class UserPlan extends Model
 {
     use HasFactory, HasUuid;
 
-    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id', 'payment_amount'];
+    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id', 'payment_amount', 'credit_applied', 'cancelled_at'];
 
     protected $casts = [
         'start_date' => 'datetime',
         'end_date' => 'datetime',
+        'cancelled_at' => 'datetime',
         'active' => 'boolean',
+        'payment_amount' => 'decimal:2',
+        'credit_applied' => 'decimal:2',
     ];
 
     public function plan()
@@ -28,6 +52,66 @@ class UserPlan extends Model
     public function authentication()
     {
         return $this->belongsTo(\RiseTechApps\ApiKey\Models\Authentication\Authentication::class);
+    }
+
+    /**
+     * The subscriber asked not to be charged again.
+     *
+     * Cancelling is not revoking: the period that was paid for keeps working to
+     * its end_date, and only the automatic renewal is called off. Conflating the
+     * two would mean a customer who cancels on day 2 of 30 loses 28 days they
+     * already paid for.
+     */
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    /**
+     * Currency value of the days already paid for and not yet used.
+     *
+     * Switching plans mid-cycle runs through subscribeToPlan(), which deactivates
+     * the current subscription and starts a fresh one — so a user who upgraded on
+     * day 3 of 30 simply lost the 27 days they had paid for. This is what those
+     * days are worth, to be credited against the new purchase.
+     *
+     * Prorated over the real length of *this* subscription rather than over the
+     * plan's nominal cycle, so a period that was itself shortened or extended
+     * (an earlier switch, a manual adjustment) is still measured correctly.
+     *
+     * Returns 0 when there is nothing to credit: free plan, inactive
+     * subscription, or a period that has already run out. Timestamps are
+     * compared as integers on purpose — Carbon's diff methods changed their
+     * signed/absolute behaviour between major versions, and a sign flip here
+     * would hand out credit for a period that already ended.
+     */
+    public function unusedCredit(): float
+    {
+        $price = (float) ($this->plan?->price ?? 0);
+
+        if ($price <= 0 || ! $this->active || ! $this->start_date || ! $this->end_date) {
+            return 0.0;
+        }
+
+        $now  = now()->getTimestamp();
+        $ends = $this->end_date->getTimestamp();
+
+        // Expired, or inside the grace period: the paid window is over.
+        if ($now >= $ends) {
+            return 0.0;
+        }
+
+        $total = $ends - $this->start_date->getTimestamp();
+
+        if ($total <= 0) {
+            return 0.0;
+        }
+
+        $remaining = $ends - $now;
+
+        // A start_date in the future would put the ratio above 1 and credit more
+        // than was ever paid.
+        return round($price * min(1.0, $remaining / $total), 2);
     }
 
     /**

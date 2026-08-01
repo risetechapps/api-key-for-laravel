@@ -1,0 +1,1183 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Schema\\Blueprint\:\:caseInsensitiveText\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: database/migrations/2025_11_27_173516_create_authentications_table.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Schema\\Blueprint\:\:caseInsensitiveText\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: database/migrations/2025_11_27_173518_create_plans_table.php
+
+		-
+			message: '#^PHPDoc tag @method has invalid value \(routes\)\: Unexpected token "\\r\\n ", expected ''\('' at offset 75 on line 3$#'
+			identifier: phpDoc.parseError
+			count: 1
+			path: src/ApiKeyFacade.php
+
+		-
+			message: '#^Parameter \#1 \$view of function view expects view\-string\|null, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/ApiKeyServiceProvider.php
+
+		-
+			message: '#^Relation ''authentication'' is not found in RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: src/Console/Commands/Billing/ProcessRenewalsCommand.php
+
+		-
+			message: '#^Relation ''plan'' is not found in RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: src/Console/Commands/Billing/ProcessRenewalsCommand.php
+
+		-
+			message: '#^Relation ''authentication'' is not found in RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan model\.$#'
+			identifier: larastan.relationExistence
+			count: 2
+			path: src/Console/Commands/CheckExpiredPlans.php
+
+		-
+			message: '#^Relation ''plan'' is not found in RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: src/Console/Commands/CheckExpiredPlans.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>features" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/FeatureContext.php
+
+		-
+			message: '#^Call to an undefined method ReflectionType\:\:getName\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/FeatureManager.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:currentAccessToken\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Controllers/Authentication/AuthController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$address\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Controllers/Authentication/ProfileController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$apiKey\.$#'
+			identifier: property.notFound
+			count: 3
+			path: src/Http/Controllers/Authentication/ProfileController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:address\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Controllers/Authentication/ProfileController.php
+
+		-
+			message: '#^Relation ''authentication'' is not found in RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: src/Http/Controllers/Dashboard/Admin/AdminController.php
+
+		-
+			message: '#^Relation ''plan'' is not found in RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: src/Http/Controllers/Dashboard/Admin/AdminController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$mp_card_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Method Illuminate\\Routing\\ResponseFactory\:\:jsonSuccess\(\) invoked with 2 parameters, 0\-1 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Parameter \#1 \$user of method RiseTechApps\\ApiKey\\Services\\MpCustomerService\:\:getOrCreateCustomer\(\) expects RiseTechApps\\ApiKey\\Models\\Authentication\\Authentication, Illuminate\\Foundation\\Auth\\User\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type MercadoPago\\Net\\MPResponse\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>expiration_month" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>expiration_year" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>last_four_digits" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Cards/CardController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\>\|RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$mp_customer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon\:\:\$type\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon\:\:\$value\.$#'
+			identifier: property.notFound
+			count: 5
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:activePlan\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:subscribeToPlan\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Parameter \#1 \$user of method RiseTechApps\\ApiKey\\Http\\Controllers\\Dashboard\\Checkout\\CheckoutController\:\:syncCardAfterPayment\(\) expects RiseTechApps\\ApiKey\\Models\\Authentication\\Authentication, Illuminate\\Foundation\\Auth\\User\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type MercadoPago\\Net\\MPResponse\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>expiration_month" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>expiration_year" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>last_four_digits" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
+
+		-
+			message: '#^Call to function is_null\(\) with RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 3
+			path: src/Http/Controllers/Dashboard/Coupons/CouponsController.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 2
+			path: src/Http/Controllers/Dashboard/Coupons/CouponsController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:activePlan\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Signature/SignatureController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:activePlanWithGracePeriod\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Http/Controllers/Dashboard/Signature/SignatureController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:requestLog\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Http/Controllers/Dashboard/Signature/SignatureController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:subscribeToPlan\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Signature/SignatureController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:userPlan\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Controllers/Dashboard/Signature/SignatureController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>request_limit" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Signature/SignatureController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>requests_used" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Controllers/Dashboard/Signature/SignatureController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Middlewares/AdminMiddleware.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$apiKey\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Middlewares/ApiKeyOriginValidatorMiddleware.php
+
+		-
+			message: '#^Parameter \#1 \$user of method Illuminate\\Contracts\\Auth\\Guard\:\:setUser\(\) expects Illuminate\\Contracts\\Auth\\Authenticatable, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Http/Middlewares/AuthenticateApiKey.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$apiKey\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Middlewares/CheckActivePlanMiddleware.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:activePlanWithGracePeriod\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Middlewares/CheckActivePlanMiddleware.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:userPlan\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Middlewares/CheckActivePlanMiddleware.php
+
+		-
+			message: '#^Parameter \#1 \$user of event class RiseTechApps\\ApiKey\\Events\\PlanExpired constructor expects RiseTechApps\\ApiKey\\Models\\Authentication\\Authentication in RiseTechApps\\ApiKey\\Events\\PlanExpired\:\:dispatch\(\), Illuminate\\Foundation\\Auth\\User given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Http/Middlewares/CheckActivePlanMiddleware.php
+
+		-
+			message: '#^Call to an undefined static method RiseTechApps\\ApiKey\\ApiKeyFacade\:\:resolve\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: src/Http/Middlewares/CheckPlanFeatureMiddleware.php
+
+		-
+			message: '#^Method RiseTechApps\\ApiKey\\Http\\Middlewares\\CheckRequestLimitMiddleware\:\:resolveActivePlan\(\) should return RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Http/Middlewares/CheckRequestLimitMiddleware.php
+
+		-
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
+			count: 2
+			path: src/Http/Middlewares/CheckRequestLimitMiddleware.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type RiseTechApps\\ApiKey\\Models\\Authentication\\Authentication\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Http/Middlewares/CheckRequestLimitMiddleware.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>request_limit" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Http/Middlewares/CheckRequestLimitMiddleware.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$active\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/ApiKeyResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Http/Resources/ApiKeyResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/ApiKeyResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/ApiKeyResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$updated_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/ApiKeyResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:getKey\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/ApiKeyResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$activePlan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$apiKey\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$birth_date\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$cellphone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$cpf\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$email_verified_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$locale\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$rg\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:countUsed\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:getKey\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:getMedia\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\AuthenticationMeResource\:\:requestLimit\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/AuthenticationMeResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$activePlan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$address\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$apiKey\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$birth_date\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$cellphone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$cpf\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$email_verified_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$genre\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$locale\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$marital_status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$nationality\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$naturalness\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$rg\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:\$telephone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:countUsed\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:getKey\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:getPhotoProfile\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Authentication\\ProfileResource\:\:requestLimit\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Http/Resources/Authentication/ProfileResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$gateway_coupon_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$is_active\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$max_uses\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$updated_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$uses\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:\$value\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:getKey\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Coupons\\CouponsResource\:\:isValid\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Coupons/CouponsResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:\$billing_cycle\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:\$description\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:\$features\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:\$formatted_price\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:\$is_active\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:\$price\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:\$request_limit\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Plans\\PlansResource\:\:getKey\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Plans/PlansResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:\$endpoint\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:\$method\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:\$requested_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:\$response_code\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:getKey\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/RequestLogResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$endpoint\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/RequestLogResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$method\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/RequestLogResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$requested_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/RequestLogResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$response_code\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Http/Resources/RequestLogResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:getKey\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/RequestLogResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$activePlan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$address\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$apiKey\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$birth_date\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$cellphone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$cpf\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$deleted_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$email_verified_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$locale\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$marital_status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$nationality\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$naturalness\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$rg\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$telephone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:\$updated_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:countUsed\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:getKey\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:getPhotoProfile\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Call to an undefined method RiseTechApps\\ApiKey\\Http\\Resources\\UserResource\:\:requestLimit\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Http/Resources/UserResource.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$brand\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Jobs/ProcessPlanRenewalJob.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$mp_card_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Jobs/ProcessPlanRenewalJob.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$mp_customer_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Jobs/ProcessPlanRenewalJob.php
+
+		-
+			message: '#^Relation ''authentication'' is not found in RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: src/Jobs/ProcessPlanRenewalJob.php
+
+		-
+			message: '#^Relation ''plan'' is not found in RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: src/Jobs/ProcessPlanRenewalJob.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\ApiKey\\ApiKey\:\:\$allowed_origins\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Models/ApiKey/ApiKey.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Models/Authentication/Authentication.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$requests_used\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Models/Authentication/Authentication.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:isInGracePeriod\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/Models/Authentication/Authentication.php
+
+		-
+			message: '#^Method RiseTechApps\\ApiKey\\Models\\Authentication\\Authentication\:\:getPhotoProfile\(\) should return RiseTechApps\\Media\\Models\\Media\|null but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Models/Authentication/Authentication.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Database\\Eloquent\\Relations\\HasOne\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Models/Authentication/Authentication.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>request_limit" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Models/Authentication/Authentication.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>requests_used" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Models/Authentication/Authentication.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Models/Coupon/Coupon.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Models/Coupon/Coupon.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon\:\:\$is_active\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Models/Coupon/Coupon.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon\:\:\$max_uses\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Models/Coupon/Coupon.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon\:\:\$uses\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Models/Coupon/Coupon.php
+
+		-
+			message: '#^Method RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan\:\:getGracePeriodRemainingDays\(\) should return int but returns float\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Models/UserPlan/UserPlan.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>price" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Models/UserPlan/UserPlan.php
+
+		-
+			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\Coupon\\Coupon\:\:\$uses\.$#'
+			identifier: property.notFound
+			count: 4
+			path: src/Repositories/Coupon/CouponEloquentRepository.php
+
+		-
+			message: '#^Anonymous function has an unused use \$options\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: src/RoutesApiKey.php
+
+		-
+			message: '#^Parameter \#1 \$array \(array\{\}\|array\{non\-falsy\-string\}\) to function array_filter does not contain falsy values, the array will always stay the same\.$#'
+			identifier: arrayFilter.same
+			count: 1
+			path: src/RoutesApiKey.php
+
+		-
+			message: '#^Method RiseTechApps\\ApiKey\\Rules\\PlanRules\:\:messages\(\) should return array\<string, array\<string, string\>\> but returns array\<string, string\>\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Rules/PlanRules.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$apiKey\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Scope/ApiKeyScope.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Services/PlanService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$requests_used\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Services/PlanService.php
+
+		-
+			message: '#^Trait RiseTechApps\\ApiKey\\Traits\\ApiResponseTrait is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: src/Traits/ApiResponseTrait.php
+
+		-
+			message: '#^Trait RiseTechApps\\ApiKey\\Traits\\HasApiKey is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: src/Traits/HasApiKey.php

@@ -110,11 +110,30 @@ class CheckRequestLimitMiddleware
             }
         }
 
-        $response = $next($request);
+        try {
+            $response = $next($request);
+        } catch (\Throwable $e) {
+            // The slot was claimed before the request ran, so an exception on the
+            // way through would otherwise leave it spent on a request that
+            // produced nothing. Hand it back, then let the handler take over.
+            $this->releaseQuota($activePlan);
+
+            throw $e;
+        }
+
+        $status = $response->getStatusCode();
+
+        // Server faults are not the caller's doing and must not be billed. Client
+        // errors (4xx) stay charged on purpose: those come from the caller's own
+        // malformed requests, and refunding them would make the quota trivially
+        // bypassable by anyone willing to send garbage.
+        if ($status >= 500) {
+            $this->releaseQuota($activePlan);
+        }
 
         // The counter was already incremented by reserveQuota(); only the log
         // entry is deferred.
-        $this->logRequest($request, $user, $activePlan, $response->getStatusCode());
+        $this->logRequest($request, $user, $activePlan, $status);
 
         return $response;
     }
@@ -150,6 +169,33 @@ class CheckRequestLimitMiddleware
         }
 
         return $claimed > 0;
+    }
+
+    /**
+     * Give a claimed slot back to the plan's quota.
+     *
+     * Counterpart to reserveQuota(), for requests that were billed up front and
+     * then failed on the server side. The guard on `requests_used > 0` keeps the
+     * counter from going negative if the period was reset while the request was
+     * still in flight.
+     *
+     * Null plan means nothing was ever claimed (reserveQuota only runs for a
+     * resolved plan), so there is nothing to return.
+     */
+    private function releaseQuota(?UserPlan $activePlan): void
+    {
+        if (! $activePlan) {
+            return;
+        }
+
+        $released = UserPlan::whereKey($activePlan->getKey())
+            ->where('requests_used', '>', 0)
+            ->decrement('requests_used');
+
+        if ($released > 0) {
+            $activePlan->requests_used = max(0, (int) $activePlan->requests_used - 1);
+            $activePlan->syncOriginal();
+        }
     }
 
     /**

@@ -12,9 +12,12 @@ use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
+use RiseTechApps\ApiKey\Traits\SendsIdempotentPayments;
 
 class CardController extends Controller
 {
+    use SendsIdempotentPayments;
+
     public function __construct(
         protected readonly MpCustomerService $mpCustomerService,
     ) {}
@@ -33,6 +36,7 @@ class CardController extends Controller
             'payment_method_id' => ['required', 'string'],
             'holder_name'       => ['required', 'string', 'max:255'],
             'brand'             => ['required', 'string', 'max:50'],
+            'idempotency_key'   => ['nullable', 'string', 'max:64'],
         ]);
 
         $user = auth()->user();
@@ -74,7 +78,10 @@ class CardController extends Controller
                         ],
                     ],
                 ],
-            ]);
+            ], $this->idempotentRequest(
+                $validated['idempotency_key'] ?? null,
+                ['card_validation', $user->getKey(), $validated['mp_token']]
+            ));
 
             Log::info('Card validation payment', [
                 'status'        => $payment->status,

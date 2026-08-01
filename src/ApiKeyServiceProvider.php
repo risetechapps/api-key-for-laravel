@@ -9,12 +9,14 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use RiseTechApps\ApiKey\Events\PlanCancelled;
 use RiseTechApps\ApiKey\Events\PlanChanged;
 use RiseTechApps\ApiKey\Events\PlanExpired;
 use RiseTechApps\ApiKey\Events\PlanGracePeriodStarted;
 use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
 use RiseTechApps\ApiKey\Listeners\SendGracePeriodNotification;
+use RiseTechApps\ApiKey\Listeners\SendPlanCancelledNotification;
 use RiseTechApps\ApiKey\Listeners\SendPlanActivatedNotification;
 use RiseTechApps\ApiKey\Listeners\SendPlanExpiredNotification;
 use RiseTechApps\ApiKey\Listeners\SendRequestLimitReachedNotification;
@@ -36,6 +38,7 @@ use RiseTechApps\ApiKey\Console\Commands\Billing\ProcessRenewalsCommand;
 use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
 use RiseTechApps\ApiKey\Console\Commands\MakeAdminCommand;
 use RiseTechApps\ApiKey\Console\Commands\PruneRequestLogsCommand;
+use RiseTechApps\ApiKey\Console\Commands\RotateApiKeysCommand;
 use RiseTechApps\FormRequest\RulesRegistry;
 
 class ApiKeyServiceProvider extends ServiceProvider
@@ -167,6 +170,7 @@ class ApiKeyServiceProvider extends ServiceProvider
                 MakeAdminCommand::class,
                 ProcessRenewalsCommand::class,
                 PruneRequestLogsCommand::class,
+                RotateApiKeysCommand::class,
             ]);
         }
     }
@@ -235,6 +239,7 @@ class ApiKeyServiceProvider extends ServiceProvider
     {
         Event::listen(PlanGracePeriodStarted::class, SendGracePeriodNotification::class);
         Event::listen(PlanExpired::class, SendPlanExpiredNotification::class);
+        Event::listen(PlanCancelled::class, SendPlanCancelledNotification::class);
         Event::listen(PlanChanged::class, SendPlanActivatedNotification::class);
         Event::listen(RequestLimitReached::class, SendRequestLimitReachedNotification::class);
         Event::listen(PlanUsageThresholdReached::class, SendUsageThresholdNotification::class);

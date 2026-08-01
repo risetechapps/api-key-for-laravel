@@ -4,8 +4,16 @@ namespace RiseTechApps\ApiKey\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Support\FeatureResolver;
 
+/**
+ * JsonResource repassa property e método para o `$resource` por __get/__call, o
+ * que a análise estática não enxerga sozinha. O mixin diz qual model está por
+ * trás — vale para o PHPStan e para o autocomplete da IDE.
+ *
+ * @mixin UserPlan
+ */
 class UserPlanResource extends JsonResource
 {
     /**
@@ -28,6 +36,14 @@ class UserPlanResource extends JsonResource
                 'used' => $this->requests_used,
                 'limit' => $this->whenLoaded('plan', fn() => $this->plan?->request_limit),
                 'remaining' => $this->whenLoaded('plan', fn() => $this->plan?->request_limit ? max(0, $this->plan->request_limit - $this->requests_used) : null),
+            ],
+            // Sem isto o painel não tem como distinguir "renova no dia X" de
+            // "acesso acaba no dia X", que são a mesma data com significados
+            // opostos para quem está lendo a tela.
+            'cancellation' => [
+                'cancelled' => $this->isCancelled(),
+                'cancelled_at' => $this->cancelled_at?->toIso8601String(),
+                'renews' => ! $this->isCancelled(),
             ],
             'dates' => [
                 'start_date' => $this->start_date?->toIso8601String(),

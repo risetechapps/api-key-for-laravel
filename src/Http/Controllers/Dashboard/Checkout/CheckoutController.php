@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use MercadoPago\Client\Common\RequestOptions;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
@@ -15,9 +16,12 @@ use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 use RiseTechApps\ApiKey\Repositories\Coupon\CouponRepository;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
+use RiseTechApps\ApiKey\Traits\SendsIdempotentPayments;
 
 class CheckoutController extends Controller
 {
+    use SendsIdempotentPayments;
+
     public function __construct(
         protected readonly PlanRepository $planRepository,
         protected readonly MpCustomerService $mpCustomerService,
@@ -32,7 +36,7 @@ class CheckoutController extends Controller
             'plan_id' => ['required', 'string'],
         ]);
 
-        $plan = $this->planRepository->findById($validated['plan_id']);
+        $plan = $this->planRepository->findActiveById($validated['plan_id']);
 
         if (! $plan) {
             return response()->json(['success' => false, 'message' => __('api-key::messages.plan_not_found')], 404);
@@ -48,13 +52,19 @@ class CheckoutController extends Controller
         $discount      = $coupon->type === 'percentage'
             ? $originalPrice * ($coupon->value / 100)
             : min((float) $coupon->value, $originalPrice);
-        $finalPrice = max(0, round($originalPrice - $discount, 2));
+
+        // The preview has to apply the proration credit for the same reason
+        // process() does, and in the same order — otherwise the screen quotes one
+        // amount and the card is charged another.
+        $credit     = $this->prorationCredit();
+        $finalPrice = max(0, round($originalPrice - $discount - $credit, 2));
 
         return response()->jsonSuccess([
             'coupon'         => $coupon->code,
             'type'           => $coupon->type,
             'discount_value' => $coupon->value,
             'discount'       => round($discount, 2),
+            'credit'         => $credit,
             'original_price' => $originalPrice,
             'final_price'    => $finalPrice,
         ]);
@@ -74,9 +84,14 @@ class CheckoutController extends Controller
             'payer.identification.type'   => ['nullable', 'string'],
             'payer.identification.number' => ['nullable', 'string'],
             'coupon_code'                 => ['nullable', 'string'],
+            // Optional, and the client should send it: a value generated once per
+            // checkout attempt and reused across retries is the only thing that
+            // makes a re-submitted form provably the same purchase. See
+            // idempotencyKey() for what happens when it is absent.
+            'idempotency_key'             => ['nullable', 'string', 'max:64'],
         ]);
 
-        $plan = $this->planRepository->findById($validated['plan_id']);
+        $plan = $this->planRepository->findActiveById($validated['plan_id']);
         if (! $plan) {
             return response()->json(['success' => false, 'message' => __('api-key::messages.plan_not_found')], 404);
         }
@@ -84,9 +99,19 @@ class CheckoutController extends Controller
         $transactionAmount = (float) $plan->price;
         $appliedCoupon     = null;
 
+        // A claimed coupon use is kept only when the checkout reaches a state
+        // that can still become a subscription (approved now, or pending /
+        // in_process for the webhook to settle). Every other exit hands it back,
+        // so a declined card does not burn a redemption.
+        $couponSettled = false;
+
         if (! empty($validated['coupon_code'])) {
             $coupon = Coupon::where('code', strtoupper($validated['coupon_code']))->first();
-            if ($coupon && $coupon->isValid()) {
+
+            // Claimed before the gateway is called rather than after approval:
+            // the claim is what enforces max_uses, so it has to happen while this
+            // request can still be refused. See CouponRepository::claimUse().
+            if ($coupon && $this->couponRepository->claimUse($coupon)) {
                 $discount          = $coupon->type === 'percentage'
                     ? $transactionAmount * ($coupon->value / 100)
                     : min((float) $coupon->value, $transactionAmount);
@@ -95,17 +120,36 @@ class CheckoutController extends Controller
             }
         }
 
+        // Proration. subscribeToPlan() replaces the running subscription with a
+        // fresh one, so whatever was left of the current period is discarded —
+        // upgrading on day 3 of 30 used to throw away 27 paid days. Applied after
+        // the coupon so a percentage discount is computed on the plan's real
+        // price, not on an already-credited amount.
+        $credit = $this->prorationCredit();
+
+        if ($credit > 0) {
+            $transactionAmount = max(0, round($transactionAmount - $credit, 2));
+        }
+
         if ($transactionAmount <= 0) {
-            auth()->user()->subscribeToPlan($plan);
-            if ($appliedCoupon) $this->couponRepository->incrementUses($appliedCoupon);
-            return response()->jsonSuccess(['status' => 'approved', 'message' => __('api-key::messages.subscription_activated_full_discount')]);
+            $userPlan = auth()->user()->subscribeToPlan($plan);
+            $userPlan->update(['credit_applied' => $credit ?: null]);
+
+            return response()->jsonSuccess([
+                'status'  => 'approved',
+                'message' => $credit > 0
+                    ? __('api-key::messages.subscription_activated_with_credit')
+                    : __('api-key::messages.subscription_activated_full_discount'),
+            ]);
         }
 
         if (empty($validated['token'])) {
+            $this->releaseCoupon($appliedCoupon);
             return response()->json(['success' => false, 'message' => __('api-key::messages.invalid_payment_data')], 422);
         }
 
         if (empty($validated['payment_method_id']) || empty($validated['payer']['email'])) {
+            $this->releaseCoupon($appliedCoupon);
             return response()->json(['success' => false, 'message' => __('api-key::messages.invalid_payment_data')], 422);
         }
 
@@ -171,7 +215,10 @@ class CheckoutController extends Controller
                 $paymentPayload['issuer_id'] = (int) $validated['issuer_id'];
             }
 
-            $payment = $client->create($paymentPayload);
+            $payment = $client->create($paymentPayload, $this->idempotentRequest(
+                $validated['idempotency_key'] ?? null,
+                ['checkout', auth()->id(), $plan->getKey(), $transactionAmount, $token]
+            ));
 
             // Only the fields needed to trace a payment. The full $payment object
             // carries cardholder name, last four digits and the payer document —
@@ -187,8 +234,9 @@ class CheckoutController extends Controller
                 $userPlan->update([
                     'payment_id'     => $payment->id,
                     'payment_amount' => $transactionAmount,
+                    'credit_applied' => $credit ?: null,
                 ]);
-                if ($appliedCoupon) $this->couponRepository->incrementUses($appliedCoupon);
+                $couponSettled = true;
 
                 if ($savedCard) {
                     UserCard::where('authentication_id', auth()->user()->getKey())->update(['is_default' => false]);
@@ -202,6 +250,9 @@ class CheckoutController extends Controller
             }
 
             if (in_array($payment->status ?? '', ['pending', 'in_process'])) {
+                // Still live: the webhook subscribes the user if it settles, so the
+                // redemption stays claimed.
+                $couponSettled = true;
                 return response()->jsonSuccess(['status' => 'pending', 'message' => __('api-key::messages.payment_pending')]);
             }
 
@@ -217,6 +268,37 @@ class CheckoutController extends Controller
         } catch (\Exception $e) {
             Log::error('Checkout process error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 500);
+        } finally {
+            // Covers the declined-payment return and all three catches above.
+            if (! $couponSettled) {
+                $this->releaseCoupon($appliedCoupon);
+            }
+        }
+    }
+
+    /**
+     * Credit owed for the unused remainder of the buyer's current subscription.
+     *
+     * Zero when there is no running subscription, when it is on a free plan, or
+     * when its period has already lapsed — see UserPlan::unusedCredit().
+     */
+    private function prorationCredit(): float
+    {
+        return auth()->user()
+            ?->activePlan()
+            ->with('plan')
+            ->first()
+            ?->unusedCredit() ?? 0.0;
+    }
+
+    /**
+     * Hand a claimed coupon use back when the checkout it was claimed for did
+     * not result in a subscription. No-op when no coupon was applied.
+     */
+    private function releaseCoupon(?Coupon $coupon): void
+    {
+        if ($coupon) {
+            $this->couponRepository->releaseUse($coupon);
         }
     }
 
@@ -313,6 +395,9 @@ class CheckoutController extends Controller
         }
 
         $user = Authentication::find($reference['user_id']);
+        // findById, not findActiveById: the money has already changed hands. A plan
+        // taken off sale between checkout and confirmation must still be delivered
+        // to the buyer who paid for it — only *acquiring* a plan is gated on is_active.
         $plan = $this->planRepository->findById($reference['plan_id']);
 
         if (! $user || ! $plan) {

@@ -2,13 +2,20 @@
 
 namespace RiseTechApps\ApiKey\Enums;
 
+/**
+ * Formas de pagamento que o checkout do pacote realmente processa.
+ *
+ * PIX, boleto e transferência existiam aqui, mas nada no pacote os
+ * implementava: `CheckoutController::process()` só monta pagamento com
+ * `token` de cartão. Eram opções que a validação aceitava e o checkout não
+ * sabia cobrar. Fluxo assíncrono (QR code / linha digitável, expiração,
+ * ativação só na confirmação do webhook) é uma feature à parte — quando
+ * existir, os casos voltam junto com ela.
+ */
 enum BillingMethod: string
 {
     case CREDIT_CARD = 'credit_card';
     case DEBIT_CARD = 'debit_card';
-    case PIX = 'pix';
-    case BANK_SLIP = 'bank_slip';
-    case BANK_TRANSFER = 'bank_transfer';
 
     /**
      * Retorna o nome amigável do ciclo de cobrança.
@@ -18,9 +25,6 @@ enum BillingMethod: string
         return match ($this) {
             self::CREDIT_CARD => 'Cartão de Crédito',
             self::DEBIT_CARD => 'Cartão de Debito',
-            self::PIX => 'Pix',
-            self::BANK_SLIP => 'Boleto',
-            self::BANK_TRANSFER => 'Transferência',
         };
     }
 

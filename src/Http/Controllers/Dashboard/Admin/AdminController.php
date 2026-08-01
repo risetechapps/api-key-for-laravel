@@ -5,6 +5,8 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Client\Payment\PaymentRefundClient;
 use MercadoPago\MercadoPagoConfig;
@@ -34,8 +36,28 @@ class AdminController extends Controller
                 'status'    => $refund->status ?? 'processed',
             ]);
         } catch (\Exception $e) {
+            // A correlation code goes to the panel, the detail goes to the log.
+            // Concatenating $e->getMessage() into the response rendered whatever
+            // the catch happened to swallow straight into the admin screen — a
+            // QueryException carries the SQL with its bound values, an
+            // MPApiException carries Mercado Pago's internal detail — and from
+            // there it travels into screenshots and support tickets. report()
+            // already puts the full exception where operators can read it.
+            $errorId = strtoupper(Str::random(8));
+
+            Log::error('Refund failed', [
+                'error_id'     => $errorId,
+                'user_plan_id' => $userPlan->getKey(),
+                'payment_id'   => $userPlan->payment_id,
+                'admin_id'     => auth()->id(),
+                'exception'    => $e->getMessage(),
+            ]);
+
             report($e);
-            return response()->jsonGone(__('api-key::messages.error_processing_refund') . ': ' . $e->getMessage());
+
+            return response()->jsonGone(
+                __('api-key::messages.error_processing_refund', ['id' => $errorId])
+            );
         }
     }
 

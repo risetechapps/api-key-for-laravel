@@ -32,6 +32,9 @@ class ProcessRenewalsCommand extends Command
         $dispatched = 0;
 
         UserPlan::where('active', true)
+            // Cancelada: o período pago segue até o end_date, mas não há próxima
+            // cobrança. Filtrar aqui evita enfileirar o job só para ele desistir.
+            ->whereNull('cancelled_at')
             ->whereBetween('end_date', [today()->startOfDay(), today()->endOfDay()])
             ->with(['authentication:id,email', 'plan:id,name'])
             ->chunkById(200, function ($plans) use ($dryRun, $sync, $queue, &$dispatched) {

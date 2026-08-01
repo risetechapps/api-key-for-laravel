@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Laravel\Pennant\Feature;
+use RiseTechApps\ApiKey\Events\PlanCancelled;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Signature\SignatureRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Signature\LogHistoryResource;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Signature\SignatureHistoryResource;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 
 class SignatureController extends Controller
@@ -18,19 +21,158 @@ class SignatureController extends Controller
     {
     }
 
+    /**
+     * Activate a free plan for the authenticated user.
+     *
+     * This endpoint grants a subscription outright and never talks to the payment
+     * gateway, so it only ever applies to plans that cost nothing; a priced plan
+     * must go through /dashboard/checkout/process, which charges before it
+     * subscribes. Without the price guard below, any authenticated user could
+     * POST the id of the most expensive plan and receive it for free.
+     */
     public function signature(SignatureRequest $request): JsonResponse
     {
         try {
 
             $data = $request->validationData();
 
-            $plan = $this->planRepository->findById($data['plan']);
+            $plan = $this->planRepository->findActiveById($data['plan']);
+
+            if (! $plan) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('api-key::messages.plan_not_found'),
+                ], 404);
+            }
+
+            if ((float) $plan->price > 0) {
+                Log::warning('Free subscription attempted on a paid plan', [
+                    'user_id' => auth()->id(),
+                    'plan_id' => $plan->getKey(),
+                    'price'   => $plan->price,
+                    'ip'      => $request->ip(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => __('api-key::messages.plan_requires_payment'),
+                ], 422);
+            }
+
             auth()->user()->subscribeToPlan($plan);
 
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
             return response()->jsonGone(__('api-key::messages.error_creating_signature'));
+        }
+    }
+
+    /**
+     * Stop the subscription from renewing.
+     *
+     * Deliberately not a revocation. The period already paid for runs to its
+     * end_date and the API key keeps working until then — cancelling on day 2 of
+     * 30 must not cost the subscriber the other 28. All this does is stop the
+     * next charge: `billing:process-renewals` skips cancelled subscriptions, and
+     * the plan lapses on its own through the usual expiry path.
+     *
+     * Until this existed there was no way out at all. A subscriber with a saved
+     * card was charged again at every end_date, and the only exit was asking an
+     * administrator for a manual refund.
+     */
+    public function cancel(Request $request): JsonResponse
+    {
+        try {
+            $userPlan = auth()->user()->activePlanWithGracePeriod()->with('plan')->first();
+
+            if (! $userPlan) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('api-key::messages.no_active_subscription'),
+                ], 404);
+            }
+
+            // Idempotent: a second cancellation is the state the caller asked for,
+            // not an error worth failing a retry over.
+            if (! $userPlan->isCancelled()) {
+                $userPlan->update(['cancelled_at' => now()]);
+
+                /** @var Authentication $user */
+                $user = auth()->user();
+
+                if ($userPlan->plan && $userPlan->end_date) {
+                    PlanCancelled::dispatch(
+                        $user,
+                        $userPlan,
+                        $userPlan->plan,
+                        $userPlan->end_date
+                    );
+                }
+
+                Log::info('Subscription cancelled', [
+                    'user_id' => auth()->id(),
+                    'user_plan_id' => $userPlan->getKey(),
+                    'plan_id' => $userPlan->plan_id,
+                    'access_until' => $userPlan->end_date?->toIso8601String(),
+                    'ip' => $request->ip(),
+                ]);
+            }
+
+            return response()->jsonSuccess([
+                'cancelled_at' => $userPlan->cancelled_at?->toIso8601String(),
+                'access_until' => $userPlan->end_date?->toIso8601String(),
+                'message' => __('api-key::messages.subscription_cancelled'),
+            ]);
+        } catch (\Exception $e) {
+            report($e);
+
+            return response()->jsonGone(__('api-key::messages.error_cancelling_signature'));
+        }
+    }
+
+    /**
+     * Undo a cancellation while the period is still running.
+     *
+     * Only possible before the subscription lapses — once end_date has passed
+     * there is nothing left to renew, and the customer has to buy again through
+     * the checkout.
+     */
+    public function resume(Request $request): JsonResponse
+    {
+        try {
+            $userPlan = auth()->user()->activePlanWithGracePeriod()->with('plan')->first();
+
+            if (! $userPlan || ! $userPlan->isCancelled()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('api-key::messages.no_cancelled_subscription'),
+                ], 404);
+            }
+
+            if ($userPlan->isExpired()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('api-key::messages.subscription_cannot_resume'),
+                ], 422);
+            }
+
+            $userPlan->update(['cancelled_at' => null]);
+
+            Log::info('Subscription resumed', [
+                'user_id' => auth()->id(),
+                'user_plan_id' => $userPlan->getKey(),
+                'ip' => $request->ip(),
+            ]);
+
+            return response()->jsonSuccess([
+                'renews_on' => $userPlan->end_date?->toIso8601String(),
+                'message' => __('api-key::messages.subscription_resumed'),
+            ]);
+        } catch (\Exception $e) {
+            report($e);
+
+            return response()->jsonGone(__('api-key::messages.error_resuming_signature'));
         }
     }
 

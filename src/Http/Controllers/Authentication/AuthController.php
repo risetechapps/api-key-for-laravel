@@ -58,11 +58,21 @@ class AuthController extends Controller
         $id = $request->route('id');
         $hash = $request->route('hash');
 
+        // Enough to diagnose a failed verification (which link, when it expired,
+        // whether it arrived signed) without writing the signature itself to the
+        // log. The full URL and the APP_KEY fingerprint that used to be here were
+        // instrumentation for the reverse-proxy signature bug fixed in 2.2.2 with
+        // trustProxies(); the bug is gone, the token in the log outlived it.
+        //
+        // The second call site below logs *after* hasValidSignature() has passed,
+        // so that entry would carry a genuinely valid signature. Replaying it is
+        // inert today — the signature covers {id} and {hash}, so the same request
+        // hits the same hash_equals that already rejected it — but that is a
+        // property of this method's control flow, not of the log, and the next
+        // person to touch this method should not have to rediscover it.
         $context = [
             'id' => $id,
-            'url' => $request->fullUrl(),
-            'app_url' => config('app.url'),
-            'app_key_hash' => substr(hash('sha256', (string) config('app.key')), 0, 8),
+            'path' => $request->path(),
             'expires' => $request->query('expires'),
             'has_signature' => $request->has('signature'),
         ];
@@ -121,8 +131,8 @@ class AuthController extends Controller
 
     public function forgotPassword(Request $request): JsonResponse
     {
-        $email = $request->input('email');
         $request->validate(['email' => 'required|email']);
+        $email = $request->input('email');
 
         $status = Password::sendResetLink($request->only('email'));
 

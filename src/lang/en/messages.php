@@ -53,6 +53,13 @@ return [
 
     // Signature Messages
     'error_creating_signature' => 'Unable to complete the subscription at this time, please try again later',
+    'error_cancelling_signature' => 'Unable to cancel the subscription at this time, please try again later',
+    'error_resuming_signature' => 'Unable to resume the renewal at this time, please try again later',
+    'no_active_subscription' => 'No active subscription found.',
+    'no_cancelled_subscription' => 'No cancelled subscription to resume.',
+    'subscription_cancelled' => 'Renewal cancelled. Your access continues until the end of the period you already paid for, and you will not be charged again.',
+    'subscription_resumed' => 'Renewal resumed. Your subscription will renew normally on its due date.',
+    'subscription_cannot_resume' => 'This subscription has already lapsed and cannot be resumed. Please subscribe again.',
     'error_loading_signature_history' => 'Unable to load subscribed plan history',
     'error_loading_request_log' => 'Unable to load request history',
 
@@ -63,9 +70,11 @@ return [
 
     // Checkout & Payment
     'plan_not_found' => 'Plan not found.',
+    'plan_requires_payment' => 'This plan requires payment. Complete the subscription through checkout.',
     'coupon_invalid_or_expired' => 'Invalid or expired coupon.',
     'invalid_payment_data' => 'Invalid payment data.',
     'subscription_activated_full_discount' => 'Subscription activated with full discount coupon.',
+    'subscription_activated_with_credit' => 'Subscription activated. Credit from your previous plan covered the full amount.',
     'payment_approved' => 'Payment approved! Your subscription has been activated.',
     'payment_pending' => 'Payment under review. You will be notified shortly.',
     'payment_declined' => 'Payment declined.',
@@ -73,7 +82,7 @@ return [
     'invalid_webhook_signature' => 'Invalid signature.',
 
     // Admin
-    'error_processing_refund' => 'Error processing refund.',
+    'error_processing_refund' => 'Unable to process the refund. The payment was left untouched and the subscription is still active. Look up code :id in the application log for the reason.',
 
     // Billing
     'plan_subscription_description' => ':plan plan subscription',

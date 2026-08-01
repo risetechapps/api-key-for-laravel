@@ -1,0 +1,32 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    paths:
+        - src
+        - database
+
+    # Nível 5: checa tipos de argumento e retorno, que é onde moram os erros que
+    # esta base de código realmente produz — um findById() devolvendo ?Plan usado
+    # sem checar null foi exatamente o bug de plano inativo desta auditoria.
+    # Subir de nível é barato depois que a baseline estiver zerada; começar alto
+    # só gera ruído que ninguém lê.
+    level: 5
+
+    # O erro do que já existia fica registrado na baseline, não silenciado no
+    # código: a análise passa a valer para tudo que for escrito de agora em
+    # diante, sem exigir uma limpeza geral antes de ligar a ferramenta.
+    reportUnmatchedIgnoredErrors: false
+
+    ignoreErrors:
+        # Docblock errado no SDK do Mercado Pago, não no nosso código.
+        # RequestOptions::setCustomHeaders() está anotado como array<string,string>,
+        # mas o valor termina em CURLOPT_HTTPHEADER (MPDefaultHttpClient:109), que
+        # exige uma LISTA de 'Nome: valor' — é o formato que o próprio SDK monta em
+        # MercadoPagoClient::addDefaultHeaders(). Passar par chave-valor faria o
+        # array_merge de addCustomHeaders() produzir um item com chave string, e o
+        # curl mandaria o valor sem o nome do header. A lista é o formato correto.
+        -
+            message: '#setCustomHeaders\(\) expects array<string, string>, array<int, string> given#'
+            path: src/Traits/SendsIdempotentPayments.php

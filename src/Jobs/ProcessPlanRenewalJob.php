@@ -14,6 +14,7 @@ use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
+use RiseTechApps\ApiKey\Traits\SendsIdempotentPayments;
 
 /**
  * Charges the renewal of a single subscription.
@@ -25,7 +26,7 @@ use RiseTechApps\ApiKey\Services\MpCustomerService;
  */
 class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SendsIdempotentPayments, SerializesModels;
 
     /**
      * Payments are never retried automatically: a timeout after the charge was
@@ -56,6 +57,18 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
         $userPlan = UserPlan::with(['authentication', 'plan'])->find($this->userPlanId);
 
         if (!$userPlan || !$userPlan->active) {
+            return;
+        }
+
+        // Re-checked here and not only in the command that dispatched it: the job
+        // can sit in the queue while the subscriber cancels, and charging a card
+        // after someone asked you to stop is the worst failure mode this has.
+        if ($userPlan->isCancelled()) {
+            Log::info('billing renewal skipped: subscription cancelled', [
+                'user_plan_id' => $this->userPlanId,
+                'cancelled_at' => $userPlan->cancelled_at?->toIso8601String(),
+            ]);
+
             return;
         }
 
@@ -111,7 +124,19 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
                     ],
                 ],
             ],
-        ]);
+        ], $this->idempotentRequest(null, [
+            // ShouldBeUnique stops the same job running twice at once, and
+            // tries = 1 stops a retry after a timeout. Neither covers the gap
+            // where the charge is accepted, the write that records it fails, and
+            // uniqueFor (1h) then lets a later run dispatch the same renewal
+            // again. The gateway settles that one.
+            //
+            // Keyed on the period being renewed, never on the subscription alone:
+            // next month's renewal is a different charge and must go through.
+            'renewal',
+            $this->userPlanId,
+            $userPlan->end_date?->toDateString(),
+        ]));
 
         if ($payment->status === 'approved') {
             $newPlan = $user->subscribeToPlan($plan);

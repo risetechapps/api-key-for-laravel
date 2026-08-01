@@ -30,6 +30,29 @@ use RiseTechApps\Media\Models\Media;
 use RiseTechApps\Media\Traits\HasMediaSuite\HasMediaSuite;
 use RiseTechApps\ToUpper\Traits\HasToUpper;
 
+/**
+ * @property string $id
+ * @property string|null $code
+ * @property string $name
+ * @property string $email
+ * @property string|null $rg
+ * @property string|null $cpf
+ * @property string|null $birth_date
+ * @property string|null $telephone
+ * @property string|null $cellphone
+ * @property string|null $nationality
+ * @property string|null $naturalness
+ * @property string|null $marital_status
+ * @property string|null $locale
+ * @property string|null $status
+ * @property string|null $role
+ * @property \Illuminate\Support\Carbon|null $email_verified_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $deleted_at
+ * @property-read ApiKey|null $apiKey
+ * @property-read UserPlan|null $activePlan
+ */
 class Authentication extends Authenticatable implements HasLocalePreference, MediaContract
 {
 
