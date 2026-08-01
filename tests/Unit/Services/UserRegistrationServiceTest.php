@@ -39,12 +39,19 @@ describe('Registration', function () {
         expect($user->apiKey->plainKey)->not->toBeNull();
     });
 
-    it('throws exception when avatar generator is not available', function () {
-        // avatarGenerator() é uma função global (helper do pacote risetools), não
-        // um binding de container — não há como "desregistrá-la" por teste enquanto
-        // o pacote estiver instalado. O ramo de erro é coberto por inspeção; aqui
-        // não é testável de forma determinística.
-    })->skip('avatarGenerator é helper global; cenário de indisponibilidade não é simulável em teste com o pacote carregado.');
+    it('generates and stores the avatar', function () {
+        // O caminho que de fato roda: validateAvatarGenerator() passa, o avatar é
+        // gerado e anexado à coleção 'profile'. O ramo de erro dele depende de
+        // `function_exists('avatarGenerator')` ser falso, o que nunca acontece com
+        // o risetools instalado — está documentado no próprio método.
+        $user = $this->service->register([
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'secret123',
+        ]);
+
+        expect($user->getMedia('profile'))->not->toBeEmpty();
+    });
 });
 
 describe('Transaction Safety', function () {

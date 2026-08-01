@@ -11,7 +11,7 @@ beforeEach(function () {
 });
 
 /** Uma linha de log registrada em `$requestedAt`. */
-function logEntry(\DateTimeInterface|string $requestedAt): RequestLog
+function logEntry(DateTimeInterface|string $requestedAt): RequestLog
 {
     return RequestLog::create([
         'authentication_id' => test()->user->getKey(),

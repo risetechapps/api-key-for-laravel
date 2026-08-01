@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 
@@ -47,7 +48,7 @@ describe('Reading coupons', function () {
     it('404s a coupon that does not exist', function () {
         $this->actingAs($this->user, 'sanctum');
 
-        $this->getJson('/api/v1/dashboard/coupons/'.\Illuminate\Support\Str::uuid())->assertStatus(404);
+        $this->getJson('/api/v1/dashboard/coupons/'.Str::uuid())->assertStatus(404);
     });
 });
 

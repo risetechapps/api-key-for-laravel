@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 
@@ -59,7 +60,7 @@ describe('Plan catalogue', function () {
     it('reports a plan that does not exist', function () {
         $this->actingAs($this->user, 'sanctum');
 
-        $this->getJson('/api/v1/dashboard/plans/'.\Illuminate\Support\Str::uuid())->assertStatus(410);
+        $this->getJson('/api/v1/dashboard/plans/'.Str::uuid())->assertStatus(410);
     });
 
     it('requires authentication to read a single plan', function () {
@@ -158,6 +159,6 @@ describe('Plan administration', function () {
     it('reports deleting a plan that is not there', function () {
         $this->actingAs($this->admin, 'sanctum');
 
-        $this->deleteJson('/api/v1/dashboard/plans/'.\Illuminate\Support\Str::uuid())->assertStatus(410);
+        $this->deleteJson('/api/v1/dashboard/plans/'.Str::uuid())->assertStatus(410);
     });
 });
