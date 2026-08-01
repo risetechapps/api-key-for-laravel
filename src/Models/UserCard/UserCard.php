@@ -3,8 +3,23 @@
 namespace RiseTechApps\ApiKey\Models\UserCard;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
+/**
+ * @property string $id
+ * @property string $authentication_id
+ * @property string $holder_name
+ * @property string $last_four
+ * @property string $brand
+ * @property string $expiry_month
+ * @property string $expiry_year
+ * @property string|null $mp_customer_id
+ * @property string|null $mp_card_id
+ * @property bool $is_default
+ * @property string|null $validation_payment_id
+ * @property Carbon|null $validation_refunded_at
+ */
 class UserCard extends Model
 {
     protected $fillable = [
@@ -17,6 +32,8 @@ class UserCard extends Model
         'mp_customer_id',
         'mp_card_id',
         'is_default',
+        'validation_payment_id',
+        'validation_refunded_at',
     ];
 
     // Identificadores do gateway. GET /dashboard/cards serializa o model cru, então
@@ -27,6 +44,10 @@ class UserCard extends Model
     protected $hidden = [
         'mp_customer_id',
         'mp_card_id',
+        // Rastro interno da cobrança de validação: serve ao reprocessamento do
+        // estorno, não à tela de cartões do cliente.
+        'validation_payment_id',
+        'validation_refunded_at',
     ];
 
     // Sem o cast, o valor devolvido é o que o driver entregar (bool no
@@ -35,7 +56,21 @@ class UserCard extends Model
     // API em true/false independente do banco.
     protected $casts = [
         'is_default' => 'boolean',
+        'validation_refunded_at' => 'datetime',
     ];
+
+    /**
+     * Cartões cuja cobrança de validação foi feita mas não estornada.
+     *
+     * É o conjunto que o `api-key:retry-validation-refunds` reprocessa: o
+     * estorno é best-effort no cadastro, então uma falha de rede deixa o valor
+     * cobrado no cartão do cliente até alguém devolver.
+     */
+    public function scopePendingValidationRefund($query)
+    {
+        return $query->whereNotNull('validation_payment_id')
+            ->whereNull('validation_refunded_at');
+    }
 
     public function authentication()
     {

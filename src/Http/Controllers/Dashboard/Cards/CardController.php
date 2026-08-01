@@ -119,6 +119,10 @@ class CardController extends Controller
                     'mp_customer_id' => $mpCustomerId,
                     'mp_card_id' => $mpCardId ?? $existing->mp_card_id,
                     'is_default' => true,
+                    // Cobrança nova, estorno ainda pendente: revalidar o mesmo
+                    // cartão cobra de novo, e o estorno anterior não cobre este.
+                    'validation_payment_id' => (string) $payment->id,
+                    'validation_refunded_at' => null,
                 ]);
                 $card = $existing;
             } else {
@@ -134,16 +138,26 @@ class CardController extends Controller
                     'mp_customer_id' => $mpCustomerId,
                     'mp_card_id' => $mpCardId,
                     'is_default' => true,
+                    'validation_payment_id' => (string) $payment->id,
                 ]);
             }
 
-            // Estorno automático da cobrança de validação
+            // Estorno automático da cobrança de validação.
+            //
+            // Best-effort de propósito: o cartão já foi validado e associado ao
+            // cliente no gateway, e derrubar o cadastro porque o estorno não saiu
+            // seria pior para quem está do outro lado. O que não pode é o
+            // fracasso sumir — a pendência fica registrada na própria linha e o
+            // comando `api-key:retry-validation-refunds` a reprocessa.
             try {
-                $refundClient = new PaymentRefundClient;
-                $refundClient->refund($payment->id, 5.00);
+                new PaymentRefundClient()->refund($payment->id, 5.00);
+
+                $card->update(['validation_refunded_at' => now()]);
+
                 Log::info('Card validation refunded', ['payment_id' => $payment->id]);
             } catch (\Exception $e) {
                 Log::warning('Card validation refund failed', [
+                    'card_id' => $card->getKey(),
                     'payment_id' => $payment->id,
                     'error' => $e->getMessage(),
                 ]);
