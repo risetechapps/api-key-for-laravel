@@ -18,6 +18,45 @@
             </Card>
         </div>
 
+        <!-- Subscription management -->
+        <Card v-if="activePlan" title="Assinatura" subtitle="Renovação automática">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="flex items-start gap-3">
+                    <div
+                        class="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                        :class="isCancelled ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30'"
+                    >
+                        <component
+                            :is="isCancelled ? PhWarningCircle : PhArrowsClockwise"
+                            :size="20"
+                            :class="isCancelled ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'"
+                        />
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">
+                            {{ isCancelled ? 'Renovação cancelada' : 'Renovação ativa' }}
+                        </p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">
+                            <template v-if="isCancelled">
+                                Seu acesso continua até {{ formatDate(activePlan?.dates?.end_date) }} e nenhuma nova cobrança será feita.
+                            </template>
+                            <template v-else>
+                                Seu plano será renovado automaticamente em {{ formatDate(activePlan?.dates?.end_date) }}.
+                            </template>
+                        </p>
+                    </div>
+                </div>
+
+                <Button
+                    :variant="isCancelled ? 'primary' : 'outline'"
+                    :disabled="subscriptionBusy"
+                    @click="isCancelled ? resumeSubscription() : cancelSubscription()"
+                >
+                    {{ isCancelled ? 'Reativar renovação' : 'Cancelar renovação' }}
+                </Button>
+            </div>
+        </Card>
+
         <!-- Subscription History -->
         <Card title="Histórico de Assinaturas" subtitle="Suas assinaturas anteriores">
             <div class="overflow-x-auto">
@@ -160,6 +199,8 @@ import {
     PhCalendar,
     PhCoins,
     PhTrash,
+    PhArrowsClockwise,
+    PhWarningCircle,
 } from '@phosphor-icons/vue';
 import Swal from 'sweetalert2';
 import Card from "@/views/componentes/Card.vue";
@@ -169,8 +210,9 @@ import AddCardModal from "@/views/dashboard/AddCardModal.vue";
 const authStore      = useAuthStore();
 const dashboardStore = useDashboardStore();
 
-const loading     = ref(true);
-const showAddCard = ref(false);
+const loading          = ref(true);
+const showAddCard      = ref(false);
+const subscriptionBusy = ref(false);
 
 const user           = computed(() => authStore.user);
 const billingHistory = computed(() => dashboardStore.billingHistory);
@@ -178,6 +220,7 @@ const savedCards     = computed(() => dashboardStore.savedCards);
 
 const activePlan     = computed(() => user.value?.active_plan);
 const activePlanInfo = computed(() => activePlan.value?.plan);
+const isCancelled    = computed(() => activePlan.value?.cancellation?.cancelled === true);
 
 const summaryStats = computed(() => [
     {
@@ -188,11 +231,14 @@ const summaryStats = computed(() => [
         iconClass: 'text-indigo-600 dark:text-indigo-400',
     },
     {
-        name: 'Próxima Cobrança',
+        // Mesma data, significados opostos: depois de cancelar não há cobrança
+        // nenhuma vindo, e chamar isso de "próxima cobrança" assusta quem acabou
+        // de cancelar.
+        name: isCancelled.value ? 'Acesso até' : 'Próxima Cobrança',
         value: formatDate(activePlan.value?.dates?.end_date) || 'N/A',
         icon: PhCalendar,
-        bgClass: 'bg-emerald-100 dark:bg-emerald-900/30',
-        iconClass: 'text-emerald-600 dark:text-emerald-400',
+        bgClass: isCancelled.value ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30',
+        iconClass: isCancelled.value ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400',
     },
     {
         name: 'Total Gasto',
@@ -203,8 +249,15 @@ const summaryStats = computed(() => [
     },
 ]);
 
+// Soma o que foi cobrado, não o preço de tabela: cupom e crédito de troca fazem
+// o valor pago divergir do raw_price do plano, e somar a tabela mostrava um total
+// que o cliente nunca pagou. Cai para o preço do plano em assinaturas antigas,
+// anteriores ao registro de payment_amount.
 const totalSpent = computed(() =>
-    billingHistory.value.reduce((acc, sub) => acc + (sub.plan?.raw_price || 0), 0)
+    billingHistory.value.reduce(
+        (acc, sub) => acc + (sub.payment?.amount ?? sub.plan?.raw_price ?? 0),
+        0
+    )
 );
 
 onMounted(async () => {
@@ -261,5 +314,66 @@ async function removeCard(id) {
 
 async function onCardSaved() {
     await dashboardStore.fetchSavedCards();
+}
+
+async function cancelSubscription() {
+    const accessUntil = formatDate(activePlan.value?.dates?.end_date);
+
+    const result = await Swal.fire({
+        icon: 'warning',
+        title: 'Cancelar renovação?',
+        // Diz na confirmação o que NÃO acontece. A dúvida de quem clica aqui é
+        // "vou perder o acesso agora?", e a resposta é não.
+        html: `Sua assinatura <strong>não será interrompida agora</strong>.<br>
+               O acesso continua até <strong>${accessUntil}</strong> e nenhuma nova cobrança será feita.`,
+        showCancelButton: true,
+        confirmButtonText: 'Sim, cancelar renovação',
+        cancelButtonText: 'Manter assinatura',
+        confirmButtonColor: '#f59e0b',
+    });
+
+    if (!result.isConfirmed) return;
+
+    subscriptionBusy.value = true;
+    try {
+        const data = await dashboardStore.cancelSubscription();
+        await authStore.fetchProfile();
+
+        await Swal.fire({
+            icon: 'success',
+            title: 'Renovação cancelada',
+            text: data?.message ?? `Seu acesso continua até ${accessUntil}.`,
+        });
+    } catch (err) {
+        await Swal.fire({
+            icon: 'error',
+            title: 'Não foi possível cancelar',
+            text: err.response?.data?.message ?? 'Tente novamente em alguns instantes.',
+        });
+    } finally {
+        subscriptionBusy.value = false;
+    }
+}
+
+async function resumeSubscription() {
+    subscriptionBusy.value = true;
+    try {
+        const data = await dashboardStore.resumeSubscription();
+        await authStore.fetchProfile();
+
+        await Swal.fire({
+            icon: 'success',
+            title: 'Renovação reativada',
+            text: data?.message ?? 'Sua assinatura será renovada normalmente.',
+        });
+    } catch (err) {
+        await Swal.fire({
+            icon: 'error',
+            title: 'Não foi possível reativar',
+            text: err.response?.data?.message ?? 'Tente novamente em alguns instantes.',
+        });
+    } finally {
+        subscriptionBusy.value = false;
+    }
 }
 </script>

@@ -139,6 +139,7 @@ import {
     PhEye,
     PhEyeSlash,
 } from '@phosphor-icons/vue';
+import Swal from 'sweetalert2';
 import Card from "@/views/componentes/Card.vue";
 import Button from "@/views/componentes/Button.vue";
 import Input from "@/views/componentes/Input.vue";
@@ -194,13 +195,52 @@ async function handleRegister() {
     if (hasError) return;
 
     try {
-        await authStore.register({
+        const { apiKey } = await authStore.register({
             name: form.name,
             email: form.email,
             password: form.password,
             password_confirmation: form.password_confirmation,
         });
-        router.push('/dashboard');
+
+        // A chave só existe em texto puro aqui. Depois desta tela o servidor tem
+        // apenas o hash e ela é irrecuperável — só resta gerar outra. Por isso a
+        // exibição é bloqueante, com cópia, e não some sozinha.
+        if (apiKey) {
+            await Swal.fire({
+                icon: 'success',
+                title: 'Conta criada',
+                html: `
+                    <p class="text-sm">Esta é a sua API key. <strong>Guarde agora</strong> — ela não será exibida novamente.</p>
+                    <code style="display:block;word-break:break-all;text-align:left;padding:12px;margin-top:12px;border-radius:8px;background:#f1f5f9;color:#0f172a;font-size:12px;">${apiKey}</code>
+                `,
+                confirmButtonText: 'Copiei minha chave',
+                showCancelButton: true,
+                cancelButtonText: 'Copiar',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                preConfirm: () => true,
+                didOpen: () => {
+                    const copyButton = Swal.getCancelButton();
+                    copyButton?.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        navigator.clipboard?.writeText(apiKey);
+                        copyButton.textContent = 'Copiado!';
+                    });
+                },
+            });
+        }
+
+        // Login exige e-mail verificado, então o destino é a tela de login e não
+        // o painel — a versão anterior mandava para /dashboard com uma sessão que
+        // nunca existiu.
+        await Swal.fire({
+            icon: 'info',
+            title: 'Verifique seu e-mail',
+            text: `Enviamos um link de confirmação para ${form.email}. Confirme o endereço para poder entrar.`,
+            confirmButtonText: 'Ir para o login',
+        });
+
+        router.push('/login');
     } catch (err) {
         // Erro 429 - Too Many Requests (Rate Limit)
         if (err.response?.status === 429) {

@@ -273,8 +273,11 @@ const stats = computed(() => {
             iconClass: 'text-emerald-600 dark:text-emerald-400',
         },
         {
-            name: 'Cache Hit Rate',
-            value: `${dashboardStore.stats.cache_hit_rate || 0}%`,
+            // "Cache Hit Rate" saiu daqui: o valor era 85 fixo no store, não uma
+            // medição. O pacote não expõe métrica de cache; enquanto não existir,
+            // este espaço mostra o teto do plano, que é dado real.
+            name: 'Limite do Plano',
+            value: total > 0 ? total : 'Ilimitado',
             icon: PhHardDrives,
             bgClass: 'bg-amber-100 dark:bg-amber-900/30',
             iconClass: 'text-amber-600 dark:text-amber-400',

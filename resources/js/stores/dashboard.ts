@@ -1,26 +1,84 @@
-//@ts-nocheck
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import axios from 'axios';
 
+export interface DashboardStats {
+    today_requests: number;
+    month_requests: number;
+    remaining_requests: number;
+    total_requests_limit: number;
+}
+
+export interface RequestLogEntry {
+    id: string;
+    endpoint?: string;
+    method?: string;
+    response_code?: number;
+    requested_at?: string;
+}
+
+export interface Plan {
+    id: string;
+    name: string;
+    description?: string;
+    price?: string;
+    raw_price?: number;
+    request_limit?: number;
+    features?: Array<{ key: string; name: string; description?: string; icon?: string }>;
+}
+
+export interface Subscription {
+    id: string;
+    status?: { active: boolean; label: string };
+    payment?: { amount: number | null; credit_applied: number | null; payment_id: string | null };
+    cancellation?: { cancelled: boolean; cancelled_at: string | null };
+    dates?: { start_date?: string; end_date?: string };
+    plan?: Plan;
+}
+
+export interface SavedCard {
+    id: number;
+    brand: string;
+    last_four: string;
+    holder_name: string;
+    expiry_month: string;
+    expiry_year: string;
+    is_default: boolean;
+}
+
+interface StatsPayload {
+    today?: number;
+    used?: number;
+    remaining?: number;
+    limit?: number;
+    series?: Array<{ date: string; total: number }>;
+}
+
+/**
+ * Desembrulha o envelope padrão da API: { success: true, data: ... }.
+ * Cai para o corpo cru quando a resposta não vem embrulhada.
+ */
+function unwrap<T>(response: any): T {
+    return (response?.data?.data ?? response?.data) as T;
+}
+
 export const useDashboardStore = defineStore('dashboard', () => {
-    const stats = ref({
+    const stats = ref<DashboardStats>({
         today_requests: 0,
         month_requests: 0,
         remaining_requests: 0,
         total_requests_limit: 0,
-        cache_hit_rate: 0,
     });
-    const requests = ref([]);
-    const plans = ref([]);
-    const currentPlan = ref(null);
-    const billingHistory = ref([]);
-    const savedCards = ref([]);
+    const requests = ref<RequestLogEntry[]>([]);
+    const plans = ref<Plan[]>([]);
+    const currentPlan = ref<Plan | null>(null);
+    const billingHistory = ref<Subscription[]>([]);
+    const savedCards = ref<SavedCard[]>([]);
     const loading = ref(false);
-    const error = ref(null);
+    const error = ref<string | null>(null);
 
-    const chartSeries = ref([{ name: 'Requisições', data: [] }]);
-    const chartCategories = ref([]);
+    const chartSeries = ref<Array<{ name: string; data: number[] }>>([{ name: 'Requisições', data: [] }]);
+    const chartCategories = ref<string[]>([]);
 
     const usagePercentage = computed(() => {
         if (stats.value.total_requests_limit === 0) return 0;
@@ -32,7 +90,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // A versão anterior baixava /dashboard/log inteiro e contava as linhas no
     // browser — uma leitura da tabela completa por carregamento de página. Agora
     // a agregação vem pronta do servidor e o log chega paginado.
-    async function fetchStats(days = 30) {
+    async function fetchStats(days = 30): Promise<void> {
         loading.value = true;
 
         try {
@@ -41,24 +99,23 @@ export const useDashboardStore = defineStore('dashboard', () => {
                 axios.get('/dashboard/log', { params: { per_page: 20 } }),
             ]);
 
-            const s = statsResponse.data?.data ?? statsResponse.data ?? {};
+            const s = unwrap<StatsPayload>(statsResponse) ?? {};
 
             stats.value = {
                 today_requests:       s.today ?? 0,
                 month_requests:       s.used ?? 0,
                 remaining_requests:   s.remaining ?? 0,
                 total_requests_limit: s.limit ?? 0,
-                cache_hit_rate: 85,
             };
 
             requests.value = mapLogs(logResponse.data?.data?.data ?? []);
 
             const series = s.series ?? [];
-            chartCategories.value = series.map(p => {
+            chartCategories.value = series.map((p) => {
                 const [, m, d] = p.date.split('-');
                 return `${d}/${m}`;
             });
-            chartSeries.value = [{ name: 'Requisições', data: series.map(p => p.total) }];
+            chartSeries.value = [{ name: 'Requisições', data: series.map((p) => p.total) }];
 
         } catch (err) {
             console.error('Erro ao atualizar estatísticas:', err);
@@ -67,8 +124,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
         }
     }
 
-    function mapLogs(logs) {
-        return logs.map(log => ({
+    function mapLogs(logs: any[]): RequestLogEntry[] {
+        return logs.map((log) => ({
             id:            log.id,
             endpoint:      log.request?.endpoint,
             method:        log.request?.method,
@@ -80,9 +137,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // Stats leves para polling em tempo real. Bate no /dashboard/stats (COUNT +
     // contador do plano), nao carrega a lista de logs e nao mexe no loading
     // (para nao piscar skeleton durante o auto-refresh).
-    async function fetchLiveStats() {
-        const { data } = await axios.get('/dashboard/stats');
-        const s = data?.data ?? data ?? {};
+    async function fetchLiveStats(): Promise<void> {
+        const response = await axios.get('/dashboard/stats');
+        const s = unwrap<StatsPayload>(response) ?? {};
 
         stats.value = {
             ...stats.value,
@@ -93,7 +150,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         };
     }
 
-    async function fetchRequests(params = {}) {
+    async function fetchRequests(params: Record<string, unknown> = {}) {
         loading.value = true;
         try {
             const response = await axios.get('/dashboard/log', { params: { per_page: 20, ...params } });
@@ -102,7 +159,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
             requests.value = mapLogs(payload.data ?? []);
 
             return payload;
-        } catch (err) {
+        } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao carregar requisições';
             throw err;
         } finally {
@@ -110,14 +167,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
         }
     }
 
-    async function fetchPlans() {
+    async function fetchPlans(): Promise<Plan[]> {
         loading.value = true;
         try {
             const response = await axios.get('/dashboard/plans');
-            // A API retorna { success: true, data: [...] }
-            plans.value = response.data?.data || response.data || [];
-            return response.data;
-        } catch (err) {
+            plans.value = unwrap<Plan[]>(response) ?? [];
+            return plans.value;
+        } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao carregar planos';
             throw err;
         } finally {
@@ -125,16 +181,47 @@ export const useDashboardStore = defineStore('dashboard', () => {
         }
     }
 
-    async function subscribeToPlan(planId) {
+    // Ativa um plano gratuito. O campo é `plan`, não `plan_id`: mandava a chave
+    // errada e a rota respondia 422 em toda chamada. Plano com preço não passa
+    // por aqui — é o processCheckout, que cobra antes de assinar.
+    async function subscribeToPlan(planId: string) {
         loading.value = true;
         try {
-            const response = await axios.post('/dashboard/signature', { plan_id: planId });
-            // A API retorna { success: true, data: {...} }
-            const responseData = response.data?.data || response.data;
-            currentPlan.value = responseData?.plan;
-            return response.data;
-        } catch (err) {
+            const response = await axios.post('/dashboard/signature', { plan: planId });
+            const data = unwrap<{ plan?: Plan }>(response);
+            currentPlan.value = data?.plan ?? null;
+            return data;
+        } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao assinar plano';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    // Para a renovação automática. Não revoga: o acesso segue até o fim do
+    // período já pago, e a resposta traz essa data para a tela poder dizer isso.
+    async function cancelSubscription() {
+        loading.value = true;
+        try {
+            const response = await axios.post('/dashboard/signature/cancel');
+            return unwrap<{ cancelled_at: string; access_until: string; message: string }>(response);
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erro ao cancelar assinatura';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    // Desfaz o cancelamento enquanto o período corre.
+    async function resumeSubscription() {
+        loading.value = true;
+        try {
+            const response = await axios.post('/dashboard/signature/resume');
+            return unwrap<{ renews_on: string; message: string }>(response);
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Erro ao reativar renovação';
             throw err;
         } finally {
             loading.value = false;
@@ -147,6 +234,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
             const response = await axios.post('/dashboard/checkout/process', {
                 plan_id: planId,
                 coupon_code: couponCode ?? undefined,
+                // Gerada uma vez por tentativa de compra e reenviada em todo retry:
+                // é o que permite ao gateway reconhecer o reenvio do formulário como
+                // a mesma cobrança em vez de criar uma segunda.
+                idempotency_key: idempotencyKeyFor(planId),
                 ...formData,
                 additional_info: {
                     items: [
@@ -159,7 +250,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
                     ],
                 },
             });
-            return response.data?.data || response.data;
+            return unwrap(response);
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao processar pagamento';
             throw err;
@@ -168,13 +259,30 @@ export const useDashboardStore = defineStore('dashboard', () => {
         }
     }
 
+    // Uma chave por plano, mantida enquanto a página do checkout viver. Reenviar o
+    // formulário reaproveita a mesma; trocar de plano gera outra.
+    const idempotencyKeys = new Map<string, string>();
+
+    function idempotencyKeyFor(planId: string): string {
+        const existing = idempotencyKeys.get(planId);
+        if (existing) return existing;
+
+        const key = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${planId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        idempotencyKeys.set(planId, key);
+        return key;
+    }
+
+    /** Chamado após uma compra concluir, para que a próxima seja uma cobrança nova. */
+    function clearIdempotencyKey(planId: string): void {
+        idempotencyKeys.delete(planId);
+    }
+
     async function validateCoupon(code: string, planId: string) {
-        try {
-            const response = await axios.post('/dashboard/checkout/coupon', { code, plan_id: planId });
-            return response.data?.data || response.data;
-        } catch (err: any) {
-            throw err;
-        }
+        const response = await axios.post('/dashboard/checkout/coupon', { code, plan_id: planId });
+        return unwrap<{ coupon: string; discount: number; credit: number; original_price: number; final_price: number }>(response);
     }
 
     async function fetchBillingHistory() {
@@ -184,7 +292,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
             const payload = response.data?.data ?? {};
             billingHistory.value = payload.data ?? [];
             return payload;
-        } catch (err) {
+        } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao carregar histórico';
             throw err;
         } finally {
@@ -192,23 +300,18 @@ export const useDashboardStore = defineStore('dashboard', () => {
         }
     }
 
-    async function fetchSavedCards() {
+    async function fetchSavedCards(): Promise<void> {
         try {
-            const response = await axios.get('dashboard/cards');
-            savedCards.value = response.data?.data || response.data || [];
-        } catch (_) {
+            const response = await axios.get('/dashboard/cards');
+            savedCards.value = unwrap<SavedCard[]>(response) ?? [];
+        } catch {
             savedCards.value = [];
         }
     }
 
-    async function deleteSavedCard(id: number) {
-        await axios.delete(`dashboard/cards/${id}`);
-        savedCards.value = savedCards.value.filter((c: any) => c.id !== id);
-    }
-
-    async function testRequest(feature: string, params: Record<string, string> = {}) {
-        const response = await axios.post('/dashboard/test-request', { feature, params });
-        return response.data;
+    async function deleteSavedCard(id: number): Promise<void> {
+        await axios.delete(`/dashboard/cards/${id}`);
+        savedCards.value = savedCards.value.filter((c) => c.id !== id);
     }
 
     return {
@@ -228,11 +331,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchRequests,
         fetchPlans,
         subscribeToPlan,
+        cancelSubscription,
+        resumeSubscription,
         processCheckout,
+        clearIdempotencyKey,
         validateCoupon,
         fetchBillingHistory,
         fetchSavedCards,
         deleteSavedCard,
-        testRequest,
     };
 });

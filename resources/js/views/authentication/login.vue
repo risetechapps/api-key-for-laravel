@@ -147,6 +147,11 @@ onMounted(() => {
     if (route.query.error === 'invalid_link') {
         errorMessage.value = 'Link de verificação inválido ou expirado. Faça login para reenviar o e-mail.';
     }
+    // Enviado pelo interceptor de 401 do axios: sem esta mensagem o usuário
+    // apareceria na tela de login sem saber por que foi expulso.
+    if (route.query.error === 'session_expired') {
+        errorMessage.value = 'Sua sessão expirou. Entre novamente para continuar.';
+    }
 });
 
 const form = reactive({

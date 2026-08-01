@@ -190,7 +190,12 @@ const faqs = ref([
     },
     {
         question: 'Há garantia de reembolso?',
-        answer: 'Sim, oferecemos garantia de 7 dias para novas assinaturas. Se não estiver satisfeito, cancele dentro deste período para reembolso integral.',
+        // O texto anterior dizia "cancele dentro deste período para reembolso
+        // integral", como se cancelar devolvesse o dinheiro. Cancelar interrompe a
+        // renovação e nada mais; estorno hoje é operação manual do administrador
+        // (POST /dashboard/admin/refunds/{id}). O texto agora descreve o que o
+        // sistema realmente faz.
+        answer: 'Sim, oferecemos garantia de 7 dias para novas assinaturas. Solicite o reembolso ao suporte dentro deste período e devolvemos o valor integral. Cancelar a renovação pelo painel interrompe as cobranças futuras, mas não gera estorno automático.',
         isOpen: false,
     },
     {

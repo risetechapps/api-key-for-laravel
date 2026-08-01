@@ -368,6 +368,7 @@ async function confirmFree() {
             { payer: { email: authStore.user?.email?.toLowerCase() ?? '' } },
             appliedCoupon.value?.coupon ?? null,
         );
+        dashboardStore.clearIdempotencyKey(props.plan.id);
         await authStore.fetchProfile();
         isOpen.value = false;
         emit('success');
@@ -457,6 +458,9 @@ async function submitSavedCard() {
 
 async function handlePaymentResult(result) {
     if (result?.status === 'approved') {
+        // A compra concluiu: a próxima é uma cobrança nova e precisa de chave de
+        // idempotência própria, senão o gateway devolveria este mesmo pagamento.
+        dashboardStore.clearIdempotencyKey(props.plan.id);
         await authStore.fetchProfile();
         await dashboardStore.fetchSavedCards();
         isOpen.value = false;
