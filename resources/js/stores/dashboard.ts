@@ -36,6 +36,33 @@ export interface Subscription {
     plan?: Plan;
 }
 
+/** Motivos pelos quais o estorno pode ser recusado, espelhando RefundDecision. */
+export type RefundReason =
+    | 'eligible'
+    | 'refund_disabled'
+    | 'nothing_to_refund'
+    | 'already_refunded'
+    | 'window_expired'
+    | 'usage_exceeded';
+
+export interface RefundPreview {
+    eligible: boolean;
+    reason: RefundReason;
+    message: string;
+    amount: number;
+    /** Null quando há estorno: o acesso termina no ato, não no vencimento. */
+    access_until: string | null;
+}
+
+export interface CancelResult {
+    cancelled_at: string | null;
+    access_until: string | null;
+    message: string;
+    refunded: boolean;
+    refunded_amount?: number;
+    refund_refused_reason?: RefundReason;
+}
+
 export interface SavedCard {
     id: number;
     brand: string;
@@ -199,13 +226,22 @@ export const useDashboardStore = defineStore('dashboard', () => {
         }
     }
 
-    // Para a renovação automática. Não revoga: o acesso segue até o fim do
-    // período já pago, e a resposta traz essa data para a tela poder dizer isso.
+    // O que acontece se cancelar agora, consultado ANTES da confirmação para a
+    // tela não prometer o que não vai cumprir: com estorno concedido o acesso
+    // termina no ato, sem estorno ele segue até o fim do período pago.
+    async function fetchRefundPreview() {
+        const response = await axios.get('/dashboard/signature/refund-preview');
+        return unwrap<RefundPreview>(response);
+    }
+
+    // Para a renovação automática. Só revoga quando há estorno — devolver o
+    // dinheiro e manter o período seria entregá-lo de graça. A resposta diz qual
+    // dos dois aconteceu.
     async function cancelSubscription() {
         loading.value = true;
         try {
             const response = await axios.post('/dashboard/signature/cancel');
-            return unwrap<{ cancelled_at: string; access_until: string; message: string }>(response);
+            return unwrap<CancelResult>(response);
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao cancelar assinatura';
             throw err;
@@ -331,6 +367,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchRequests,
         fetchPlans,
         subscribeToPlan,
+        fetchRefundPreview,
         cancelSubscription,
         resumeSubscription,
         processCheckout,

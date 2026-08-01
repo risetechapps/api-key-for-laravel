@@ -190,7 +190,7 @@ import { ref, computed, onMounted } from 'vue';
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuthStore } from '@/stores/auth';
-import { useDashboardStore } from '@/stores/dashboard';
+import { useDashboardStore, type RefundPreview } from '@/stores/dashboard';
 import {
     PhReceipt,
     PhCreditCard,
@@ -319,17 +319,49 @@ async function onCardSaved() {
 async function cancelSubscription() {
     const accessUntil = formatDate(activePlan.value?.dates?.end_date);
 
+    // Consulta o desfecho ANTES de perguntar. Cancelar tem dois resultados
+    // opostos — com estorno o acesso acaba na hora, sem estorno ele segue até o
+    // vencimento — e o painel prometia o segundo para todo mundo. Prometer que
+    // "nada será interrompido" e revogar em seguida é pior do que não avisar.
+    let preview: RefundPreview | null = null;
+
+    try {
+        preview = await dashboardStore.fetchRefundPreview();
+    } catch {
+        // Se a consulta falhar, seguimos sem afirmar nada sobre estorno; o
+        // resultado real vem na resposta do cancelamento.
+        preview = null;
+    }
+
+    const willRefund = preview?.eligible === true;
+
+    const confirmation = willRefund
+        ? {
+              title: 'Cancelar e receber o estorno?',
+              html: `Vamos devolver <strong>${formatPrice(preview!.amount)}</strong> no cartão usado na compra.<br><br>
+                     <strong>O acesso é encerrado imediatamente</strong>, porque o valor está sendo devolvido.
+                     Sua chave de API para de responder assim que você confirmar.`,
+              confirmButtonText: 'Sim, cancelar e estornar',
+              confirmButtonColor: '#dc2626',
+          }
+        : {
+              title: 'Cancelar renovação?',
+              // Sem estorno o comportamento é o de sempre, e a dúvida de quem
+              // clica aqui continua sendo "perco o acesso agora?".
+              html: `Sua assinatura <strong>não será interrompida agora</strong>.<br>
+                     O acesso continua até <strong>${accessUntil}</strong> e nenhuma nova cobrança será feita.
+                     ${preview && !preview.eligible && preview.reason !== 'refund_disabled'
+                         ? `<br><br><small>${preview.message}</small>`
+                         : ''}`,
+              confirmButtonText: 'Sim, cancelar renovação',
+              confirmButtonColor: '#f59e0b',
+          };
+
     const result = await Swal.fire({
         icon: 'warning',
-        title: 'Cancelar renovação?',
-        // Diz na confirmação o que NÃO acontece. A dúvida de quem clica aqui é
-        // "vou perder o acesso agora?", e a resposta é não.
-        html: `Sua assinatura <strong>não será interrompida agora</strong>.<br>
-               O acesso continua até <strong>${accessUntil}</strong> e nenhuma nova cobrança será feita.`,
         showCancelButton: true,
-        confirmButtonText: 'Sim, cancelar renovação',
         cancelButtonText: 'Manter assinatura',
-        confirmButtonColor: '#f59e0b',
+        ...confirmation,
     });
 
     if (!result.isConfirmed) return;
@@ -339,10 +371,14 @@ async function cancelSubscription() {
         const data = await dashboardStore.cancelSubscription();
         await authStore.fetchProfile();
 
+        // O desfecho real vem da resposta, e não do preview: entre a consulta e
+        // a confirmação o estorno pode ter sido recusado pelo gateway.
         await Swal.fire({
             icon: 'success',
-            title: 'Renovação cancelada',
-            text: data?.message ?? `Seu acesso continua até ${accessUntil}.`,
+            title: data?.refunded ? 'Assinatura cancelada e estornada' : 'Renovação cancelada',
+            text: data?.message ?? (data?.refunded
+                ? 'O valor foi devolvido e o acesso encerrado.'
+                : `Seu acesso continua até ${accessUntil}.`),
         });
     } catch (err) {
         await Swal.fire({
