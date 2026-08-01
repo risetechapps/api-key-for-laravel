@@ -34,6 +34,7 @@ return [
     'error_loading_plan' => 'Erro ao carregar dados do plano',
     'error_updating_plan' => 'Não foi possível atualizar o plano no momento, por favor tente novamente mais tarde',
     'error_deleting_plan' => 'Não foi possível excluir este plano no momento, por favor tente novamente mais tarde',
+    'plan_name_taken' => 'Já existe um plano com este nome.',
 
     // Validation
     'validation_failed' => 'Falha na validação',
@@ -44,6 +45,7 @@ return [
     'error_loading_coupon' => 'Não foi possível carregar os detalhes do cupom, por favor tente novamente mais tarde',
     'error_updating_coupon' => 'Não foi possível atualizar este cupom no momento, por favor tente novamente mais tarde',
     'error_deleting_coupon' => 'Não foi possível excluir este cupom no momento, por favor tente novamente mais tarde',
+    'coupon_code_taken' => 'Já existe um cupom com este código.',
 
     // Profile Messages
     'error_loading_profile' => 'Erro ao carregar dados do perfil',

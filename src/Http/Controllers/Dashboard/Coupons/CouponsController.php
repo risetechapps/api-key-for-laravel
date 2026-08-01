@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Coupons;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -11,9 +12,12 @@ use RiseTechApps\ApiKey\Http\Request\Dashboard\Coupon\UpdateCouponRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Coupons\CouponsResource;
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\ApiKey\Repositories\Coupon\CouponRepository;
+use RiseTechApps\ApiKey\Traits\HandlesUniqueViolation;
 
 class CouponsController extends Controller
 {
+    use HandlesUniqueViolation;
+
     public function __construct(protected readonly CouponRepository $couponRepository) {}
 
     public function index(Request $request): JsonResponse
@@ -40,6 +44,14 @@ class CouponsController extends Controller
             $this->couponRepository->store($data);
 
             return response()->jsonSuccess();
+        } catch (QueryException $e) {
+            if ($response = $this->uniqueViolationResponse($e, 'code', __('api-key::messages.coupon_code_taken'))) {
+                return $response;
+            }
+
+            report($e);
+
+            return response()->jsonGone(__('api-key::messages.error_creating_coupon'));
         } catch (\Exception $e) {
             report($e);
 
@@ -79,6 +91,14 @@ class CouponsController extends Controller
 
             return response()->jsonGone(__('api-key::messages.error_updating_coupon'));
 
+        } catch (QueryException $e) {
+            if ($response = $this->uniqueViolationResponse($e, 'code', __('api-key::messages.coupon_code_taken'))) {
+                return $response;
+            }
+
+            report($e);
+
+            return response()->jsonGone(__('api-key::messages.error_updating_coupon'));
         } catch (\Exception $e) {
             report($e);
 

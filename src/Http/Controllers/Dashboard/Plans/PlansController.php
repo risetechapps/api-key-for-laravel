@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Plans;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -11,9 +12,12 @@ use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\UpdatePlanRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
+use RiseTechApps\ApiKey\Traits\HandlesUniqueViolation;
 
 class PlansController extends Controller
 {
+    use HandlesUniqueViolation;
+
     private const string PLANS_CACHE_KEY = 'api_key:plans:active';
 
     public function __construct(protected readonly PlanRepository $planRepositor) {}
@@ -50,6 +54,14 @@ class PlansController extends Controller
             Cache::forget(self::PLANS_CACHE_KEY);
 
             return response()->jsonSuccess();
+        } catch (QueryException $e) {
+            if ($response = $this->uniqueViolationResponse($e, 'name', __('api-key::messages.plan_name_taken'))) {
+                return $response;
+            }
+
+            report($e);
+
+            return response()->jsonGone(__('api-key::messages.error_creating_plan'));
         } catch (\Exception $e) {
             report($e);
 
@@ -104,6 +116,14 @@ class PlansController extends Controller
 
             return response()->jsonGone(__('api-key::messages.error_updating_plan'));
 
+        } catch (QueryException $e) {
+            if ($response = $this->uniqueViolationResponse($e, 'name', __('api-key::messages.plan_name_taken'))) {
+                return $response;
+            }
+
+            report($e);
+
+            return response()->jsonGone(__('api-key::messages.error_updating_plan'));
         } catch (\Exception $e) {
             report($e);
 

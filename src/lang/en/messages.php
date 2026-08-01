@@ -34,6 +34,7 @@ return [
     'error_loading_plan' => 'Error loading plan data to be viewed',
     'error_updating_plan' => 'We couldn\'t update the plan at the moment, please try again later',
     'error_deleting_plan' => 'We couldn\'t delete this plan at the moment, please try again later',
+    'plan_name_taken' => 'A plan with this name already exists.',
 
     // Validation
     'validation_failed' => 'Validation failed',
@@ -44,6 +45,7 @@ return [
     'error_loading_coupon' => 'Unable to load coupon details at this time, please try again later',
     'error_updating_coupon' => 'We couldn\'t update this coupon at this time, please try again later',
     'error_deleting_coupon' => 'We couldn\'t delete this coupon at the moment, please try again later',
+    'coupon_code_taken' => 'A coupon with this code already exists.',
 
     // Profile Messages
     'error_loading_profile' => 'Error loading data from your profile',

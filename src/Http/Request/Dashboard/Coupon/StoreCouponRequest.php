@@ -3,12 +3,14 @@
 namespace RiseTechApps\ApiKey\Http\Request\Dashboard\Coupon;
 
 use Illuminate\Foundation\Http\FormRequest;
+use RiseTechApps\ApiKey\Http\Request\Concerns\ReplacesUniqueIgnoringCase;
+use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\FormRequest\Traits\HasFormValidation\HasFormValidation;
 use RiseTechApps\FormRequest\ValidationRuleRepository;
 
 class StoreCouponRequest extends FormRequest
 {
-    use HasFormValidation;
+    use HasFormValidation, ReplacesUniqueIgnoringCase;
 
     public array $result = [];
 
@@ -21,7 +23,12 @@ class StoreCouponRequest extends FormRequest
 
     public function rules(): array
     {
-        return $this->result['rules'];
+        return $this->uniqueIgnoringCase(
+            $this->result['rules'],
+            'code',
+            Coupon::class,
+            message: __('api-key::messages.coupon_code_taken'),
+        );
     }
 
     public function authorize(): bool

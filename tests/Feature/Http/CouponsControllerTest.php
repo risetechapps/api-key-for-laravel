@@ -89,9 +89,37 @@ describe('Coupon administration', function () {
         Coupon::factory()->create(['code' => 'BLACKFRIDAY']);
         $this->actingAs($this->admin, 'sanctum');
 
-        $this->postJson('/api/v1/dashboard/coupons', couponPayload())->assertStatus(422);
+        $this->postJson('/api/v1/dashboard/coupons', couponPayload())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('code');
 
         expect(Coupon::count())->toBe(1);
+    });
+
+    it('refuses a code that only differs in case', function () {
+        // Mesma armadilha do nome de plano: o `code` também é normalizado para
+        // maiúsculas pelo to-upper, então 'BlackFriday' passava pelo `unique:` e
+        // só colidia no índice.
+        Coupon::factory()->create(['code' => 'BLACKFRIDAY']);
+        $this->actingAs($this->admin, 'sanctum');
+
+        $this->postJson('/api/v1/dashboard/coupons', couponPayload(['code' => 'BlackFriday']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('code');
+
+        expect(Coupon::count())->toBe(1);
+    });
+
+    it('lets a coupon keep its own code on update', function () {
+        $coupon = Coupon::factory()->create(['code' => 'BLACKFRIDAY', 'value' => 5]);
+        $this->actingAs($this->admin, 'sanctum');
+
+        $this->putJson("/api/v1/dashboard/coupons/{$coupon->getKey()}", couponPayload([
+            'code' => 'BlackFriday',
+            'value' => 30,
+        ]))->assertStatus(200);
+
+        expect((float) $coupon->fresh()->value)->toBe(30.0);
     });
 
     it('refuses a percentage above 100', function () {

@@ -98,19 +98,47 @@ describe('Plan administration', function () {
             ->assertStatus(422);
     });
 
-    it('refuses a name that only differs in case, though without a field error', function () {
-        // Documenta uma folga conhecida: o `unique:plans,name` roda sobre o nome
-        // como veio ('Plano Profissional'), mas o pacote to-upper normaliza para
-        // maiúsculas na gravação. A validação passa, o índice único do banco
-        // recusa, e o operador recebe a mensagem genérica de erro em vez de um
-        // erro no campo. Não duplica o plano — só informa mal.
+    it('refuses a name that only differs in case, pointing at the field', function () {
+        // O `unique:` do registry compara o nome como veio ('Plano Profissional'),
+        // mas o to-upper normaliza para maiúsculas na gravação — a validação
+        // passava e só o índice recusava, virando erro genérico. A regra
+        // UniqueIgnoringCase compara como o índice compara.
         Plan::factory()->create(['name' => 'PLANO PROFISSIONAL']);
         $this->actingAs($this->admin, 'sanctum');
 
         $this->postJson('/api/v1/dashboard/plans', planPayload(['name' => 'Plano Profissional']))
-            ->assertStatus(410);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('name');
 
         expect(Plan::count())->toBe(1);
+    });
+
+    it('lets a plan keep its own name on update', function () {
+        // A checagem de unicidade não pode acusar conflito com a própria linha
+        // que está sendo editada, senão nenhum plano consegue salvar sem trocar
+        // de nome.
+        $plan = Plan::factory()->create(['name' => 'PLANO PROFISSIONAL', 'price' => 10.00]);
+        $this->actingAs($this->admin, 'sanctum');
+
+        $this->putJson("/api/v1/dashboard/plans/{$plan->getKey()}", planPayload([
+            'name' => 'Plano Profissional',
+            'price' => 199.90,
+        ]))->assertStatus(200);
+
+        expect((float) $plan->fresh()->price)->toBe(199.90);
+    });
+
+    it('refuses to rename a plan onto another plan name', function () {
+        Plan::factory()->create(['name' => 'PLANO BASICO']);
+        $outro = Plan::factory()->create(['name' => 'PLANO AVANCADO']);
+
+        $this->actingAs($this->admin, 'sanctum');
+
+        $this->putJson("/api/v1/dashboard/plans/{$outro->getKey()}", planPayload(['name' => 'plano basico']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('name');
+
+        expect($outro->fresh()->name)->toBe('PLANO AVANCADO');
     });
 
     it('refuses a free plan through this endpoint', function () {
