@@ -1,14 +1,15 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\ApiKey\Repositories\Coupon\CouponEloquentRepository;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     // Instanciado direto: o binding do contrato só é registrado quando o
     // RepositoryServiceProvider está carregado, e ele não faz parte do Testbench.
-    $this->repository = new CouponEloquentRepository();
+    $this->repository = new CouponEloquentRepository;
 });
 
 describe('Coupon claim', function () {

@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use RiseTechApps\ApiKey\Events\ApiKeyCreated;
 use RiseTechApps\ApiKey\Events\ApiKeyStatusChanged;
@@ -13,7 +14,7 @@ use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 // Apenas os eventos de domínio são falsificados. Event::fake() sem argumentos
 // intercepta TAMBÉM os eventos de model do Eloquent (creating/saving), o que

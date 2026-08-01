@@ -1,13 +1,16 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
 use RiseTechApps\ApiKey\Events\PlanExpired;
+use RiseTechApps\ApiKey\Events\PlanGracePeriodStarted;
+use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     // Cria os models ANTES de falsificar, e falsifica apenas os eventos de
@@ -18,7 +21,7 @@ beforeEach(function () {
 
     config(['api-key.grace_period_days' => 3]);
 
-    Event::fake([PlanExpired::class, \RiseTechApps\ApiKey\Events\PlanGracePeriodStarted::class]);
+    Event::fake([PlanExpired::class, PlanGracePeriodStarted::class]);
 });
 
 describe('Check Expired Plans Command', function () {
@@ -32,7 +35,7 @@ describe('Check Expired Plans Command', function () {
             'end_date' => now()->subDays(10), // 10 days ago, grace period is 3 days
         ]);
 
-        $apiKey = \RiseTechApps\ApiKey\Models\ApiKey\ApiKey::factory()->create([
+        $apiKey = ApiKey::factory()->create([
             'authentication_id' => $this->user->id,
             'active' => true,
         ]);

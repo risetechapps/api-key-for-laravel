@@ -1,12 +1,13 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Services\UserRegistrationService;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->service = new UserRegistrationService();
+    $this->service = new UserRegistrationService;
 });
 
 describe('Registration', function () {
@@ -59,7 +60,7 @@ describe('Transaction Safety', function () {
                 'email' => 'x@example.com',
                 'password' => 'secret123',
             ]);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Expected
         }
 

@@ -11,6 +11,4 @@ use Illuminate\Routing\Controller as BaseController;
  * em qualquer app Laravel real, mas não no skeleton do Testbench. Este stub supre
  * a classe apenas no ambiente de teste (mapeado via autoload-dev).
  */
-class Controller extends BaseController
-{
-}
+class Controller extends BaseController {}

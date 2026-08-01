@@ -1,10 +1,12 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Laravel\Sanctum\Sanctum;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     Notification::fake();
@@ -153,7 +155,7 @@ describe('Me', function () {
         // A rota /auth/me é protegida por auth:sanctum, então autenticamos com um
         // token Sanctum (não com a API key, que serve às rotas do grupo 'plan').
         $user = Authentication::factory()->create();
-        \Laravel\Sanctum\Sanctum::actingAs($user);
+        Sanctum::actingAs($user);
 
         $response = $this->getJson('/api/v1/auth/me');
 

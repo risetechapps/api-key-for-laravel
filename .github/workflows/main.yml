@@ -43,5 +43,16 @@ jobs:
                   composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
                   composer update --${{ matrix.stability }} --prefer-dist --no-interaction
 
+            - name: Static analysis
+              run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
             - name: Execute tests
               run: vendor/bin/pest
+
+            # Pint ainda não roda aqui: o repositório inteiro (155 arquivos, quase
+            # todos por line_ending) reprova o preset, e ligar a checagem antes da
+            # normalização deixaria o CI vermelho em todo commit. Depois de rodar
+            # `composer lint` uma vez, em commit isolado, descomente:
+            #
+            # - name: Code style
+            #   run: vendor/bin/pint --test

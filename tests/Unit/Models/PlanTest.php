@@ -1,9 +1,10 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use RiseTechApps\ApiKey\Enums\BillingCycle;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 describe('Plan Attributes', function () {
     it('has request limit', function () {

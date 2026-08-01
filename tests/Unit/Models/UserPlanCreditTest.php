@@ -1,10 +1,11 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     // Congelado: unusedCredit() compara timestamps, e sem isto o now() de dentro

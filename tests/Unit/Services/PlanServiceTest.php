@@ -1,18 +1,21 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use RiseTechApps\ApiKey\Enums\BillingCycle;
+use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Services\PlanService;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->service = new PlanService();
+    $this->service = new PlanService;
     $this->user = Authentication::factory()->create();
     $this->plan = Plan::factory()->create([
         'request_limit' => 1000,
-        'billing_cycle' => \RiseTechApps\ApiKey\Enums\BillingCycle::MONTHLY,
+        'billing_cycle' => BillingCycle::MONTHLY,
     ]);
 });
 
@@ -43,7 +46,7 @@ describe('Subscription', function () {
     });
 
     it('activates api key when subscribing', function () {
-        $apiKey = \RiseTechApps\ApiKey\Models\ApiKey\ApiKey::factory()->create([
+        $apiKey = ApiKey::factory()->create([
             'authentication_id' => $this->user->id,
             'active' => false,
         ]);

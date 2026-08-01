@@ -1,8 +1,9 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 describe('Coupon Validation', function () {
     it('returns valid when active, not expired, and under limit', function () {

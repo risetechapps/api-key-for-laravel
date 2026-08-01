@@ -1,5 +1,9 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
+use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Tests\TestCase;
 
 /*
@@ -16,7 +20,7 @@ use RiseTechApps\ApiKey\Tests\TestCase;
 
 uses(
     TestCase::class,
-    Illuminate\Foundation\Testing\RefreshDatabase::class,
+    RefreshDatabase::class,
 )->in('Feature', 'Unit');
 
 /*
@@ -33,6 +37,7 @@ uses(
 
 expect()->extend('toBeUuid', function () {
     $pattern = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
+
     return $this->value->toMatch($pattern);
 });
 
@@ -47,17 +52,17 @@ expect()->extend('toBeUuid', function () {
 |
 */
 
-function createUser(array $attributes = []): \RiseTechApps\ApiKey\Models\Authentication\Authentication
+function createUser(array $attributes = []): Authentication
 {
-    return \RiseTechApps\ApiKey\Models\Authentication\Authentication::factory()->create($attributes);
+    return Authentication::factory()->create($attributes);
 }
 
-function createPlan(array $attributes = []): \RiseTechApps\ApiKey\Models\Plan\Plan
+function createPlan(array $attributes = []): Plan
 {
-    return \RiseTechApps\ApiKey\Models\Plan\Plan::factory()->create($attributes);
+    return Plan::factory()->create($attributes);
 }
 
-function createApiKey(array $attributes = []): \RiseTechApps\ApiKey\Models\ApiKey\ApiKey
+function createApiKey(array $attributes = []): ApiKey
 {
-    return \RiseTechApps\ApiKey\Models\ApiKey\ApiKey::factory()->create($attributes);
+    return ApiKey::factory()->create($attributes);
 }

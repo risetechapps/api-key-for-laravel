@@ -1,20 +1,38 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use RiseTechApps\ApiKey\Jobs\ProcessPlanRenewalJob;
-use RiseTechApps\ApiKey\Notifications\PlanCancelledNotification;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
+use RiseTechApps\ApiKey\Notifications\PlanCancelledNotification;
+use RiseTechApps\ApiKey\Services\MpCustomerService;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->user = Authentication::factory()->create();
     $this->plan = Plan::factory()->create(['price' => 49.90]);
     $this->actingAs($this->user, 'sanctum');
 });
+
+/**
+ * Vence hoje, mas ainda não venceu.
+ *
+ * Os casos de renovação precisam das duas coisas ao mesmo tempo: dentro da
+ * janela do `billing:process-renewals` (`[today 00:00, today 23:59:59]`) e com
+ * `isExpired()` falso (`now()->gt($end_date)`). O valor anterior era
+ * `today()->addHours(3)`, ou seja 03:00 de hoje, que vira passado a partir das
+ * 03:00 — o teste de `resume` recebia 422 e a suíte passava ou falhava conforme
+ * a hora em que rodasse.
+ */
+function dueToday(): Carbon
+{
+    return now()->endOfDay();
+}
 
 function activeSubscription(array $attributes = []): UserPlan
 {
@@ -114,7 +132,7 @@ describe('Renewal after cancellation', function () {
         Queue::fake();
 
         activeSubscription([
-            'end_date' => today()->addHours(3),
+            'end_date' => dueToday(),
             'cancelled_at' => now(),
         ]);
 
@@ -126,7 +144,7 @@ describe('Renewal after cancellation', function () {
     it('is still dispatched for a subscription that was not cancelled', function () {
         Queue::fake();
 
-        activeSubscription(['end_date' => today()->addHours(3)]);
+        activeSubscription(['end_date' => dueToday()]);
 
         $this->artisan('billing:process-renewals')->assertSuccessful();
 
@@ -138,7 +156,7 @@ describe('Renewal after cancellation', function () {
         // depois de alguém pedir para parar é o pior desfecho possível aqui, então
         // a checagem é refeita na hora de executar — e antes de falar com o gateway.
         $userPlan = activeSubscription([
-            'end_date' => today()->addHours(3),
+            'end_date' => dueToday(),
             'cancelled_at' => now(),
         ]);
 
@@ -148,7 +166,7 @@ describe('Renewal after cancellation', function () {
         config(['api-key.mercadopago.access_token' => 'TEST-not-a-real-token']);
 
         new ProcessPlanRenewalJob($userPlan->getKey())
-            ->handle(app(\RiseTechApps\ApiKey\Services\MpCustomerService::class));
+            ->handle(app(MpCustomerService::class));
 
         // Uma renovação bem-sucedida abriria um UserPlan novo pelo subscribeToPlan.
         // Continuar com um só é a prova de que nada foi cobrado.
@@ -170,7 +188,7 @@ describe('Resuming a subscription', function () {
         Queue::fake();
 
         $userPlan = activeSubscription([
-            'end_date' => today()->addHours(3),
+            'end_date' => dueToday(),
             'cancelled_at' => now(),
         ]);
 

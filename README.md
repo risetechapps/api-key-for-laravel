@@ -209,6 +209,63 @@ $plan = Plan::create([
 $user->subscribeToPlan($plan);
 ```
 
+### Cancelamento
+
+```
+POST /api/v1/dashboard/signature/cancel    # para de renovar
+POST /api/v1/dashboard/signature/resume    # desfaz, enquanto o período corre
+```
+
+**Cancelar não é revogar.** O período já pago continua valendo até o `end_date` e a API key segue funcionando — quem cancela no dia 2 de 30 não perde os outros 28. O que para é a próxima cobrança:
+
+- `billing:process-renewals` filtra `cancelled_at IS NULL` e nem enfileira o job
+- `ProcessPlanRenewalJob` refaz a checagem ao executar, **antes** de falar com o gateway: o job pode ter ficado na fila enquanto o assinante cancelava
+- no vencimento a assinatura expira pelo caminho normal (carência inclusive)
+
+`cancel` é idempotente — um retry pede o estado que já foi pedido. `resume` só funciona enquanto o período não venceu; depois disso não há o que renovar e o cliente contrata de novo pelo checkout.
+
+Uma coluna só (`user_plans.cancelled_at`) em vez de um par `cancelled_at` / `auto_renew`: dois campos carregando o mesmo fato acabam discordando, e a renovação precisa de uma fonte única. Null renova; timestamp é ao mesmo tempo a decisão e o registro de quando ela foi tomada.
+
+> O pacote **não envia e-mail** de confirmação de cancelamento. As 7 notificações existentes cobrem outros eventos; se quiser uma aqui, o caminho é o mesmo dos demais — evento, listener e entrada no mapa `notifications`.
+
+### Troca de plano no meio do ciclo
+
+Assinar um plano novo encerra a assinatura corrente e abre outra do zero. Para que os dias já pagos não sejam perdidos, o checkout credita o valor proporcional do que sobrou:
+
+```
+Plano A: R$29,90/mês, 27 de 30 dias restantes
+crédito = 29,90 x 27/30 = R$26,91
+
+Upgrade para o Plano B (R$99,00):
+  cobrado    = 99,00 - 26,91 = R$72,09
+  novo ciclo = 30 dias cheios
+```
+
+A ordem de aplicação é **preço → cupom → crédito**, então um cupom percentual incide sobre o preço cheio do plano, não sobre o valor já creditado. Se o crédito cobrir o total, a assinatura é ativada sem cobrança.
+
+O crédito é proporcional à duração real da assinatura corrente (`start_date` → `end_date`), não ao ciclo nominal do plano — um período que já tinha sido encurtado por uma troca anterior é medido corretamente. Vale zero para plano gratuito, assinatura inativa ou período já vencido (inclusive dentro da carência).
+
+O valor creditado fica registrado em `user_plans.credit_applied`. Sem essa coluna, um `payment_amount` abaixo do preço do plano seria indistinguível entre desconto de cupom e crédito de troca.
+
+```php
+$credito = $user->activePlan()->with('plan')->first()?->unusedCredit();
+```
+
+### Como a cota é contada
+
+O `CheckRequestLimitMiddleware` **reserva** uma requisição da cota antes de repassar o request adiante, com um `UPDATE` condicional que o banco serializa. Reservar antes é o que garante que exatamente `request_limit` requisições passem, mesmo com dezenas de chamadas concorrentes — ler o contador e incrementar depois deixava todas elas enxergarem o mesmo valor e estourarem o limite.
+
+O que conta e o que não conta:
+
+| Resultado | Consome cota? |
+|---|---|
+| `2xx` / `3xx` | sim |
+| `4xx` (requisição malformada do cliente) | **sim** — refundar tornaria a cota burlável enviando lixo |
+| `429` (cota esgotada) | não — a reserva não chega a acontecer; a requisição só entra no log |
+| `5xx` ou exceção não tratada | não — a reserva é devolvida |
+
+Ou seja: falha de servidor não é cobrada do cliente, erro do cliente é.
+
 ### Período de carência
 
 Assinaturas expiradas entram automaticamente no período de carência. O usuário mantém o acesso enquanto o prazo corre:
@@ -314,6 +371,22 @@ https://seudominio.com/api/v1/dashboard/checkout/webhook
 ```
 
 Defina `MP_WEBHOOK_SECRET` com o secret gerado pelo MercadoPago para verificação HMAC.
+
+### Idempotência das cobranças
+
+`POST /dashboard/checkout/process` e `POST /dashboard/cards` aceitam um campo opcional `idempotency_key`, repassado ao MercadoPago no header `X-Idempotency-Key`. Chave repetida devolve o pagamento original em vez de criar um segundo.
+
+**Envie o seu.** Gere um valor uma única vez por tentativa de compra e reutilize em toda re-submissão:
+
+```js
+const idempotencyKey = crypto.randomUUID();   // uma vez, ao abrir o checkout
+
+await axios.post('/dashboard/checkout/process', { plan_id, token, idempotency_key: idempotencyKey, ... });
+```
+
+O caso perigoso não é o usuário desatento, é a rede: a cobrança é aceita, a resposta se perde num timeout, e ninguém consegue distinguir "não aconteceu" de "aconteceu e a resposta sumiu". O comprador olhando o spinner clica de novo e paga duas vezes.
+
+Sem o campo, o pacote deriva uma chave de quem paga, o quê, quanto e com qual token de cartão. Como o token do MercadoPago é de uso único, um retry que reaproveita o mesmo token é reconhecido como a mesma tentativa — mas uma re-tokenização vira cobrança nova. Por isso o cliente deve mandar a sua.
 
 ### Cartões salvos
 
@@ -471,7 +544,21 @@ php artisan api-key:prune-logs --days=30          # sobrescreve a retenção con
 
 # Promover um usuário a admin
 php artisan apikey:make-admin {email}
+
+# Emitir novas API keys em lote
+php artisan api-key:rotate-keys --legacy --output=keys.csv   # só o backlog v1 -> v2 (lookup_hash NULL)
+php artisan api-key:rotate-keys --user=cliente@exemplo.com   # um dono só, imprime a key no console
+php artisan api-key:rotate-keys --all --output=keys.csv      # todas as keys ativas
+php artisan api-key:rotate-keys --legacy --dry-run           # apenas conta quantas seriam trocadas
 ```
+
+> **Rotação é destrutiva.** No instante em que a key é trocada, todo cliente que
+> ainda usa a antiga passa a receber 401. A key nova existe em texto puro uma única
+> vez, durante a execução do comando — por isso ele **recusa** rotacionar mais de uma
+> key sem `--output`, e exige exatamente um seletor (`--legacy`, `--user=` ou `--all`),
+> para que uma flag digitada errado não revogue a instalação inteira. O CSV gerado dá
+> acesso total à API: distribua e apague. O pacote **não notifica** ninguém sobre a
+> troca — avisar os donos é com você.
 
 > **Filas e agendamento.** A partir da 2.1.0, listeners de notificação, o log de
 > requisições (quando `request_log.queue` está definido) e o billing rodam em fila.

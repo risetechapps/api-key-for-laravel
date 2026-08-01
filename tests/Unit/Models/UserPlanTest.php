@@ -1,13 +1,15 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use RiseTechApps\ApiKey\Enums\BillingCycle;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->plan = Plan::factory()->create([
-        'billing_cycle' => \RiseTechApps\ApiKey\Enums\BillingCycle::MONTHLY,
+        'billing_cycle' => BillingCycle::MONTHLY,
         'request_limit' => 1000,
     ]);
 });

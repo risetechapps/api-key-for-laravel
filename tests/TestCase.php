@@ -7,6 +7,7 @@ use Laravel\Sanctum\SanctumServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 use RiseTechApps\ApiKey\ApiKeyServiceProvider;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
+use RiseTechApps\Address\AddressServiceProvider;
 use RiseTechApps\CodeGenerate\CodeGenerateServiceProvider;
 use RiseTechApps\FormRequest\FormRequestServiceProvider;
 use RiseTechApps\Media\MediaServiceProvider;
@@ -24,7 +25,7 @@ abstract class TestCase extends BaseTestCase
         // sob RiseTechApps\ApiKey\Models — a convenção padrão do Laravel não liga
         // os dois. Este resolver mapeia Model => Database\Factories\<Model>Factory.
         Factory::guessFactoryNamesUsing(
-            fn (string $modelName) => 'Database\\Factories\\' . class_basename($modelName) . 'Factory'
+            fn (string $modelName) => 'Database\\Factories\\'.class_basename($modelName).'Factory'
         );
     }
 
@@ -47,6 +48,11 @@ abstract class TestCase extends BaseTestCase
             // Media fornece o binding PathGeneratorContract usado no fluxo de
             // avatar do registro (addMediaFromDisk) e a migration da tabela media.
             MediaServiceProvider::class,
+            // Address traz a migration da tabela `addresses`. O Authentication tem
+            // relação `address()` e o ProfileController faz eager load dela em
+            // show(); sem este provider o endpoint estoura com "no such table:
+            // addresses" e não pode ser testado.
+            AddressServiceProvider::class,
             // Sanctum registra o driver do guard 'sanctum' (usado por auth:sanctum
             // no /me e pelo createToken) e a migration de personal_access_tokens.
             SanctumServiceProvider::class,
@@ -102,13 +108,13 @@ abstract class TestCase extends BaseTestCase
         // Set up filesystem for avatars
         $app['config']->set('filesystems.disks.avatars', [
             'driver' => 'local',
-            'root' => sys_get_temp_dir() . '/avatars',
+            'root' => sys_get_temp_dir().'/avatars',
         ]);
     }
 
     protected function defineDatabaseMigrations(): void
     {
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
     }
 
     protected function defineRoutes($router): void
