@@ -4,7 +4,11 @@ namespace RiseTechApps\ApiKey\Http\Resources\Dashboard\Coupons;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 
+/**
+ * @mixin Coupon
+ */
 class CouponsResource extends JsonResource
 {
     #[\Override]

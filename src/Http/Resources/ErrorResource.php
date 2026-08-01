@@ -10,14 +10,14 @@ class ErrorResource extends JsonResource
     /**
      * Transform the resource into an array.
      *
-     * @param string $message Error message
-     * @param int $code HTTP status code
-     * @param array $errors Detailed errors (for validation errors)
-     * @param string|null $error_code Application-specific error code
+     * @param  string  $message  Error message
+     * @param  int  $code  HTTP status code
+     * @param  array  $errors  Detailed errors (for validation errors)
+     * @param  string|null  $error_code  Application-specific error code
      */
     public function __construct(
-        string                 $message,
-        private readonly int   $code = 500,
+        string $message,
+        private readonly int $code = 500,
         private readonly array $errors = [],
         private readonly ?string $error_code = null
     ) {
@@ -40,7 +40,7 @@ class ErrorResource extends JsonResource
             $response['error_code'] = $this->error_code;
         }
 
-        if (!empty($this->errors)) {
+        if (! empty($this->errors)) {
             $response['errors'] = $this->errors;
         }
 

@@ -6,7 +6,11 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use RiseTechApps\ApiKey\Http\Resources\ApiKeyResource;
 use RiseTechApps\ApiKey\Http\Resources\UserPlanResource;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
+/**
+ * @mixin Authentication
+ */
 class AuthenticationMeResource extends JsonResource
 {
     #[\Override]
@@ -19,7 +23,7 @@ class AuthenticationMeResource extends JsonResource
             'name' => $this->name,
             'role' => $this->role ?? 'user',
             'status' => $this->status,
-            'email_verified' => !is_null($this->email_verified_at),
+            'email_verified' => ! is_null($this->email_verified_at),
             'locale' => $this->locale,
 
             // Profile
@@ -32,8 +36,8 @@ class AuthenticationMeResource extends JsonResource
             ],
 
             // Relationships
-            'api_key' => $this->whenLoaded('apiKey', fn() => ApiKeyResource::make($this->apiKey)),
-            'active_plan' => $this->whenLoaded('activePlan', fn() => UserPlanResource::make($this->activePlan)),
+            'api_key' => $this->whenLoaded('apiKey', fn () => ApiKeyResource::make($this->apiKey)),
+            'active_plan' => $this->whenLoaded('activePlan', fn () => UserPlanResource::make($this->activePlan)),
 
             // Usage statistics (requests_used nunca acima do limite)
             'usage' => $this->usageStats(),
@@ -53,15 +57,15 @@ class AuthenticationMeResource extends JsonResource
     private function usageStats(): array
     {
         $limit = (int) $this->requestLimit();
-        $used  = (int) $this->countUsed();
+        $used = (int) $this->countUsed();
 
         if ($limit > 0) {
             $used = min($used, $limit);
         }
 
         return [
-            'requests_used'      => $used,
-            'requests_limit'     => $limit,
+            'requests_used' => $used,
+            'requests_limit' => $limit,
             'remaining_requests' => $limit > 0 ? max(0, $limit - $used) : 0,
         ];
     }

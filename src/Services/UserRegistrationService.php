@@ -13,8 +13,8 @@ class UserRegistrationService
     /**
      * Register a new user with avatar and API key.
      *
-     * @param array $data Validated registration data
-     * @return Authentication
+     * @param  array  $data  Validated registration data
+     *
      * @throws RuntimeException
      */
     public function register(array $data): Authentication
@@ -27,7 +27,7 @@ class UserRegistrationService
             Log::info('User created in registration service', [
                 'user_id' => $user->getKey(),
                 'email' => $user->email,
-                'has_api_key' => !is_null($user->apiKey),
+                'has_api_key' => ! is_null($user->apiKey),
             ]);
 
             return $user;
@@ -71,10 +71,10 @@ class UserRegistrationService
     {
         $this->validateAvatarGenerator();
 
-        $avatarPath = $user->getKey() . '.png';
+        $avatarPath = $user->getKey().'.png';
         $profileImage = avatarGenerator()->generateBase64($name);
 
-        if (!Storage::put($avatarPath, $profileImage)) {
+        if (! Storage::put($avatarPath, $profileImage)) {
             throw new RuntimeException('Unable to persist generated avatar.');
         }
 
@@ -84,11 +84,17 @@ class UserRegistrationService
     /**
      * Validate that avatar generator helper exists.
      *
+     * Guarda de instalação, não de execução: risetools é dependência declarada
+     * no composer.json, então na prática a função sempre existe e este ramo só
+     * dispara numa instalação quebrada. Como `function_exists()` consulta o nome
+     * global literal, não há como torná-lo falso num teste com o pacote
+     * carregado — por isso ele não tem cobertura, e não por esquecimento.
+     *
      * @throws RuntimeException
      */
     private function validateAvatarGenerator(): void
     {
-        if (!function_exists('avatarGenerator')) {
+        if (! function_exists('avatarGenerator')) {
             throw new RuntimeException(
                 'avatarGenerator helper is not available. Please install risetechapps/risetools package.'
             );

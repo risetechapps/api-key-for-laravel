@@ -4,9 +4,12 @@ namespace RiseTechApps\ApiKey\Http\Resources\Authentication;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use RiseTechApps\ApiKey\Http\Resources\ApiKeyResource;
 use RiseTechApps\ApiKey\Http\Resources\UserPlanResource;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
+/**
+ * @mixin Authentication
+ */
 class ProfileResource extends JsonResource
 {
     #[\Override]
@@ -33,7 +36,7 @@ class ProfileResource extends JsonResource
             ],
 
             // Address
-            'address' => $this->whenLoaded('address', fn() => $this->address ? [
+            'address' => $this->whenLoaded('address', fn () => $this->address ? [
                 'zip_code' => $this->address->zip_code,
                 'country' => $this->address->country,
                 'state' => $this->address->state,
@@ -47,7 +50,7 @@ class ProfileResource extends JsonResource
 
             // Media
             'photo' => [
-                'url' => $this->when($this->getPhotoProfile(), fn() => $this->getPhotoProfile()->getFullUrl()),
+                'url' => $this->when($this->getPhotoProfile(), fn () => $this->getPhotoProfile()->getFullUrl()),
             ],
 
             // Account Information
@@ -57,7 +60,7 @@ class ProfileResource extends JsonResource
                 'status' => $this->status,
                 'role' => $this->role ?? 'user',
                 'locale' => $this->locale,
-                'email_verified' => !is_null($this->email_verified_at),
+                'email_verified' => ! is_null($this->email_verified_at),
                 'email_verified_at' => $this->email_verified_at?->toIso8601String(),
             ],
             'role' => $this->role ?? 'user',
@@ -69,7 +72,7 @@ class ProfileResource extends JsonResource
             // identifier for the key.
             'api_key' => $this->apiKey ? str_repeat('•', 32) : '',
             'api_key_code' => $this->apiKey?->code,
-            'active_plan' => $this->whenLoaded('activePlan', fn() => UserPlanResource::make($this->activePlan)),
+            'active_plan' => $this->whenLoaded('activePlan', fn () => UserPlanResource::make($this->activePlan)),
 
             // Usage Statistics
             'usage' => [

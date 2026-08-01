@@ -4,7 +4,11 @@ namespace RiseTechApps\ApiKey\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 
+/**
+ * @mixin ApiKey
+ */
 class ApiKeyResource extends JsonResource
 {
     /**

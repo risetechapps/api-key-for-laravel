@@ -4,7 +4,11 @@ namespace RiseTechApps\ApiKey\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use RiseTechApps\ApiKey\Models\RequestLog\RequestLog;
 
+/**
+ * @mixin RequestLog
+ */
 class RequestLogResource extends JsonResource
 {
     /**

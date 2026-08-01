@@ -23,7 +23,7 @@ class SignatureHistoryResource extends JsonResource
             ],
             'requests' => [
                 'used' => $this->requests_used,
-                'limit' => $this->whenLoaded('plan', fn() => $this->plan?->request_limit),
+                'limit' => $this->whenLoaded('plan', fn () => $this->plan?->request_limit),
             ],
             // O que foi efetivamente cobrado, que não é o preço de tabela do plano:
             // cupom e crédito de troca entram aqui. O histórico somava raw_price e
@@ -43,7 +43,7 @@ class SignatureHistoryResource extends JsonResource
                 'created_at' => $this->created_at?->toIso8601String(),
                 'updated_at' => $this->updated_at?->toIso8601String(),
             ],
-            'plan' => $this->whenLoaded('plan', fn() => PlansResource::make($this->plan)),
+            'plan' => $this->whenLoaded('plan', fn () => PlansResource::make($this->plan)),
         ];
     }
 

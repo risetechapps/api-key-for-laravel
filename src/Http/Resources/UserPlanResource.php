@@ -30,12 +30,12 @@ class UserPlanResource extends JsonResource
             'grace_period' => [
                 'in_grace_period' => $this->isInGracePeriod(),
                 'remaining_days' => $this->getGracePeriodRemainingDays(),
-                'grace_period_end_date' => $this->when($this->isInGracePeriod(), fn() => $this->getGracePeriodEndDate()?->toIso8601String()),
+                'grace_period_end_date' => $this->when($this->isInGracePeriod(), fn () => $this->getGracePeriodEndDate()?->toIso8601String()),
             ],
             'requests' => [
                 'used' => $this->requests_used,
-                'limit' => $this->whenLoaded('plan', fn() => $this->plan?->request_limit),
-                'remaining' => $this->whenLoaded('plan', fn() => $this->plan?->request_limit ? max(0, $this->plan->request_limit - $this->requests_used) : null),
+                'limit' => $this->whenLoaded('plan', fn () => $this->plan?->request_limit),
+                'remaining' => $this->whenLoaded('plan', fn () => $this->plan?->request_limit ? max(0, $this->plan->request_limit - $this->requests_used) : null),
             ],
             // Sem isto o painel não tem como distinguir "renova no dia X" de
             // "acesso acaba no dia X", que são a mesma data com significados
@@ -52,7 +52,7 @@ class UserPlanResource extends JsonResource
                 'updated_at' => $this->updated_at?->toIso8601String(),
             ],
             // Include plan details when loaded
-            'plan' => $this->whenLoaded('plan', fn() => [
+            'plan' => $this->whenLoaded('plan', fn () => [
                 'id' => $this->plan->getKey(),
                 'code' => $this->plan->code,
                 'name' => $this->plan->name,

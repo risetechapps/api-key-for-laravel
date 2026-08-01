@@ -4,7 +4,11 @@ namespace RiseTechApps\ApiKey\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
+/**
+ * @mixin Authentication
+ */
 class UserResource extends JsonResource
 {
     /**
@@ -18,7 +22,7 @@ class UserResource extends JsonResource
             'code' => $this->code,
             'name' => $this->name,
             'email' => $this->email,
-            'email_verified' => !is_null($this->email_verified_at),
+            'email_verified' => ! is_null($this->email_verified_at),
             'email_verified_at' => $this->email_verified_at?->toIso8601String(),
             'status' => $this->status,
             'role' => $this->role,
@@ -37,11 +41,11 @@ class UserResource extends JsonResource
             ],
 
             // Photo
-            'photo_url' => $this->when($this->getPhotoProfile(), fn() => $this->getPhotoProfile()->getFullUrl()),
+            'photo_url' => $this->when($this->getPhotoProfile(), fn () => $this->getPhotoProfile()->getFullUrl()),
 
             // Relationships
-            'api_key' => $this->whenLoaded('apiKey', fn() => ApiKeyResource::make($this->apiKey)),
-            'active_plan' => $this->whenLoaded('activePlan', fn() => UserPlanResource::make($this->activePlan)),
+            'api_key' => $this->whenLoaded('apiKey', fn () => ApiKeyResource::make($this->apiKey)),
+            'active_plan' => $this->whenLoaded('activePlan', fn () => UserPlanResource::make($this->activePlan)),
             'address' => $this->whenLoaded('address', $this->address),
 
             // Usage Statistics

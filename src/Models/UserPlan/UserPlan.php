@@ -2,9 +2,12 @@
 
 namespace RiseTechApps\ApiKey\Models\UserPlan;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Config;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\HasUuid\Traits\HasUuid;
 
@@ -27,7 +30,7 @@ use RiseTechApps\HasUuid\Traits\HasUuid;
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
  * @property-read Plan|null $plan
- * @property-read \RiseTechApps\ApiKey\Models\Authentication\Authentication|null $authentication
+ * @property-read Authentication|null $authentication
  */
 class UserPlan extends Model
 {
@@ -44,14 +47,16 @@ class UserPlan extends Model
         'credit_applied' => 'decimal:2',
     ];
 
-    public function plan()
+    /** @return BelongsTo<Plan, $this> */
+    public function plan(): BelongsTo
     {
         return $this->belongsTo(Plan::class);
     }
 
-    public function authentication()
+    /** @return BelongsTo<Authentication, $this> */
+    public function authentication(): BelongsTo
     {
-        return $this->belongsTo(\RiseTechApps\ApiKey\Models\Authentication\Authentication::class);
+        return $this->belongsTo(Authentication::class);
     }
 
     /**
@@ -93,7 +98,7 @@ class UserPlan extends Model
             return 0.0;
         }
 
-        $now  = now()->getTimestamp();
+        $now = now()->getTimestamp();
         $ends = $this->end_date->getTimestamp();
 
         // Expired, or inside the grace period: the paid window is over.
@@ -134,7 +139,7 @@ class UserPlan extends Model
      * Get the grace period end date.
      * Returns null if grace period is disabled (0 days).
      */
-    public function getGracePeriodEndDate(): ?\Carbon\Carbon
+    public function getGracePeriodEndDate(): ?Carbon
     {
         $graceDays = Config::get('api-key.grace_period_days', 3);
 
@@ -157,7 +162,7 @@ class UserPlan extends Model
 
         $graceEnd = $this->getGracePeriodEndDate();
 
-        if (!$graceEnd) {
+        if (! $graceEnd) {
             return false;
         }
 
@@ -179,7 +184,7 @@ class UserPlan extends Model
      */
     public function getGracePeriodRemainingDays(): int
     {
-        if (!$this->isInGracePeriod()) {
+        if (! $this->isInGracePeriod()) {
             return 0;
         }
 
@@ -199,7 +204,7 @@ class UserPlan extends Model
 
         $graceEnd = $this->getGracePeriodEndDate();
 
-        if (!$graceEnd) {
+        if (! $graceEnd) {
             return $this->isExpired();
         }
 

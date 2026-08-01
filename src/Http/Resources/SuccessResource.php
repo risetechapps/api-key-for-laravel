@@ -10,12 +10,12 @@ class SuccessResource extends JsonResource
     /**
      * Transform the resource into an array.
      *
-     * @param array|string $data Response data
-     * @param string|null $message Success message
-     * @param int $code HTTP status code
+     * @param  array|string  $data  Response data
+     * @param  string|null  $message  Success message
+     * @param  int  $code  HTTP status code
      */
     public function __construct(
-                                 $data = [],
+        $data = [],
         private readonly ?string $message = null,
         private readonly int $code = 200
     ) {
