@@ -4,10 +4,11 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
-        if (!Schema::hasTable('personal_access_tokens')) {
+        if (! Schema::hasTable('personal_access_tokens')) {
             // Sanctum's own migration did not run (e.g. it is not published).
             // Create the base table ourselves; the tokenable morph columns are
             // added as UUID morphs by a later migration in this package.
@@ -41,15 +42,15 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if(Schema::hasTable('personal_access_tokens')){
+        if (Schema::hasTable('personal_access_tokens')) {
             Schema::table('personal_access_tokens', function (Blueprint $table) {
-                if(!Schema::hasColumn('personal_access_tokens', 'tokenable_id')){
+                if (! Schema::hasColumn('personal_access_tokens', 'tokenable_id')) {
                     $table->unsignedBigInteger('tokenable_id')->after('id');
                 }
             });
 
             Schema::table('personal_access_tokens', function (Blueprint $table) {
-                if(!Schema::hasColumn('personal_access_tokens', 'tokenable_type')){
+                if (! Schema::hasColumn('personal_access_tokens', 'tokenable_type')) {
                     $table->string('tokenable_type')->after('tokenable_id');
                 }
             });

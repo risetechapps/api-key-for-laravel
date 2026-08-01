@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * Trigram indexes for the admin user search.
      *
@@ -25,7 +26,7 @@ return new class extends Migration {
 
         try {
             DB::statement('CREATE EXTENSION IF NOT EXISTS pg_trgm');
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::warning('api-key: could not enable pg_trgm; admin user search will not be indexed', [
                 'error' => $e->getMessage(),
             ]);

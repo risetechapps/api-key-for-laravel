@@ -5,7 +5,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * start_date / end_date were `date`, but every write stores a full timestamp
      * (now(), now()->addDays(...)) and every read compares against now().

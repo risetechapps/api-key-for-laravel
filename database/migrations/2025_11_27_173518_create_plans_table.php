@@ -1,11 +1,12 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use RiseTechApps\ApiKey\Enums\BillingCycle;
 use Illuminate\Database\Schema\Blueprint;
+use RiseTechApps\ApiKey\Enums\BillingCycle;
 use Tpetry\PostgresqlEnhanced\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('plans', function (Blueprint $table) {
@@ -22,7 +23,7 @@ return new class extends Migration {
 
             $table->unsignedBigInteger('request_limit')->default(0);
 
-            $table->enum('billing_cycle',BillingCycle::cases());
+            $table->enum('billing_cycle', BillingCycle::cases());
             $table->decimal('price', 8, 2);
 
             $table->jsonb('features')->nullable();

@@ -27,21 +27,21 @@ class ApiKeyFactory extends Factory
 
     public function inactive(): static
     {
-        return $this->state(fn(array $attributes) => [
+        return $this->state(fn (array $attributes) => [
             'active' => false,
         ]);
     }
 
     public function expired(): static
     {
-        return $this->state(fn(array $attributes) => [
+        return $this->state(fn (array $attributes) => [
             'expires_at' => now()->subDay(),
         ]);
     }
 
     public function withAllowedOrigins(array $origins): static
     {
-        return $this->state(fn(array $attributes) => [
+        return $this->state(fn (array $attributes) => [
             'allowed_origins' => $origins,
         ]);
     }

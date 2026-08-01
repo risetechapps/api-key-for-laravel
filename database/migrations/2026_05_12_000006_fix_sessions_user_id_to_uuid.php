@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * Alinha sessions.user_id (bigint padrão do Laravel) ao id UUID das
      * autenticações. É sintaxe exclusiva do PostgreSQL (ALTER COLUMN ... USING),

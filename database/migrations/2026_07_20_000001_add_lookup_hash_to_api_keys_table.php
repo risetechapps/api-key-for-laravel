@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * Adds a deterministic lookup column so an API key can be found with a single
      * indexed SELECT instead of scanning every active row with bcrypt.

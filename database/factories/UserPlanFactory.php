@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use RiseTechApps\ApiKey\Enums\BillingCycle;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
@@ -26,7 +25,7 @@ class UserPlanFactory extends Factory
 
     public function expired(): static
     {
-        return $this->state(fn(array $attributes) => [
+        return $this->state(fn (array $attributes) => [
             'start_date' => now()->subDays(60),
             'end_date' => now()->subDay(),
         ]);
@@ -34,7 +33,7 @@ class UserPlanFactory extends Factory
 
     public function inGracePeriod(): static
     {
-        return $this->state(fn(array $attributes) => [
+        return $this->state(fn (array $attributes) => [
             'start_date' => now()->subDays(32),
             'end_date' => now()->subDay(),
             'active' => true,
@@ -43,14 +42,14 @@ class UserPlanFactory extends Factory
 
     public function inactive(): static
     {
-        return $this->state(fn(array $attributes) => [
+        return $this->state(fn (array $attributes) => [
             'active' => false,
         ]);
     }
 
     public function withRequests(int $used): static
     {
-        return $this->state(fn(array $attributes) => [
+        return $this->state(fn (array $attributes) => [
             'requests_used' => $used,
         ]);
     }
