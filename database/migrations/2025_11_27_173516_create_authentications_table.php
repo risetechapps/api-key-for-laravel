@@ -5,10 +5,11 @@ use Illuminate\Database\Migrations\Migration;
 // runtime recebe o Blueprint do tpetry — os métodos pg-específicos seguem
 // disponíveis — e no SQLite dos testes recebe o core, sem TypeError.
 use Illuminate\Database\Schema\Blueprint;
-use Tpetry\PostgresqlEnhanced\Support\Facades\Schema;
 use RiseTechApps\ApiKey\Services\AuthService;
+use Tpetry\PostgresqlEnhanced\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         // citext é uma extensão exclusiva do PostgreSQL. Fora do pgsql (ex.: o
@@ -31,7 +32,7 @@ return new class extends Migration {
             $table->enum('genre', AuthService::genreProfile())->default('MASCULINE');
             $table->string('nationality')->nullable();
             $table->string('naturalness')->nullable();
-            $table->enum('marital_status', AuthService::maritalStatusProfile())->default("SINGLE")->nullable();
+            $table->enum('marital_status', AuthService::maritalStatusProfile())->default('SINGLE')->nullable();
 
             if (DB::getDriverName() === 'pgsql') {
                 $table->caseInsensitiveText('email');
