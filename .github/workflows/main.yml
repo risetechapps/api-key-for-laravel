@@ -13,9 +13,16 @@ jobs:
             fail-fast: false
             matrix:
                 os: [ubuntu-latest]
-                php: ['8.4']
+                # O composer.json pede php ^8.4, então 8.5 está dentro do que o
+                # pacote promete suportar e precisa ser exercitado — quem instalar
+                # numa stack 8.5 vai usar este código.
+                php: ['8.4', '8.5']
                 laravel: ['12.*']
-                stability: [prefer-stable]
+                # prefer-lowest instala o piso de cada constraint. É o que revela
+                # constraint frouxa: código que usa uma API só existente na versão
+                # nova passa em prefer-stable e quebra na casa de quem instalou o
+                # mínimo declarado.
+                stability: [prefer-lowest, prefer-stable]
                 include:
                     - laravel: '12.*'
                       testbench: '^10.0'
@@ -43,16 +50,41 @@ jobs:
                   composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
                   composer update --${{ matrix.stability }} --prefer-dist --no-interaction
 
+            # Estilo e análise estática dependem só do código, não da combinação
+            # de versões: rodam uma vez, na perna canônica, em vez de quatro.
+            - name: Code style
+              if: matrix.php == '8.4' && matrix.stability == 'prefer-stable'
+              run: vendor/bin/pint --test
+
             - name: Static analysis
+              if: matrix.php == '8.4' && matrix.stability == 'prefer-stable'
               run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
 
             - name: Execute tests
               run: vendor/bin/pest
 
-            # Pint ainda não roda aqui: o repositório inteiro (155 arquivos, quase
-            # todos por line_ending) reprova o preset, e ligar a checagem antes da
-            # normalização deixaria o CI vermelho em todo commit. Depois de rodar
-            # `composer lint` uma vez, em commit isolado, descomente:
-            #
-            # - name: Code style
-            #   run: vendor/bin/pint --test
+    coverage:
+        runs-on: ubuntu-latest
+        name: Coverage
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, intl, fileinfo
+                  # pcov e não xdebug: mede linha coberta a uma fração do custo,
+                  # que é tudo o que este relatório precisa.
+                  coverage: pcov
+
+            - name: Install dependencies
+              run: composer update --prefer-stable --prefer-dist --no-interaction
+
+            # Sem --min por enquanto: um piso escolhido no escuro ou trava o CI ou
+            # é baixo demais para significar algo. Depois da primeira execução,
+            # fixe o número que ela reportar (menos uma folga) aqui.
+            - name: Coverage report
+              run: vendor/bin/pest --coverage
