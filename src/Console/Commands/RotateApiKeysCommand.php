@@ -131,7 +131,7 @@ class RotateApiKeysCommand extends Command
 
         Log::warning('api-key: bulk key rotation completed', [
             'rotated' => $rotated,
-            'scope'   => $this->scopeLabel(),
+            'scope' => $this->scopeLabel(),
         ]);
 
         $this->info("Rotated {$rotated} API key(s).");
@@ -174,7 +174,7 @@ class RotateApiKeysCommand extends Command
         $user = $this->resolveUser((string) $this->option('user'));
 
         if (! $user) {
-            $this->error('No user matched ' . $this->option('user') . '.');
+            $this->error('No user matched '.$this->option('user').'.');
 
             return null;
         }
@@ -201,8 +201,8 @@ class RotateApiKeysCommand extends Command
     {
         return match (true) {
             (bool) $this->option('legacy') => 'legacy keys without lookup_hash',
-            (bool) $this->option('all')    => 'all active keys',
-            default                        => 'user ' . $this->option('user'),
+            (bool) $this->option('all') => 'all active keys',
+            default => 'user '.$this->option('user'),
         };
     }
 }

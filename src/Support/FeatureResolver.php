@@ -32,10 +32,10 @@ class FeatureResolver
             $meta = $registry->get($key) ?? [];
 
             return [
-                'key'         => $key,
-                'name'        => $meta['name'] ?? self::humanize($key),
+                'key' => $key,
+                'name' => $meta['name'] ?? self::humanize($key),
                 'description' => $meta['description'] ?? null,
-                'icon'        => $meta['icon'] ?? null,
+                'icon' => $meta['icon'] ?? null,
             ];
         })->filter()->values()->all();
     }

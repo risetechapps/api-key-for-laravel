@@ -20,16 +20,16 @@ class CheckPlanFeatureMiddleware
             return $next($request);
         }
 
-        $hasAccess = array_any($features, fn($feature) => ApiKeyFacade::resolve($feature));
+        $hasAccess = array_any($features, fn ($feature) => ApiKeyFacade::resolve($feature));
 
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             $featuresList = implode(', ', $features);
 
             if ($request->expectsJson()) {
                 return response()->json([
                     'status' => 'upgrade_required',
                     'message' => "You need at least one of these features: [{$featuresList}]",
-                    'features' => $features
+                    'features' => $features,
                 ], 402);
             }
 

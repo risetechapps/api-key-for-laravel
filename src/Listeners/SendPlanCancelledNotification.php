@@ -34,8 +34,8 @@ class SendPlanCancelledNotification implements ShouldQueue
         ));
 
         Log::info('Plan cancelled notification sent', [
-            'user_id'      => $event->user->id,
-            'plan_id'      => $event->plan->id,
+            'user_id' => $event->user->id,
+            'plan_id' => $event->plan->id,
             'access_until' => $event->accessUntil->format('Y-m-d H:i:s'),
         ]);
     }

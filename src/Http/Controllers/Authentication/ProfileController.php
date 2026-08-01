@@ -60,9 +60,11 @@ class ProfileController extends Controller
     {
         try {
             $data = auth()->user()->apiKey->allowed_origins;
+
             return response()->jsonSuccess($data);
         } catch (\Exception $exception) {
             report($exception);
+
             return response()->jsonGone(__('api-key::messages.error_loading_allowed_origins'));
         }
     }
@@ -71,11 +73,13 @@ class ProfileController extends Controller
     {
         try {
             auth()->user()->apiKey->update([
-                'allowed_origins' => $request->get('allowed') ?? $request->get('allowed_origins')
+                'allowed_origins' => $request->get('allowed') ?? $request->get('allowed_origins'),
             ]);
+
             return response()->jsonSuccess();
         } catch (\Exception $exception) {
             report($exception);
+
             return response()->jsonGone(__('api-key::messages.error_updating_allowed_origins'));
         }
     }
@@ -85,7 +89,7 @@ class ProfileController extends Controller
         try {
             $apiKey = auth()->user()->apiKey;
 
-            if (!$apiKey) {
+            if (! $apiKey) {
                 return response()->jsonGone(__('api-key::messages.api_key_not_found'));
             }
 
@@ -96,6 +100,7 @@ class ProfileController extends Controller
             return response()->jsonSuccess(['key' => $newKey]);
         } catch (\Exception $exception) {
             report($exception);
+
             return response()->jsonGone(__('api-key::messages.error_regenerating_api_key'));
         }
     }

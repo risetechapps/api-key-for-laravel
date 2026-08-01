@@ -6,7 +6,6 @@ use RiseTechApps\FormRequest\Contracts\RulesContract;
 
 class AuthenticationRules implements RulesContract
 {
-
     public static function Rules(): array
     {
         return [

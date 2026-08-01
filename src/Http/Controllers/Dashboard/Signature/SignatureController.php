@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Laravel\Pennant\Feature;
 use RiseTechApps\ApiKey\Events\PlanCancelled;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Signature\SignatureRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Signature\LogHistoryResource;
@@ -17,9 +17,7 @@ use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 
 class SignatureController extends Controller
 {
-    public function __construct(protected readonly PlanRepository $planRepository)
-    {
-    }
+    public function __construct(protected readonly PlanRepository $planRepository) {}
 
     /**
      * Activate a free plan for the authenticated user.
@@ -49,8 +47,8 @@ class SignatureController extends Controller
                 Log::warning('Free subscription attempted on a paid plan', [
                     'user_id' => auth()->id(),
                     'plan_id' => $plan->getKey(),
-                    'price'   => $plan->price,
-                    'ip'      => $request->ip(),
+                    'price' => $plan->price,
+                    'ip' => $request->ip(),
                 ]);
 
                 return response()->json([
@@ -64,6 +62,7 @@ class SignatureController extends Controller
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_creating_signature'));
         }
     }
@@ -189,6 +188,7 @@ class SignatureController extends Controller
             );
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_loading_signature_history'));
         }
     }
@@ -220,6 +220,7 @@ class SignatureController extends Controller
             );
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_loading_request_log'));
         }
     }
@@ -257,8 +258,8 @@ class SignatureController extends Controller
 
             $activePlan = $user->activePlan()->with('plan')->first();
 
-            $used      = (int) ($activePlan?->requests_used ?? 0);
-            $limit     = (int) ($activePlan?->plan?->request_limit ?? 0);
+            $used = (int) ($activePlan?->requests_used ?? 0);
+            $limit = (int) ($activePlan?->plan?->request_limit ?? 0);
             // Nunca exibe acima do limite (cobre dado legado / overshoot de concorrência).
             if ($limit > 0) {
                 $used = min($used, $limit);
@@ -271,18 +272,18 @@ class SignatureController extends Controller
             // Cached briefly as well: the dashboard polls this on a timer and the
             // number does not need to be exact to the second.
             $today = Cache::remember(
-                "api_key_stats_today:{$user->getKey()}:" . now()->toDateString(),
+                "api_key_stats_today:{$user->getKey()}:".now()->toDateString(),
                 config('api-key.cache_ttl.stats', 30),
-                fn() => $user->requestLog()
+                fn () => $user->requestLog()
                     ->whereBetween('requested_at', [now()->startOfDay(), now()->endOfDay()])
                     ->count()
             );
 
             $payload = [
-                'today'     => $today,
-                'used'      => $used,
+                'today' => $today,
+                'used' => $used,
                 'remaining' => $remaining,
-                'limit'     => $limit,
+                'limit' => $limit,
             ];
 
             // The chart series is only built when asked for. The dashboard polls
@@ -298,6 +299,7 @@ class SignatureController extends Controller
             return response()->jsonSuccess($payload);
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_loading_request_log'));
         }
     }
@@ -317,11 +319,11 @@ class SignatureController extends Controller
         $since = now()->subDays($days - 1)->startOfDay();
 
         $counts = Cache::remember(
-            "api_key_stats_series:{$user->getKey()}:{$days}:" . now()->toDateString(),
+            "api_key_stats_series:{$user->getKey()}:{$days}:".now()->toDateString(),
             config('api-key.cache_ttl.stats', 30),
-            fn() => $user->requestLog()
+            fn () => $user->requestLog()
                 ->where('requested_at', '>=', $since)
-                ->selectRaw($this->dayExpression() . ' as day, COUNT(*) as total')
+                ->selectRaw($this->dayExpression().' as day, COUNT(*) as total')
                 ->groupBy('day')
                 ->pluck('total', 'day')
                 ->all()
@@ -334,7 +336,7 @@ class SignatureController extends Controller
         for ($i = 0; $i < $days; $i++) {
             $date = $since->copy()->addDays($i)->toDateString();
             $series[] = [
-                'date'  => $date,
+                'date' => $date,
                 'total' => (int) ($counts[$date] ?? 0),
             ];
         }
@@ -348,7 +350,7 @@ class SignatureController extends Controller
      */
     private function dayExpression(): string
     {
-        return match (\Illuminate\Support\Facades\DB::connection()->getDriverName()) {
+        return match (DB::connection()->getDriverName()) {
             'pgsql' => 'CAST(requested_at AS date)',
             'sqlite' => "strftime('%Y-%m-%d', requested_at)",
             default => 'DATE(requested_at)',

@@ -29,13 +29,13 @@ class FeatureManager
 
     public function resolve(string $name, ...$arguments): bool
     {
-        if (!isset($this->definitions[$name])) {
+        if (! isset($this->definitions[$name])) {
             return false;
         }
 
         $resolver = $this->definitions[$name];
 
-        if (!$resolver instanceof Closure) {
+        if (! $resolver instanceof Closure) {
             return false;
         }
 

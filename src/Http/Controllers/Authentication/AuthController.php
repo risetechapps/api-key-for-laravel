@@ -4,8 +4,8 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Authentication;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
@@ -49,11 +49,12 @@ class AuthController extends Controller
                 'ip' => $request->ip(),
             ]);
             report($exception);
+
             return response()->jsonGone(__('api-key::messages.registration_failed'));
         }
     }
 
-    public function verifyEmail(Request $request): \Illuminate\Http\RedirectResponse
+    public function verifyEmail(Request $request): RedirectResponse
     {
         $id = $request->route('id');
         $hash = $request->route('hash');
@@ -77,19 +78,21 @@ class AuthController extends Controller
             'has_signature' => $request->has('signature'),
         ];
 
-        if (!URL::hasValidSignature($request)) {
+        if (! URL::hasValidSignature($request)) {
             Log::warning('Email verification failed: invalid signature', $context);
+
             return redirect('/login?error=invalid_link');
         }
 
         $user = Authentication::find($id);
 
-        if (!$user || !hash_equals((string) $hash, sha1((string) $user->getEmailForVerification()))) {
+        if (! $user || ! hash_equals((string) $hash, sha1((string) $user->getEmailForVerification()))) {
             Log::warning('Email verification failed: user not found or hash mismatch', $context);
+
             return redirect('/login?error=invalid_link');
         }
 
-        if (!$user->hasVerifiedEmail()) {
+        if (! $user->hasVerifiedEmail()) {
             $user->markEmailAsVerified();
         }
 
@@ -103,21 +106,24 @@ class AuthController extends Controller
 
         $user = $this->authService->findUserByEmail($credentials['email']);
 
-        if (!$user) {
+        if (! $user) {
             Log::info('Login failed: user not found', $context);
+
             return response()->jsonGone(__('api-key::messages.user_not_found'));
         }
 
-        if (!$user->hasVerifiedEmail()) {
+        if (! $user->hasVerifiedEmail()) {
             Log::info('Login failed: email not verified', $context);
             $user->sendEmailVerificationNotification();
+
             return response()->jsonGone(__('api-key::messages.account_not_verified'));
         }
 
         $result = $this->authService->attemptLogin($credentials);
 
-        if (!$result) {
+        if (! $result) {
             Log::info('Login failed: incorrect credentials', $context);
+
             return response()->jsonGone(__('api-key::messages.incorrect_credentials'));
         }
 
@@ -138,19 +144,21 @@ class AuthController extends Controller
 
         if ($status === Password::RESET_LINK_SENT) {
             Log::info('Password reset link sent', ['email' => $email, 'ip' => $request->ip()]);
+
             return response()->jsonSuccess(['message' => __('api-key::messages.password_reset_sent')]);
         }
 
         Log::warning('Password reset link failed', ['email' => $email, 'status' => $status, 'ip' => $request->ip()]);
+
         return response()->jsonGone(__('api-key::messages.password_reset_failed'));
     }
 
     public function resetPassword(Request $request): JsonResponse
     {
         $request->validate([
-            'token'                 => 'required',
-            'email'                 => 'required|email',
-            'password'              => 'required|min:8|confirmed',
+            'token' => 'required',
+            'email' => 'required|email',
+            'password' => 'required|min:8|confirmed',
             'password_confirmation' => 'required',
         ]);
 
@@ -166,10 +174,12 @@ class AuthController extends Controller
 
         if ($status === Password::PASSWORD_RESET) {
             Log::info('Password reset completed', ['email' => $email, 'ip' => $request->ip()]);
+
             return response()->jsonSuccess(['message' => __('api-key::messages.password_reset_success')]);
         }
 
         Log::warning('Password reset failed', ['email' => $email, 'status' => $status, 'ip' => $request->ip()]);
+
         return response()->jsonGone(__('api-key::messages.password_reset_failed'));
     }
 
@@ -185,7 +195,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        if (!$request->user()) {
+        if (! $request->user()) {
             return response()->jsonGone();
         }
 

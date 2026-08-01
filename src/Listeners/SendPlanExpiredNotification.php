@@ -34,8 +34,8 @@ class SendPlanExpiredNotification implements ShouldQueue
         ));
 
         Log::warning('Plan expired notification sent', [
-            'user_id'    => $event->user->id,
-            'plan_id'    => $event->plan->id,
+            'user_id' => $event->user->id,
+            'plan_id' => $event->plan->id,
             'expired_at' => $event->expiredAt->format('Y-m-d H:i:s'),
         ]);
     }

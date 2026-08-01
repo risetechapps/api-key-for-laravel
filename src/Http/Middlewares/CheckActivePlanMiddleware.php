@@ -18,7 +18,7 @@ class CheckActivePlanMiddleware
 
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['error' => __('api-key::messages.unauthorized')], 401);
         }
 
@@ -35,7 +35,7 @@ class CheckActivePlanMiddleware
 
             if ($expiredPlan?->isCompletelyExpired()) {
                 Log::info('Plan completely expired, deactivating', [
-                    'plan_id' => $expiredPlan->plan_id, ...$context
+                    'plan_id' => $expiredPlan->plan_id, ...$context,
                 ]);
 
                 $expiredPlan->update(['active' => false]);
@@ -46,12 +46,13 @@ class CheckActivePlanMiddleware
                 }
 
                 return response()->json([
-                    'error'              => __('api-key::messages.plan_expired_grace_ended'),
+                    'error' => __('api-key::messages.plan_expired_grace_ended'),
                     'grace_period_ended' => true,
                 ], 403);
             }
 
             Log::warning('No active plan found', $context);
+
             return response()->json(['error' => __('api-key::messages.plan_expired_or_inactive')], 403);
         }
 

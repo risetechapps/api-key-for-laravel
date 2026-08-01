@@ -12,7 +12,7 @@ class ApiKeyScope implements Scope
     {
         $user = auth()->user();
 
-        if (!$user || !$user->apiKey) {
+        if (! $user || ! $user->apiKey) {
             $builder->whereRaw('1 = 0');
 
             return;

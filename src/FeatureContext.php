@@ -7,7 +7,9 @@ use RiseTechApps\ApiKey\Contracts\FeatureContextInterface;
 class FeatureContext implements FeatureContextInterface
 {
     public $user;
+
     public $plan;
+
     public array $features = [];
 
     public function __construct($user = null)

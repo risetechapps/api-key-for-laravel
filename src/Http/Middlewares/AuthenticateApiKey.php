@@ -21,7 +21,7 @@ class AuthenticateApiKey
 
         // Internal bypass: only valid from localhost (127.0.0.1 / ::1)
         $internalToken = $request->header('X-Internal-Token');
-        $isLoopback    = in_array($request->server('REMOTE_ADDR'), ['127.0.0.1', '::1', '0:0:0:0:0:0:0:1'], true);
+        $isLoopback = in_array($request->server('REMOTE_ADDR'), ['127.0.0.1', '::1', '0:0:0:0:0:0:0:1'], true);
 
         if ($internalToken && $isLoopback && config('api-key.internal_token') && hash_equals(config('api-key.internal_token'), $internalToken)) {
             $userId = $request->header('X-User-Id');
@@ -29,6 +29,7 @@ class AuthenticateApiKey
             if ($user) {
                 auth()->setUser($user);
                 $request->attributes->set('_internal', true);
+
                 return $next($request);
             }
             Log::warning('Internal auth failed: user not found', ['user_id' => $userId, ...$context]);
@@ -37,24 +38,27 @@ class AuthenticateApiKey
         $headerName = config('api-key.header_name', 'X-API-KEY');
         $key = $request->header($headerName);
 
-        if (!$key) {
+        if (! $key) {
             Log::info('API key authentication failed: missing key', $context);
+
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         $apiKey = ApiKey::validateKey($key);
 
-        if (!$apiKey) {
+        if (! $apiKey) {
             Log::info('API key authentication failed: invalid key', $context);
+
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         $user = $apiKey->authentication;
 
-        if (!$user) {
+        if (! $user) {
             Log::warning('API key authentication failed: key has no owner', [
-                'api_key_id' => $apiKey->id, ...$context
+                'api_key_id' => $apiKey->id, ...$context,
             ]);
+
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 

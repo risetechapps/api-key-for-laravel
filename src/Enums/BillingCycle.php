@@ -22,10 +22,10 @@ enum BillingCycle: string
 
     public static function values(): array
     {
-        return array_map(fn($case) => $case->value, self::cases());
+        return array_map(fn ($case) => $case->value, self::cases());
     }
 
-    public static function convertInDays(self $billingCycle):int
+    public static function convertInDays(self $billingCycle): int
     {
         return match ($billingCycle) {
             self::WEEKLY => 7,

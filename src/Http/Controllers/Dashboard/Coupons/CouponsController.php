@@ -14,70 +14,74 @@ use RiseTechApps\ApiKey\Repositories\Coupon\CouponRepository;
 
 class CouponsController extends Controller
 {
-    public function __construct(protected readonly CouponRepository $couponRepository)
-    {
+    public function __construct(protected readonly CouponRepository $couponRepository) {}
 
-    }
-
-    public function index(Request $request):JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
             // withoutCache(): o driver de cache do app (database) não suporta tags,
             // então o repository não consegue invalidar a lista após criar/editar/excluir.
             // Lê sempre fresh para evitar lista obsoleta sem precisar de cache:clear.
             $data = $this->couponRepository->withoutCache()->get();
+
             return response()->jsonSuccess(CouponsResource::collection($data));
-        }catch (\Exception $e){
+        } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_loading_coupons'));
         }
     }
 
-    public function store(StoreCouponRequest $request):JsonResponse
+    public function store(StoreCouponRequest $request): JsonResponse
     {
-        try{
+        try {
             $data = $request->validated();
             $data['gateway_coupon_id'] = Str::slug($data['code']);
             $this->couponRepository->store($data);
+
             return response()->jsonSuccess();
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_creating_coupon'));
 
         }
     }
 
-    public function show(Coupon $coupon):JsonResponse
+    public function show(Coupon $coupon): JsonResponse
     {
-        try{
+        try {
 
-            if(is_null($coupon)){
+            if (is_null($coupon)) {
                 return response()->jsonGone();
             }
 
             return response()->jsonSuccess(CouponsResource::make($coupon));
-        }catch (\Exception $exception){
+        } catch (\Exception $exception) {
             report($exception);
+
             return response()->jsonGone(__('api-key::messages.error_loading_coupon'));
         }
     }
 
-    public function update(UpdateCouponRequest $request, Coupon $coupon):JsonResponse
+    public function update(UpdateCouponRequest $request, Coupon $coupon): JsonResponse
     {
         try {
 
             $data = $request->validated();
 
-            if (!is_null($coupon)) {
+            if (! is_null($coupon)) {
 
                 $this->couponRepository->update($coupon->getKey(), $data);
 
                 return response()->jsonSuccess();
             }
+
             return response()->jsonGone(__('api-key::messages.error_updating_coupon'));
 
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_updating_coupon'));
         }
     }
@@ -86,19 +90,21 @@ class CouponsController extends Controller
     {
 
         try {
-            if (!is_null($coupon)) {
+            if (! is_null($coupon)) {
 
                 // find() retorna o próprio repository (encadeável) e o delete() do
                 // repository dispara os eventos + clearCacheForEntity. findById()
                 // retornaria um Model (possivelmente cacheado) e o delete() do
                 // Eloquent puro não passaria pela camada do repository.
                 $this->couponRepository->find($coupon->getKey())->delete();
+
                 return response()->jsonSuccess();
             }
 
             return response()->jsonGone(__('api-key::messages.error_deleting_coupon'));
         } catch (\Exception $e) {
             report($e);
+
             return response()->jsonGone(__('api-key::messages.error_deleting_coupon'));
         }
     }

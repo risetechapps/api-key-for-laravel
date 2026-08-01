@@ -24,14 +24,14 @@ trait SendsIdempotentPayments
     /**
      * Build the request options carrying the idempotency key.
      *
-     * @param string|null $clientKey Key supplied by the caller, when there is one.
-     * @param array       $parts     Values identifying this charge, used to derive
-     *                               a key when the caller supplied none.
+     * @param  string|null  $clientKey  Key supplied by the caller, when there is one.
+     * @param  array  $parts  Values identifying this charge, used to derive
+     *                        a key when the caller supplied none.
      */
     protected function idempotentRequest(?string $clientKey, array $parts): RequestOptions
     {
-        $options = new RequestOptions();
-        $options->setCustomHeaders(['X-Idempotency-Key: ' . $this->idempotencyKey($clientKey, $parts)]);
+        $options = new RequestOptions;
+        $options->setCustomHeaders(['X-Idempotency-Key: '.$this->idempotencyKey($clientKey, $parts)]);
 
         return $options;
     }
@@ -57,7 +57,7 @@ trait SendsIdempotentPayments
         }
 
         return hash('sha256', implode('|', array_map(
-            static fn($part) => is_float($part) ? number_format($part, 2, '.', '') : (string) $part,
+            static fn ($part) => is_float($part) ? number_format($part, 2, '.', '') : (string) $part,
             $parts
         )));
     }

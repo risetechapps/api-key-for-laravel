@@ -30,6 +30,6 @@ class RequestLimitReachedNotification extends Notification
             ->line("Uso atual: **{$this->requestsUsed} / {$this->requestsLimit}** requisições no ciclo.")
             ->line('Novas chamadas à API serão bloqueadas até a renovação do ciclo ou o upgrade do plano.')
             ->action('Fazer upgrade', url('/dashboard/plans'))
-            ->salutation('Atenciosamente, Equipe ' . config('app.name'));
+            ->salutation('Atenciosamente, Equipe '.config('app.name'));
     }
 }

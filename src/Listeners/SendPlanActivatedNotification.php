@@ -35,8 +35,8 @@ class SendPlanActivatedNotification implements ShouldQueue
         ));
 
         Log::info('Plan activated notification sent', [
-            'user_id'          => $event->user->id,
-            'plan_id'          => $event->plan->id,
+            'user_id' => $event->user->id,
+            'plan_id' => $event->plan->id,
             'previous_plan_id' => $event->previousPlan?->id,
         ]);
     }

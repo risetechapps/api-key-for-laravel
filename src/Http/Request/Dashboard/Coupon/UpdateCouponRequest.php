@@ -13,11 +13,9 @@ class UpdateCouponRequest extends FormRequest
 
     public array $result = [];
 
-    public function __construct(public ValidationRuleRepository $ruleRepository,  array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
+    public function __construct(public ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
     {
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
-
-
 
         $coupon = request()->route('coupon');
         $couponId = $coupon instanceof Model ? $coupon->getKey() : $coupon;

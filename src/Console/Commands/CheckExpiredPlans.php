@@ -11,6 +11,7 @@ use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 class CheckExpiredPlans extends Command
 {
     protected $signature = 'api-key:check-expired-plans {--grace-only : Only check for plans entering grace period}';
+
     protected $description = 'Check and process expired subscription plans with grace period support';
 
     public function handle(): int
@@ -26,7 +27,7 @@ class CheckExpiredPlans extends Command
                 ->with(['authentication', 'plan'])
                 ->chunkById(200, function ($plans) use ($graceDays) {
                     foreach ($plans as $userPlan) {
-                        if (!$userPlan->authentication || !$userPlan->plan) {
+                        if (! $userPlan->authentication || ! $userPlan->plan) {
                             continue;
                         }
 

@@ -29,13 +29,13 @@ class ApiKeyOriginValidatorMiddleware
         // back from the request avoids a second SELECT on api_keys per request.
         $apiKey = $request->attributes->get('api_key_model') ?? auth()->user()?->apiKey;
 
-        if (!$apiKey) {
+        if (! $apiKey) {
             return response()->json(['message' => 'Unauthorized: Request origin/IP not permitted.'], Response::HTTP_FORBIDDEN);
         }
 
         $requestOrigin = $request->header('Origin') ?? Device::getClientPublicIp();
 
-        if (!$apiKey->isOriginAllowed($requestOrigin)) {
+        if (! $apiKey->isOriginAllowed($requestOrigin)) {
             Log::warning('API key origin validation failed', [
                 'ip' => $request->ip(),
                 'origin' => $requestOrigin,

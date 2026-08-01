@@ -10,10 +10,6 @@ class PlanService
 {
     /**
      * Subscribe a user to a plan.
-     *
-     * @param Authentication $user
-     * @param Plan $plan
-     * @return UserPlan
      */
     public function subscribe(Authentication $user, Plan $plan): UserPlan
     {
@@ -27,7 +23,7 @@ class PlanService
     {
         $activePlan = $user->activePlan()->with('plan')->first();
 
-        if (!$activePlan || !$activePlan->plan) {
+        if (! $activePlan || ! $activePlan->plan) {
             return false;
         }
 
@@ -55,7 +51,7 @@ class PlanService
     {
         $activePlan = $user->activePlan()->with('plan')->first();
 
-        if (!$activePlan || !$activePlan->plan) {
+        if (! $activePlan || ! $activePlan->plan) {
             return null;
         }
 

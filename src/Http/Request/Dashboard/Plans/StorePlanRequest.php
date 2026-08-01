@@ -3,17 +3,17 @@
 namespace RiseTechApps\ApiKey\Http\Request\Dashboard\Plans;
 
 use Illuminate\Foundation\Http\FormRequest;
+use RiseTechApps\ApiKey\Rules\PlanRules;
 use RiseTechApps\FormRequest\Traits\HasFormValidation\HasFormValidation;
 use RiseTechApps\FormRequest\ValidationRuleRepository;
 
 class StorePlanRequest extends FormRequest
 {
-
     use HasFormValidation;
 
     public array $result = [];
 
-    public function __construct(public ValidationRuleRepository $ruleRepository,  array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
+    public function __construct(public ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
     {
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
 
@@ -33,6 +33,6 @@ class StorePlanRequest extends FormRequest
     #[\Override]
     public function messages(): array
     {
-        return array_merge($this->result['messages'] ?? [], \RiseTechApps\ApiKey\Rules\PlanRules::messages());
+        return array_merge($this->result['messages'] ?? [], PlanRules::messages());
     }
 }

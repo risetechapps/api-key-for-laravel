@@ -19,11 +19,11 @@ class RoutesApiKey
         $options['middleware'][] = 'language';
 
         $prefix = config('api-key.routes.prefix', '');
-        if (!empty($prefix)) {
-            $options['prefix'] = ($options['prefix'] ?? '') . '/' . trim((string) $prefix, '/');
+        if (! empty($prefix)) {
+            $options['prefix'] = ($options['prefix'] ?? '').'/'.trim((string) $prefix, '/');
         }
 
-        Route::group($options, function () use ($options) {
+        Route::group($options, function () {
 
             $throttleAttempts = config('api-key.auth_throttle.attempts', 5);
             $throttleDecay = config('api-key.auth_throttle.decay_minutes', 1);

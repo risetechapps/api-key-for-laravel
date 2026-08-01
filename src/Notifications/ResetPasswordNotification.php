@@ -35,11 +35,11 @@ class ResetPasswordNotification extends BaseResetPassword implements ShouldQueue
             ->action('Redefinir senha', $url)
             ->line("Este link expirará em {$this->expireTime()} minutos.")
             ->line('Se você não solicitou a redefinição de senha, nenhuma ação é necessária.')
-            ->salutation('Atenciosamente, Equipe ' . config('app.name'));
+            ->salutation('Atenciosamente, Equipe '.config('app.name'));
     }
 
     private function expireTime(): int
     {
-        return config('auth.passwords.' . config('auth.defaults.passwords') . '.expire', 60);
+        return config('auth.passwords.'.config('auth.defaults.passwords').'.expire', 60);
     }
 }

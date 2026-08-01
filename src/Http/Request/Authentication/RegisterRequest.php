@@ -12,11 +12,9 @@ class RegisterRequest extends FormRequest
 
     protected array $result = [];
 
-    public function __construct(public ValidationRuleRepository $ruleRepository,  array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
+    public function __construct(public ValidationRuleRepository $ruleRepository, array $query = [], array $request = [], array $attributes = [], array $cookies = [], array $files = [], array $server = [], $content = null)
     {
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
-
-
 
         $this->result = $this->ruleRepository->getRules('register');
     }

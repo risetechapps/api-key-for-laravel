@@ -8,6 +8,7 @@ use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 class MakeAdminCommand extends Command
 {
     protected $signature = 'admin:make {email : E-mail do usuário}';
+
     protected $description = 'Concede a role de administrador a um usuário';
 
     public function handle(): int
@@ -18,6 +19,7 @@ class MakeAdminCommand extends Command
 
         if (! $user) {
             $this->error("Usuário com e-mail '{$email}' não encontrado.");
+
             return self::FAILURE;
         }
 
@@ -25,6 +27,7 @@ class MakeAdminCommand extends Command
         $user->save();
 
         $this->info("Usuário {$user->name} ({$email}) agora é administrador.");
+
         return self::SUCCESS;
     }
 }

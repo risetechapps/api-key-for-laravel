@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use MercadoPago\Client\Common\RequestOptions;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
@@ -26,13 +25,12 @@ class CheckoutController extends Controller
         protected readonly PlanRepository $planRepository,
         protected readonly MpCustomerService $mpCustomerService,
         protected readonly CouponRepository $couponRepository,
-    ) {
-    }
+    ) {}
 
     public function validateCoupon(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'code'    => ['required', 'string'],
+            'code' => ['required', 'string'],
             'plan_id' => ['required', 'string'],
         ]);
 
@@ -49,46 +47,46 @@ class CheckoutController extends Controller
         }
 
         $originalPrice = (float) $plan->price;
-        $discount      = $coupon->type === 'percentage'
+        $discount = $coupon->type === 'percentage'
             ? $originalPrice * ($coupon->value / 100)
             : min((float) $coupon->value, $originalPrice);
 
         // The preview has to apply the proration credit for the same reason
         // process() does, and in the same order — otherwise the screen quotes one
         // amount and the card is charged another.
-        $credit     = $this->prorationCredit();
+        $credit = $this->prorationCredit();
         $finalPrice = max(0, round($originalPrice - $discount - $credit, 2));
 
         return response()->jsonSuccess([
-            'coupon'         => $coupon->code,
-            'type'           => $coupon->type,
+            'coupon' => $coupon->code,
+            'type' => $coupon->type,
             'discount_value' => $coupon->value,
-            'discount'       => round($discount, 2),
-            'credit'         => $credit,
+            'discount' => round($discount, 2),
+            'credit' => $credit,
             'original_price' => $originalPrice,
-            'final_price'    => $finalPrice,
+            'final_price' => $finalPrice,
         ]);
     }
 
     public function process(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'plan_id'                     => ['required', 'string'],
-            'token'                       => ['nullable', 'string'],
-            'saved_card_id'               => ['nullable', 'integer'],
-            'payment_method_id'           => ['nullable', 'string'],
-            'issuer_id'                   => ['nullable', 'string'],
-            'payer'                       => ['nullable', 'array'],
-            'payer.email'                 => ['nullable', 'email'],
-            'payer.identification'        => ['nullable', 'array'],
-            'payer.identification.type'   => ['nullable', 'string'],
+            'plan_id' => ['required', 'string'],
+            'token' => ['nullable', 'string'],
+            'saved_card_id' => ['nullable', 'integer'],
+            'payment_method_id' => ['nullable', 'string'],
+            'issuer_id' => ['nullable', 'string'],
+            'payer' => ['nullable', 'array'],
+            'payer.email' => ['nullable', 'email'],
+            'payer.identification' => ['nullable', 'array'],
+            'payer.identification.type' => ['nullable', 'string'],
             'payer.identification.number' => ['nullable', 'string'],
-            'coupon_code'                 => ['nullable', 'string'],
+            'coupon_code' => ['nullable', 'string'],
             // Optional, and the client should send it: a value generated once per
             // checkout attempt and reused across retries is the only thing that
             // makes a re-submitted form provably the same purchase. See
             // idempotencyKey() for what happens when it is absent.
-            'idempotency_key'             => ['nullable', 'string', 'max:64'],
+            'idempotency_key' => ['nullable', 'string', 'max:64'],
         ]);
 
         $plan = $this->planRepository->findActiveById($validated['plan_id']);
@@ -97,7 +95,7 @@ class CheckoutController extends Controller
         }
 
         $transactionAmount = (float) $plan->price;
-        $appliedCoupon     = null;
+        $appliedCoupon = null;
 
         // A claimed coupon use is kept only when the checkout reaches a state
         // that can still become a subscription (approved now, or pending /
@@ -112,11 +110,11 @@ class CheckoutController extends Controller
             // the claim is what enforces max_uses, so it has to happen while this
             // request can still be refused. See CouponRepository::claimUse().
             if ($coupon && $this->couponRepository->claimUse($coupon)) {
-                $discount          = $coupon->type === 'percentage'
+                $discount = $coupon->type === 'percentage'
                     ? $transactionAmount * ($coupon->value / 100)
                     : min((float) $coupon->value, $transactionAmount);
                 $transactionAmount = max(0, round($transactionAmount - $discount, 2));
-                $appliedCoupon     = $coupon;
+                $appliedCoupon = $coupon;
             }
         }
 
@@ -136,7 +134,7 @@ class CheckoutController extends Controller
             $userPlan->update(['credit_applied' => $credit ?: null]);
 
             return response()->jsonSuccess([
-                'status'  => 'approved',
+                'status' => 'approved',
                 'message' => $credit > 0
                     ? __('api-key::messages.subscription_activated_with_credit')
                     : __('api-key::messages.subscription_activated_full_discount'),
@@ -145,17 +143,19 @@ class CheckoutController extends Controller
 
         if (empty($validated['token'])) {
             $this->releaseCoupon($appliedCoupon);
+
             return response()->json(['success' => false, 'message' => __('api-key::messages.invalid_payment_data')], 422);
         }
 
         if (empty($validated['payment_method_id']) || empty($validated['payer']['email'])) {
             $this->releaseCoupon($appliedCoupon);
+
             return response()->json(['success' => false, 'message' => __('api-key::messages.invalid_payment_data')], 422);
         }
 
         $payerEmail = strtolower($validated['payer']['email']);
-        $token      = $validated['token'] ?? null;
-        $savedCard  = null;
+        $token = $validated['token'] ?? null;
+        $savedCard = null;
 
         if (! empty($validated['saved_card_id'])) {
             $savedCard = UserCard::where('authentication_id', auth()->user()->getKey())
@@ -164,9 +164,9 @@ class CheckoutController extends Controller
 
         try {
             MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
-            $client = new PaymentClient();
+            $client = new PaymentClient;
 
-            $payerData      = ['email' => $payerEmail];
+            $payerData = ['email' => $payerEmail];
             $identification = $validated['payer']['identification'] ?? $request->input('payer.identification');
             if (! empty($identification['type']) && ! empty($identification['number'])) {
                 $payerData['identification'] = $identification;
@@ -176,36 +176,36 @@ class CheckoutController extends Controller
                 $payerData['id'] = $savedCard->mp_customer_id;
             }
 
-            $authUser  = auth()->user();
+            $authUser = auth()->user();
             $nameParts = explode(' ', $authUser->name ?? '', 2);
 
             $description = __('api-key::messages.plan_subscription_description', ['plan' => $plan->name]);
 
             $paymentPayload = [
-                'transaction_amount'   => $transactionAmount,
-                'token'                => $token,
-                'description'          => $description,
-                'installments'         => 1,
-                'payment_method_id'    => $validated['payment_method_id'],
-                'payer'                => $payerData,
-                'external_reference'   => auth()->id() . '|' . $plan->getKey(),
+                'transaction_amount' => $transactionAmount,
+                'token' => $token,
+                'description' => $description,
+                'installments' => 1,
+                'payment_method_id' => $validated['payment_method_id'],
+                'payer' => $payerData,
+                'external_reference' => auth()->id().'|'.$plan->getKey(),
                 'statement_descriptor' => mb_substr((string) config('app.name') ?: 'Assinatura', 0, 22),
-                'additional_info'      => [
+                'additional_info' => [
                     'payer' => [
-                        'first_name'               => $nameParts[0] ?? '',
-                        'last_name'                => $nameParts[1] ?? '',
-                        'registration_date'        => $authUser->created_at?->toIso8601String(),
-                        'is_prime_user'            => '0',
+                        'first_name' => $nameParts[0] ?? '',
+                        'last_name' => $nameParts[1] ?? '',
+                        'registration_date' => $authUser->created_at?->toIso8601String(),
+                        'is_prime_user' => '0',
                         'is_first_purchase_online' => '1',
                     ],
                     'items' => [
                         [
-                            'id'          => (string) $plan->getKey(),
-                            'title'       => $description,
+                            'id' => (string) $plan->getKey(),
+                            'title' => $description,
                             'description' => $plan->description ?? $description,
                             'category_id' => 'services',
-                            'quantity'    => 1,
-                            'unit_price'  => $transactionAmount,
+                            'quantity' => 1,
+                            'unit_price' => $transactionAmount,
                         ],
                     ],
                 ],
@@ -224,15 +224,15 @@ class CheckoutController extends Controller
             // carries cardholder name, last four digits and the payer document —
             // none of which belongs in an application log.
             Log::info('MP payment response', [
-                'status'        => $payment->status,
+                'status' => $payment->status,
                 'status_detail' => $payment->status_detail,
-                'id'            => $payment->id,
+                'id' => $payment->id,
             ]);
 
             if ($payment->status === 'approved') {
                 $userPlan = auth()->user()->subscribeToPlan($plan);
                 $userPlan->update([
-                    'payment_id'     => $payment->id,
+                    'payment_id' => $payment->id,
                     'payment_amount' => $transactionAmount,
                     'credit_applied' => $credit ?: null,
                 ]);
@@ -242,8 +242,11 @@ class CheckoutController extends Controller
                     UserCard::where('authentication_id', auth()->user()->getKey())->update(['is_default' => false]);
                     $savedCard->update(['is_default' => true]);
                 } else {
-                    try { $this->syncCardAfterPayment(auth()->user(), $payment, $validated); }
-                    catch (\Exception $e) { Log::warning('Card sync after payment failed', ['error' => $e->getMessage()]); }
+                    try {
+                        $this->syncCardAfterPayment(auth()->user(), $payment, $validated);
+                    } catch (\Exception $e) {
+                        Log::warning('Card sync after payment failed', ['error' => $e->getMessage()]);
+                    }
                 }
 
                 return response()->jsonSuccess(['status' => 'approved', 'message' => __('api-key::messages.payment_approved')]);
@@ -253,6 +256,7 @@ class CheckoutController extends Controller
                 // Still live: the webhook subscribes the user if it settles, so the
                 // redemption stays claimed.
                 $couponSettled = true;
+
                 return response()->jsonSuccess(['status' => 'pending', 'message' => __('api-key::messages.payment_pending')]);
             }
 
@@ -261,12 +265,14 @@ class CheckoutController extends Controller
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         } catch (MPApiException $e) {
-            $body   =$e->getApiResponse()?->getContent();
+            $body = $e->getApiResponse()?->getContent();
             $detail = $body['status_detail'] ?? $body['message'] ?? '';
             Log::error('MP API exception', ['body' => $body, 'status' => $e->getApiResponse()?->getStatusCode()]);
+
             return response()->json(['success' => false, 'message' => $this->translateStatusDetail($detail) ?: ($detail ?: __('api-key::messages.payment_declined'))], 422);
         } catch (\Exception $e) {
             Log::error('Checkout process error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 500);
         } finally {
             // Covers the declined-payment return and all three catches above.
@@ -315,23 +321,23 @@ class CheckoutController extends Controller
         }
 
         $lastFour = (string) ($payment->card?->last_four_digits ?? '');
-        $brand    = $formData['payment_method_id'] ?? 'outros';
-        $expiryM  = str_pad((string) ($payment->card?->expiration_month ?? 1), 2, '0', STR_PAD_LEFT);
-        $expiryY  = (string) ($payment->card?->expiration_year ?? date('Y'));
-        $holder   = $payment->card?->cardholder?->name ?? $user->name;
+        $brand = $formData['payment_method_id'] ?? 'outros';
+        $expiryM = str_pad((string) ($payment->card?->expiration_month ?? 1), 2, '0', STR_PAD_LEFT);
+        $expiryY = (string) ($payment->card?->expiration_year ?? date('Y'));
+        $holder = $payment->card?->cardholder?->name ?? $user->name;
 
         UserCard::where('authentication_id', $user->getKey())->update(['is_default' => false]);
 
         $card = UserCard::updateOrCreate(
             ['authentication_id' => $user->getKey(), 'last_four' => $lastFour],
             [
-                'holder_name'    => $holder,
-                'brand'          => $brand,
-                'expiry_month'   => $expiryM,
-                'expiry_year'    => $expiryY,
+                'holder_name' => $holder,
+                'brand' => $brand,
+                'expiry_month' => $expiryM,
+                'expiry_year' => $expiryY,
                 'mp_customer_id' => $mpCustomerId,
-                'mp_card_id'     => $mpCardId,
-                'is_default'     => true,
+                'mp_card_id' => $mpCardId,
+                'is_default' => true,
             ]
         );
 
@@ -353,10 +359,10 @@ class CheckoutController extends Controller
 
         $xSignature = $request->header('x-signature', '');
         $xRequestId = $request->header('x-request-id', '');
-        $dataId     = $request->query('data_id', $request->input('data.id', ''));
+        $dataId = $request->query('data_id', $request->input('data.id', ''));
 
-        $ts   = $this->extractSignaturePart($xSignature, 'ts');
-        $v1   = $this->extractSignaturePart($xSignature, 'v1');
+        $ts = $this->extractSignaturePart($xSignature, 'ts');
+        $v1 = $this->extractSignaturePart($xSignature, 'v1');
         $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$xRequestId};ts:{$ts};", (string) $secret);
 
         if (! hash_equals($hash, $v1)) {
@@ -372,7 +378,7 @@ class CheckoutController extends Controller
         $paymentId = $request->input('data.id') ?? $request->input('id');
 
         MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
-        $client  = new PaymentClient();
+        $client = new PaymentClient;
         $payment = $client->get((int) $paymentId);
 
         if ($payment->status !== 'approved' || ! $payment->external_reference) {
@@ -384,7 +390,7 @@ class CheckoutController extends Controller
         if (! $reference) {
             Log::warning('MP webhook: unrecognised external_reference', [
                 'external_reference' => $payment->external_reference,
-                'payment_id'         => $payment->id,
+                'payment_id' => $payment->id,
             ]);
 
             return response()->json(['message' => 'ok']);
@@ -420,7 +426,7 @@ class CheckoutController extends Controller
         // which left webhook-confirmed subscriptions with no payment trail and
         // invisible to the refund screen (it filters on payment_id).
         $userPlan->update([
-            'payment_id'     => (string) $payment->id,
+            'payment_id' => (string) $payment->id,
             'payment_amount' => (float) $payment->transaction_amount,
         ]);
 

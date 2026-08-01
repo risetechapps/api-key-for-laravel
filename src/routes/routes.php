@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use RiseTechApps\ApiKey\RoutesApiKey;
 
 RoutesApiKey::register([
-    'prefix'     => 'api/v1',
+    'prefix' => 'api/v1',
     'middleware' => ['api'],
 ]);
 

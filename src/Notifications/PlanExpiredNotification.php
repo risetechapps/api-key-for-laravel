@@ -28,6 +28,6 @@ class PlanExpiredNotification extends Notification
             ->line('Seu acesso à API foi suspenso. Para restabelecer o acesso, renove sua assinatura.')
             ->action('Renovar assinatura', url('/dashboard/plans'))
             ->line('Se tiver dúvidas, entre em contato com nosso suporte.')
-            ->salutation('Atenciosamente, Equipe ' . config('app.name'));
+            ->salutation('Atenciosamente, Equipe '.config('app.name'));
     }
 }

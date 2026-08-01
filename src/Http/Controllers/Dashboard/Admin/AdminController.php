@@ -26,14 +26,14 @@ class AdminController extends Controller
 
         try {
             $payment = new PaymentClient()->get((int) $userPlan->payment_id);
-            $client  = new PaymentRefundClient();
-            $refund  = $client->refund((int) $userPlan->payment_id, (float) $payment->transaction_amount);
+            $client = new PaymentRefundClient;
+            $refund = $client->refund((int) $userPlan->payment_id, (float) $payment->transaction_amount);
 
             $userPlan->update(['active' => false]);
 
             return response()->jsonSuccess([
                 'refund_id' => $refund->id,
-                'status'    => $refund->status ?? 'processed',
+                'status' => $refund->status ?? 'processed',
             ]);
         } catch (\Exception $e) {
             // A correlation code goes to the panel, the detail goes to the log.
@@ -46,11 +46,11 @@ class AdminController extends Controller
             $errorId = strtoupper(Str::random(8));
 
             Log::error('Refund failed', [
-                'error_id'     => $errorId,
+                'error_id' => $errorId,
                 'user_plan_id' => $userPlan->getKey(),
-                'payment_id'   => $userPlan->payment_id,
-                'admin_id'     => auth()->id(),
-                'exception'    => $e->getMessage(),
+                'payment_id' => $userPlan->payment_id,
+                'admin_id' => auth()->id(),
+                'exception' => $e->getMessage(),
             ]);
 
             report($e);
@@ -69,34 +69,35 @@ class AdminController extends Controller
             ->paginate(20);
 
         return response()->jsonSuccess([
-            'data' => $subscriptions->map(fn($up) => [
-                'id'         => $up->getKey(),
+            'data' => $subscriptions->map(fn ($up) => [
+                'id' => $up->getKey(),
                 'payment_id' => $up->payment_id,
-                'active'     => $up->active,
+                'active' => $up->active,
                 'start_date' => $up->start_date?->toIso8601String(),
-                'end_date'   => $up->end_date?->toIso8601String(),
-                'plan'       => [
-                    'name'  => $up->plan?->name,
+                'end_date' => $up->end_date?->toIso8601String(),
+                'plan' => [
+                    'name' => $up->plan?->name,
                     'price' => $up->plan?->formatted_price,
                 ],
                 'payment_amount' => $up->payment_amount
-                    ? 'R$ ' . number_format((float) $up->payment_amount, 2, ',', '.')
+                    ? 'R$ '.number_format((float) $up->payment_amount, 2, ',', '.')
                     : $up->plan?->formatted_price,
                 'user' => [
-                    'id'    => $up->authentication?->getKey(),
-                    'name'  => $up->authentication?->name,
+                    'id' => $up->authentication?->getKey(),
+                    'name' => $up->authentication?->name,
                     'email' => $up->authentication?->email,
                 ],
             ]),
-            'total'        => $subscriptions->total(),
+            'total' => $subscriptions->total(),
             'current_page' => $subscriptions->currentPage(),
-            'last_page'    => $subscriptions->lastPage(),
+            'last_page' => $subscriptions->lastPage(),
         ]);
     }
 
     public function plans(): JsonResponse
     {
         $plans = Plan::orderBy('price')->get();
+
         return response()->jsonSuccess(PlansResource::collection($plans));
     }
 
@@ -112,33 +113,33 @@ class AdminController extends Controller
         // Escaped so a % or _ typed by the operator is matched literally instead
         // of turning into a wildcard. The LOWER(col) LIKE shape is kept because
         // that is what the pg_trgm indexes are built on.
-        $term = $search ? '%' . addcslashes(strtolower((string) $search), '%_\\') . '%' : null;
+        $term = $search ? '%'.addcslashes(strtolower((string) $search), '%_\\').'%' : null;
 
         $users = Authentication::with(['activePlan.plan'])
-            ->when($term, fn($q) => $q->where(function ($q) use ($term) {
+            ->when($term, fn ($q) => $q->where(function ($q) use ($term) {
                 $q->whereRaw('LOWER(name) LIKE ?', [$term])
-                  ->orWhereRaw('LOWER(email) LIKE ?', [$term]);
+                    ->orWhereRaw('LOWER(email) LIKE ?', [$term]);
             }))
             ->latest()
             ->paginate(20);
 
         return response()->jsonSuccess([
-            'data' => $users->map(fn($u) => [
-                'id'         => $u->getKey(),
-                'name'       => $u->name,
-                'email'      => $u->email,
-                'role'       => $u->role ?? 'user',
-                'status'     => $u->status,
+            'data' => $users->map(fn ($u) => [
+                'id' => $u->getKey(),
+                'name' => $u->name,
+                'email' => $u->email,
+                'role' => $u->role ?? 'user',
+                'status' => $u->status,
                 'created_at' => $u->created_at?->toIso8601String(),
                 'active_plan' => $u->activePlan ? [
-                    'name'     => $u->activePlan->plan?->name,
+                    'name' => $u->activePlan->plan?->name,
                     'end_date' => $u->activePlan->end_date?->toIso8601String(),
-                    'active'   => $u->activePlan->active,
+                    'active' => $u->activePlan->active,
                 ] : null,
             ]),
-            'total'        => $users->total(),
+            'total' => $users->total(),
             'current_page' => $users->currentPage(),
-            'last_page'    => $users->lastPage(),
+            'last_page' => $users->lastPage(),
         ]);
     }
 }

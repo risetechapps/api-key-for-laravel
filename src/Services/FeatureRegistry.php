@@ -22,7 +22,7 @@ class FeatureRegistry
 
         // Auto-define in FeatureManager so `feature:key` middleware works automatically.
         // (Em memória — precisa rodar em TODA requisição para o middleware funcionar.)
-        $this->manager->define($key, fn(FeatureContext $ctx) => $ctx->has($key));
+        $this->manager->define($key, fn (FeatureContext $ctx) => $ctx->has($key));
 
         // Sincroniza metadados com a tabela `plan_features` APENAS em console
         // (deploy/artisan). Antes isto rodava no boot de toda requisição web:
@@ -35,12 +35,13 @@ class FeatureRegistry
                 Feature::updateOrCreate(
                     ['key' => $key],
                     [
-                        'name'        => $metadata['name'] ?? $key,
+                        'name' => $metadata['name'] ?? $key,
                         'description' => $metadata['description'] ?? null,
-                        'icon'        => $metadata['icon'] ?? null,
+                        'icon' => $metadata['icon'] ?? null,
                     ]
                 );
-            } catch (\Throwable) {}
+            } catch (\Throwable) {
+            }
         }
     }
 
@@ -78,9 +79,9 @@ class FeatureRegistry
             Feature::updateOrCreate(
                 ['key' => $key],
                 [
-                    'name'        => $metadata['name'] ?? $key,
+                    'name' => $metadata['name'] ?? $key,
                     'description' => $metadata['description'] ?? null,
-                    'icon'        => $metadata['icon'] ?? null,
+                    'icon' => $metadata['icon'] ?? null,
                 ]
             );
         }

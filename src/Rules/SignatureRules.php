@@ -6,7 +6,6 @@ use RiseTechApps\FormRequest\Contracts\RulesContract;
 
 class SignatureRules implements RulesContract
 {
-
     /**
      * `method` e `method_data` saíram daqui: o controller nunca os leu, e o
      * endpoint hoje só ativa plano de preço zero — exigir forma de pagamento

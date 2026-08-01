@@ -24,7 +24,7 @@ use RiseTechApps\ApiKey\Traits\SendsIdempotentPayments;
  * subscriber inside one command — at a few thousand subscribers the run no
  * longer fit in a day, and withoutOverlapping() would then skip the next one.
  */
-class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
+class ProcessPlanRenewalJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SendsIdempotentPayments, SerializesModels;
 
@@ -34,9 +34,7 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
      */
     public int $tries = 1;
 
-    public function __construct(public readonly string $userPlanId)
-    {
-    }
+    public function __construct(public readonly string $userPlanId) {}
 
     /**
      * Guards against the same subscription being charged twice if the command is
@@ -56,7 +54,7 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
     {
         $userPlan = UserPlan::with(['authentication', 'plan'])->find($this->userPlanId);
 
-        if (!$userPlan || !$userPlan->active) {
+        if (! $userPlan || ! $userPlan->active) {
             return;
         }
 
@@ -75,10 +73,11 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
         $user = $userPlan->authentication;
         $plan = $userPlan->plan;
 
-        if (!$user || !$plan) {
+        if (! $user || ! $plan) {
             Log::warning('billing renewal skipped: missing user or plan', [
                 'user_plan_id' => $this->userPlanId,
             ]);
+
             return;
         }
 
@@ -87,40 +86,41 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
             ->whereNotNull('mp_card_id')
             ->first();
 
-        if (!$card) {
+        if (! $card) {
             Log::warning('billing renewal skipped: no default card', [
-                'user_id'      => $user->getKey(),
+                'user_id' => $user->getKey(),
                 'user_plan_id' => $this->userPlanId,
             ]);
+
             return;
         }
 
         MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
 
-        $token  = $mpService->tokenizeRecurring($card->mp_customer_id, $card->mp_card_id);
+        $token = $mpService->tokenizeRecurring($card->mp_customer_id, $card->mp_card_id);
         $amount = (float) $plan->price;
 
         $payment = new PaymentClient()->create([
             'transaction_amount' => $amount,
-            'token'              => $token,
-            'installments'       => 1,
-            'payment_method_id'  => $card->brand,
-            'payer'              => [
-                'id'    => $card->mp_customer_id,
+            'token' => $token,
+            'installments' => 1,
+            'payment_method_id' => $card->brand,
+            'payer' => [
+                'id' => $card->mp_customer_id,
                 'email' => strtolower((string) $user->email),
             ],
-            'description'          => __('api-key::messages.plan_renewal_description', ['plan' => $plan->name]),
-            'external_reference'   => "renewal|{$user->getKey()}|{$plan->getKey()}|{$userPlan->getKey()}",
+            'description' => __('api-key::messages.plan_renewal_description', ['plan' => $plan->name]),
+            'external_reference' => "renewal|{$user->getKey()}|{$plan->getKey()}|{$userPlan->getKey()}",
             'statement_descriptor' => mb_substr((string) config('app.name') ?: 'Assinatura', 0, 22),
-            'additional_info'      => [
+            'additional_info' => [
                 'items' => [
                     [
-                        'id'          => (string) $plan->getKey(),
-                        'title'       => __('api-key::messages.plan_renewal_description', ['plan' => $plan->name]),
+                        'id' => (string) $plan->getKey(),
+                        'title' => __('api-key::messages.plan_renewal_description', ['plan' => $plan->name]),
                         'description' => $plan->description ?? __('api-key::messages.plan_renewal_description', ['plan' => $plan->name]),
                         'category_id' => 'services',
-                        'quantity'    => 1,
-                        'unit_price'  => $amount,
+                        'quantity' => 1,
+                        'unit_price' => $amount,
                     ],
                 ],
             ],
@@ -141,13 +141,13 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
         if ($payment->status === 'approved') {
             $newPlan = $user->subscribeToPlan($plan);
             $newPlan->update([
-                'payment_id'     => (string) $payment->id,
+                'payment_id' => (string) $payment->id,
                 'payment_amount' => $amount,
             ]);
 
             Log::info('billing renewal approved', [
-                'user_id'    => $user->getKey(),
-                'plan'       => $plan->name,
+                'user_id' => $user->getKey(),
+                'plan' => $plan->name,
                 'payment_id' => $payment->id,
             ]);
 
@@ -155,9 +155,9 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
         }
 
         Log::warning('billing renewal not approved', [
-            'user_id'       => $user->getKey(),
-            'user_plan_id'  => $this->userPlanId,
-            'status'        => $payment->status,
+            'user_id' => $user->getKey(),
+            'user_plan_id' => $this->userPlanId,
+            'status' => $payment->status,
             'status_detail' => $payment->status_detail,
         ]);
     }
@@ -166,7 +166,7 @@ class ProcessPlanRenewalJob implements ShouldQueue, ShouldBeUnique
     {
         Log::error('billing renewal failed', [
             'user_plan_id' => $this->userPlanId,
-            'error'        => $e->getMessage(),
+            'error' => $e->getMessage(),
         ]);
     }
 }

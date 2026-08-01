@@ -36,9 +36,11 @@ class LanguageMiddleware
             $language = $this->localeMap[$language] ?? Str::before($language, '-');
 
             app()->setLocale($language);
+
             return $next($request);
         } catch (\Exception) {
             app()->setLocale(config('api-key.default_language', 'pt'));
+
             return $next($request);
         }
     }

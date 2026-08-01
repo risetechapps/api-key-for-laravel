@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-
 use RiseTechApps\ApiKey\Events\ApiKeyCreated;
 use RiseTechApps\ApiKey\Events\ApiKeyStatusChanged;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
@@ -18,7 +17,7 @@ use RiseTechApps\ToUpper\Traits\HasToUpper;
 
 class ApiKey extends Model
 {
-    use HasFactory, HasUuid, HasCodeGenerate, HasToUpper;
+    use HasCodeGenerate, HasFactory, HasToUpper, HasUuid;
 
     /**
      * The plain key value (only set during creation, not stored in DB).
@@ -39,7 +38,7 @@ class ApiKey extends Model
         'lookup_hash',
         'expires_at',
         'active',
-        'allowed_origins'
+        'allowed_origins',
     ];
 
     protected $hidden = ['key', 'lookup_hash'];
@@ -63,7 +62,7 @@ class ApiKey extends Model
             // Hash the key whenever it is set or changed (creation or regeneration).
             // isDirty('key') is false on unrelated updates (e.g. toggling `active`),
             // so an already-hashed key is never re-hashed.
-            if ($model->isDirty('key') && !empty($model->key)) {
+            if ($model->isDirty('key') && ! empty($model->key)) {
                 // Keep the plain key in memory so it can be shown once to the user.
                 $model->plainKey = $model->key;
                 // Deterministic keyed digest used for the indexed lookup.
@@ -134,7 +133,7 @@ class ApiKey extends Model
      */
     public static function clearOriginCache(int|string $keyId): void
     {
-        $versionKey = 'api_key_origin_version:' . $keyId;
+        $versionKey = 'api_key_origin_version:'.$keyId;
 
         // increment() does not create a missing entry on the file/database/array
         // stores, which would leave the version pinned at 1 and the origin cache
@@ -185,7 +184,7 @@ class ApiKey extends Model
      *                        (lookup_hash IS NULL). Each row that validates is
      *                        backfilled, so this set drains to empty over time.
      *
-     * @param string|null $key The plain API key to validate
+     * @param  string|null  $key  The plain API key to validate
      */
     public static function validateKey($key): ?self
     {
@@ -195,9 +194,9 @@ class ApiKey extends Model
 
         $cacheTtl = config('api-key.cache_ttl.validation', 300);
         // Cache handle derived from the key, never the key itself.
-        $digest      = self::lookupHash($key);
-        $cacheKey    = 'api_key_valid:' . $digest;
-        $missCacheKey = 'api_key_invalid:' . $digest;
+        $digest = self::lookupHash($key);
+        $cacheKey = 'api_key_valid:'.$digest;
+        $missCacheKey = 'api_key_invalid:'.$digest;
 
         $cachedId = Cache::get($cacheKey);
 
@@ -222,11 +221,13 @@ class ApiKey extends Model
 
         if ($candidate && Hash::check($key, $candidate->key)) {
             Cache::put($cacheKey, $candidate->id, $cacheTtl);
+
             return $candidate;
         }
 
         if ($legacy = self::resolveLegacyKey($key)) {
             Cache::put($cacheKey, $legacy->id, $cacheTtl);
+
             return $legacy;
         }
 
@@ -257,7 +258,7 @@ class ApiKey extends Model
         $match = null;
 
         $maxSeconds = (float) config('api-key.legacy_scan.max_seconds', 3);
-        $deadline   = $maxSeconds > 0 ? microtime(true) + $maxSeconds : null;
+        $deadline = $maxSeconds > 0 ? microtime(true) + $maxSeconds : null;
         $budgetSpent = false;
 
         self::usableScope(self::whereNull('lookup_hash'))
@@ -266,11 +267,13 @@ class ApiKey extends Model
                 foreach ($apiKeys as $apiKey) {
                     if ($deadline !== null && microtime(true) >= $deadline) {
                         $budgetSpent = true;
+
                         return false; // stop: time budget for this request is spent
                     }
 
                     if (Hash::check($key, $apiKey->key)) {
                         $match = $apiKey;
+
                         return false; // stop chunking
                     }
                 }
@@ -310,8 +313,8 @@ class ApiKey extends Model
 
         $normalizedOrigin = strtolower(parse_url($origin, PHP_URL_HOST) ?? $origin);
 
-        $version  = Cache::get('api_key_origin_version:' . $this->id, 1);
-        $cacheKey = 'api_key_origin:' . $this->id . ':v' . $version . ':' . md5($normalizedOrigin);
+        $version = Cache::get('api_key_origin_version:'.$this->id, 1);
+        $cacheKey = 'api_key_origin:'.$this->id.':v'.$version.':'.md5($normalizedOrigin);
 
         $cacheTtl = config('api-key.cache_ttl.origin', 60);
 
@@ -334,7 +337,7 @@ class ApiKey extends Model
                 if (str_starts_with($allowedOrigin, '*.')) {
                     $base = substr($allowedOrigin, 2);
 
-                    if ($normalizedOrigin === $base || str_ends_with($normalizedOrigin, '.' . $base)) {
+                    if ($normalizedOrigin === $base || str_ends_with($normalizedOrigin, '.'.$base)) {
                         return true;
                     }
                 }
@@ -352,7 +355,7 @@ class ApiKey extends Model
      */
     public function setKeyAttribute($value): void
     {
-        if (!empty($value) && !Hash::isHashed($value)) {
+        if (! empty($value) && ! Hash::isHashed($value)) {
             $this->plainKey = $value;
         }
 

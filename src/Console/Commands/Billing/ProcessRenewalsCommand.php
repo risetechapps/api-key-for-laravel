@@ -42,6 +42,7 @@ class ProcessRenewalsCommand extends Command
                     if ($dryRun) {
                         $this->line("  - {$userPlan->authentication?->email} → {$userPlan->plan?->name}");
                         $dispatched++;
+
                         continue;
                     }
 

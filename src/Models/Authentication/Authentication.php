@@ -2,7 +2,6 @@
 
 namespace RiseTechApps\ApiKey\Models\Authentication;
 
-
 use Illuminate\Auth\MustVerifyEmail;
 use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,15 +10,16 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Laravel\Sanctum\HasApiTokens;
 use RiseTechApps\Address\Traits\HasAddress\HasAddress;
 use RiseTechApps\ApiKey\Enums\BillingCycle;
+use RiseTechApps\ApiKey\Events\PlanChanged;
+use RiseTechApps\ApiKey\Events\UserStatusChanged;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\RequestLog\RequestLog;
-use RiseTechApps\ApiKey\Events\PlanChanged;
-use RiseTechApps\ApiKey\Events\UserStatusChanged;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\ApiKey\Notifications\ResetPasswordNotification;
@@ -46,18 +46,17 @@ use RiseTechApps\ToUpper\Traits\HasToUpper;
  * @property string|null $locale
  * @property string|null $status
  * @property string|null $role
- * @property \Illuminate\Support\Carbon|null $email_verified_at
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- * @property \Illuminate\Support\Carbon|null $deleted_at
+ * @property Carbon|null $email_verified_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
  * @property-read ApiKey|null $apiKey
  * @property-read UserPlan|null $activePlan
  */
 class Authentication extends Authenticatable implements HasLocalePreference, MediaContract
 {
-
-    use HasFactory, SoftDeletes, HasUuid, HasToUpper, Notifiable;
-    use MustVerifyEmail, HasApiTokens, HasAddress, HasCodeGenerate;
+    use HasAddress, HasApiTokens, HasCodeGenerate, MustVerifyEmail;
+    use HasFactory, HasToUpper, HasUuid, Notifiable, SoftDeletes;
     use HasMediaSuite;
 
     protected $fillable = [
@@ -140,7 +139,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
     public function sendEmailVerificationNotification(): void
     {
         $notification = Config::get('api-key.notifications.email_verify', EmailVerifyNotification::class);
-        $this->notify(new $notification());
+        $this->notify(new $notification);
     }
 
     #[\Override]
@@ -189,7 +188,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
 
     public function userPlan(): HasMany
     {
-        return $this->hasMany(UserPlan::class,);
+        return $this->hasMany(UserPlan::class);
     }
 
     /**
@@ -283,7 +282,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
         return 0;
     }
 
-    public function requestLog(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function requestLog(): HasMany
     {
         return $this->hasMany(RequestLog::class);
     }
@@ -291,19 +290,19 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
     /**
      * Log request usage and increment counter.
      *
-     * @param int         $status     Código HTTP da resposta.
-     * @param bool        $countUsage Se a requisição deve contar na cota do plano.
-     *                                O CheckRequestLimitMiddleware já reserva a cota
-     *                                de forma atômica antes de processar a requisição,
-     *                                então ele passa false e usa este método apenas
-     *                                para o log. Mantido para chamadas fora do ciclo
-     *                                de request.
-     * @param string|null $planId     Plano ativo já resolvido pelo middleware. Quando
-     *                                informado, evita reconsultar user_plans.
-     * @param string|null $endpoint   Caminho da requisição. Passado explicitamente
-     *                                porque este método roda depois da resposta, onde
-     *                                depender do helper request() é frágil.
-     * @param string|null $method     Método HTTP da requisição.
+     * @param  int  $status  Código HTTP da resposta.
+     * @param  bool  $countUsage  Se a requisição deve contar na cota do plano.
+     *                            O CheckRequestLimitMiddleware já reserva a cota
+     *                            de forma atômica antes de processar a requisição,
+     *                            então ele passa false e usa este método apenas
+     *                            para o log. Mantido para chamadas fora do ciclo
+     *                            de request.
+     * @param  string|null  $planId  Plano ativo já resolvido pelo middleware. Quando
+     *                               informado, evita reconsultar user_plans.
+     * @param  string|null  $endpoint  Caminho da requisição. Passado explicitamente
+     *                                 porque este método roda depois da resposta, onde
+     *                                 depender do helper request() é frágil.
+     * @param  string|null  $method  Método HTTP da requisição.
      */
     public function requestUsed(
         int $status = 0,
@@ -317,7 +316,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
             ->where('end_date', '>=', now())
             ->value('id');
 
-        if (!$activePlanId) {
+        if (! $activePlanId) {
             return;
         }
 
@@ -329,7 +328,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
             'response_code' => $status,
         ]);
 
-        if (!$countUsage) {
+        if (! $countUsage) {
             return;
         }
 

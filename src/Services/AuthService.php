@@ -8,28 +8,31 @@ use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 class AuthService
 {
     public static string $ENABLE = 'enabled';
+
     public static string $DISABLE = 'disabled';
+
     public static string $BLOCKED = 'blocked';
 
     public static string $ADMIN = 'admin';
+
     public static string $CLIENT = 'client';
+
     public static string $EMPLOYEE = 'employee';
 
     /**
      * Attempt to login with credentials.
      *
-     * @param array $credentials
      * @return array|null Returns user data with token on success, null on failure
      */
     public function attemptLogin(array $credentials): ?array
     {
         $user = $this->findUserByEmail($credentials['email']);
 
-        if (!$user) {
+        if (! $user) {
             return null;
         }
 
-        if (!$this->validateCredentials($credentials)) {
+        if (! $this->validateCredentials($credentials)) {
             return null;
         }
 
@@ -51,7 +54,7 @@ class AuthService
     {
         return Auth::attempt([
             'email' => $credentials['email'],
-            'password' => $credentials['password']
+            'password' => $credentials['password'],
         ]);
     }
 
@@ -85,7 +88,7 @@ class AuthService
      */
     public static function genreProfile(): array
     {
-        return ["MASCULINE", "FEMALE", "OTHER"];
+        return ['MASCULINE', 'FEMALE', 'OTHER'];
     }
 
     /**
@@ -93,7 +96,7 @@ class AuthService
      */
     public static function maritalStatusProfile(): array
     {
-        return ["SINGLE", "MARRIED", "WIDOWER", "JUDICIALLY SEPARATED"];
+        return ['SINGLE', 'MARRIED', 'WIDOWER', 'JUDICIALLY SEPARATED'];
     }
 
     /**

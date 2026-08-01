@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Http\Request\Dashboard\Plans;
 
 use Illuminate\Foundation\Http\FormRequest;
+use RiseTechApps\ApiKey\Rules\PlanRules;
 use RiseTechApps\FormRequest\Traits\HasFormValidation\HasFormValidation;
 use RiseTechApps\FormRequest\ValidationRuleRepository;
 
@@ -32,6 +33,6 @@ class UpdatePlanRequest extends FormRequest
     #[\Override]
     public function messages(): array
     {
-        return array_merge($this->result['messages'] ?? [], \RiseTechApps\ApiKey\Rules\PlanRules::messages());
+        return array_merge($this->result['messages'] ?? [], PlanRules::messages());
     }
 }

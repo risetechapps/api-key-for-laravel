@@ -62,6 +62,4 @@ class LoginRequest extends FormRequest
 
         return $translations[$key] ?? $key;
     }
-
-
 }

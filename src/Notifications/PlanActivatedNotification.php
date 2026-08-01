@@ -36,8 +36,8 @@ class PlanActivatedNotification extends Notification
 
         return $mail
             ->line("Limite de requisições: **{$this->plan->request_limit}** por ciclo.")
-            ->line('Validade do período atual: ' . optional($this->userPlan->end_date)->format('d/m/Y') . '.')
+            ->line('Validade do período atual: '.optional($this->userPlan->end_date)->format('d/m/Y').'.')
             ->action('Acessar painel', url('/dashboard'))
-            ->salutation('Atenciosamente, Equipe ' . config('app.name'));
+            ->salutation('Atenciosamente, Equipe '.config('app.name'));
     }
 }

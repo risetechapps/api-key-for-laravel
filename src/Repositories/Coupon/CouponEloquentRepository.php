@@ -1,6 +1,7 @@
 <?php
 
 namespace RiseTechApps\ApiKey\Repositories\Coupon;
+
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\Repository\Core\BaseRepository;
 
@@ -13,7 +14,7 @@ class CouponEloquentRepository extends BaseRepository implements CouponRepositor
 
     public function entityOn(): Coupon
     {
-        return new Coupon();
+        return new Coupon;
     }
 
     #[\Override]
@@ -30,8 +31,8 @@ class CouponEloquentRepository extends BaseRepository implements CouponRepositor
         $claimed = Coupon::query()
             ->whereKey($coupon->getKey())
             ->where('is_active', true)
-            ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            ->where(fn($q) => $q->whereNull('max_uses')->orWhereColumn('uses', '<', 'max_uses'))
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->where(fn ($q) => $q->whereNull('max_uses')->orWhereColumn('uses', '<', 'max_uses'))
             ->increment('uses');
 
         if ($claimed <= 0) {

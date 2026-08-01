@@ -2,8 +2,10 @@
 
 namespace RiseTechApps\ApiKey\Models\Plan;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use RiseTechApps\ApiKey\Enums\BillingCycle;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
@@ -20,12 +22,12 @@ use RiseTechApps\ToUpper\Traits\HasToUpper;
  * @property bool $is_active
  * @property array $features
  * @property-read string $formatted_price
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 class Plan extends Model
 {
-    use HasFactory, HasUuid, HasCodeGenerate, HasToUpper;
+    use HasCodeGenerate, HasFactory, HasToUpper, HasUuid;
 
     protected $fillable = [
         'code',
@@ -49,9 +51,9 @@ class Plan extends Model
      * era null; este accessor normaliza para [] (contrato consistente para a
      * Resource/FeatureResolver e para os consumidores da API).
      */
-    protected function features(): \Illuminate\Database\Eloquent\Casts\Attribute
+    protected function features(): Attribute
     {
-        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+        return Attribute::make(
             get: fn ($value) => is_array($value) ? $value : (json_decode($value ?? '[]', true) ?: []),
             set: fn ($value) => json_encode($value ?? []),
         );
@@ -60,10 +62,10 @@ class Plan extends Model
     protected $hidden = [
         'id',
         'created_at',
-        'updated_at'
+        'updated_at',
     ];
 
-    protected array $no_upper   = ['billing_cycle'];
+    protected array $no_upper = ['billing_cycle'];
 
     /**
      * Verifica se o plano tem limite de requisições.
@@ -78,6 +80,6 @@ class Plan extends Model
      */
     public function getFormattedPriceAttribute(): string
     {
-        return 'R$ ' . number_format($this->price, 2, ',', '.');
+        return 'R$ '.number_format($this->price, 2, ',', '.');
     }
 }

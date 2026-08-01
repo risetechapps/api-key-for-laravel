@@ -2,6 +2,7 @@
 
 namespace RiseTechApps\ApiKey\Notifications;
 
+use Carbon\Carbon;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
@@ -23,7 +24,7 @@ class GracePeriodStartedNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $endDate = \Carbon\Carbon::instance($this->gracePeriodEndDate)->format('d/m/Y');
+        $endDate = Carbon::instance($this->gracePeriodEndDate)->format('d/m/Y');
 
         return (new MailMessage)
             ->subject('Seu plano expirou — período de tolerância ativo')
@@ -32,6 +33,6 @@ class GracePeriodStartedNotification extends Notification
             ->line("Você tem **{$this->gracePeriodDays} dias** para renovar sua assinatura (até {$endDate}).")
             ->action('Renovar agora', url('/dashboard/plans'))
             ->line('Após esse prazo, o acesso será suspenso automaticamente.')
-            ->salutation('Atenciosamente, Equipe ' . config('app.name'));
+            ->salutation('Atenciosamente, Equipe '.config('app.name'));
     }
 }

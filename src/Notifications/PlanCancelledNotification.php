@@ -38,6 +38,6 @@ class PlanCancelledNotification extends Notification
             ->line('Nenhuma nova cobrança será feita.')
             ->action('Reativar renovação', url('/dashboard/billing'))
             ->line('Mudou de ideia? Você pode reativar a renovação pelo painel enquanto o período atual não terminar.')
-            ->salutation('Atenciosamente, Equipe ' . config('app.name'));
+            ->salutation('Atenciosamente, Equipe '.config('app.name'));
     }
 }

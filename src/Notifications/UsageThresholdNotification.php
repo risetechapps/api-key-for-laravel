@@ -33,6 +33,6 @@ class UsageThresholdNotification extends Notification
             ->line("Restam aproximadamente **{$remaining}** requisições antes do bloqueio.")
             ->line('Se precisar de mais capacidade, considere fazer upgrade do plano.')
             ->action('Ver planos', url('/dashboard/plans'))
-            ->salutation('Atenciosamente, Equipe ' . config('app.name'));
+            ->salutation('Atenciosamente, Equipe '.config('app.name'));
     }
 }

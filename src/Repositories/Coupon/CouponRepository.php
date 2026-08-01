@@ -2,6 +2,7 @@
 
 namespace RiseTechApps\ApiKey\Repositories\Coupon;
 
+use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\Repository\Contracts\RepositoryInterface;
 
 interface CouponRepository extends RepositoryInterface
@@ -22,13 +23,13 @@ interface CouponRepository extends RepositoryInterface
      *
      * @return bool False when the coupon is inactive, expired or exhausted.
      */
-    public function claimUse(\RiseTechApps\ApiKey\Models\Coupon\Coupon $coupon): bool;
+    public function claimUse(Coupon $coupon): bool;
 
     /**
      * Give a claimed use back, for when the payment it was claimed for never
      * completed. Never drops below zero.
      */
-    public function releaseUse(\RiseTechApps\ApiKey\Models\Coupon\Coupon $coupon): void;
+    public function releaseUse(Coupon $coupon): void;
 
     /**
      * Ignora o cache na próxima leitura, indo direto ao banco.

@@ -36,8 +36,7 @@ class LogApiRequestJob implements ShouldQueue
         public readonly string $endpoint,
         public readonly string $method,
         public readonly int $status,
-    ) {
-    }
+    ) {}
 
     public function handle(): void
     {
@@ -55,10 +54,10 @@ class LogApiRequestJob implements ShouldQueue
 
         RequestLog::create([
             'authentication_id' => $this->authenticationId,
-            'endpoint'          => $this->endpoint,
-            'requested_at'      => now(),
-            'method'            => $this->method,
-            'response_code'     => $this->status,
+            'endpoint' => $this->endpoint,
+            'requested_at' => now(),
+            'method' => $this->method,
+            'response_code' => $this->status,
         ]);
     }
 }

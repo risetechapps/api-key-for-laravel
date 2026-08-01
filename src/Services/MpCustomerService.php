@@ -10,6 +10,7 @@ use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 class MpCustomerService
 {
     private string $baseUrl = 'https://api.mercadopago.com';
+
     private readonly string $accessToken;
 
     public function __construct()
@@ -27,7 +28,7 @@ class MpCustomerService
             return $existing;
         }
 
-        $email    = strtolower($user->email);
+        $email = strtolower($user->email);
         $response = Http::withToken($this->accessToken)
             ->post("{$this->baseUrl}/v1/customers", ['email' => $email]);
 
@@ -91,8 +92,8 @@ class MpCustomerService
     {
         $response = Http::withToken($this->accessToken)
             ->post("{$this->baseUrl}/v1/card_tokens", [
-                'customer_id'   => $customerId,
-                'card_id'       => $cardId,
+                'customer_id' => $customerId,
+                'card_id' => $cardId,
                 'security_code' => $securityCode,
             ]);
 
@@ -109,7 +110,7 @@ class MpCustomerService
         $response = Http::withToken($this->accessToken)
             ->post("{$this->baseUrl}/v1/card_tokens", [
                 'customer_id' => $customerId,
-                'card_id'     => $cardId,
+                'card_id' => $cardId,
             ]);
 
         if (! $response->successful()) {

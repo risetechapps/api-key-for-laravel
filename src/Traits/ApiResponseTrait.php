@@ -10,11 +10,6 @@ trait ApiResponseTrait
 {
     /**
      * Return a successful response.
-     *
-     * @param array|object|null $data
-     * @param string|null $message
-     * @param int $code
-     * @return JsonResponse
      */
     protected function successResponse(array|object|null $data = [], ?string $message = null, int $code = 200): JsonResponse
     {
@@ -23,12 +18,6 @@ trait ApiResponseTrait
 
     /**
      * Return an error response.
-     *
-     * @param string $message
-     * @param int $code
-     * @param array $errors
-     * @param string|null $error_code
-     * @return JsonResponse
      */
     protected function errorResponse(string $message, int $code = 500, array $errors = [], ?string $error_code = null): JsonResponse
     {
@@ -37,11 +26,6 @@ trait ApiResponseTrait
 
     /**
      * Return a paginated collection response.
-     *
-     * @param ResourceCollection $collection
-     * @param string|null $message
-     * @param int $code
-     * @return JsonResponse
      */
     protected function collectionResponse(ResourceCollection $collection, ?string $message = null, int $code = 200): JsonResponse
     {
@@ -50,9 +34,6 @@ trait ApiResponseTrait
 
     /**
      * Return a not found error response.
-     *
-     * @param string $resource
-     * @return JsonResponse
      */
     protected function notFoundResponse(string $resource = 'Resource'): JsonResponse
     {
@@ -61,9 +42,6 @@ trait ApiResponseTrait
 
     /**
      * Return an unauthorized error response.
-     *
-     * @param string|null $message
-     * @return JsonResponse
      */
     protected function unauthorizedResponse(?string $message = null): JsonResponse
     {
@@ -72,9 +50,6 @@ trait ApiResponseTrait
 
     /**
      * Return a forbidden error response.
-     *
-     * @param string|null $message
-     * @return JsonResponse
      */
     protected function forbiddenResponse(?string $message = null): JsonResponse
     {

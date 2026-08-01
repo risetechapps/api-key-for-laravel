@@ -9,18 +9,17 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use RiseTechApps\ApiKey\Console\Commands\Billing\ProcessRenewalsCommand;
+use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
+use RiseTechApps\ApiKey\Console\Commands\MakeAdminCommand;
+use RiseTechApps\ApiKey\Console\Commands\PruneRequestLogsCommand;
+use RiseTechApps\ApiKey\Console\Commands\RotateApiKeysCommand;
 use RiseTechApps\ApiKey\Events\PlanCancelled;
 use RiseTechApps\ApiKey\Events\PlanChanged;
 use RiseTechApps\ApiKey\Events\PlanExpired;
 use RiseTechApps\ApiKey\Events\PlanGracePeriodStarted;
 use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
-use RiseTechApps\ApiKey\Listeners\SendGracePeriodNotification;
-use RiseTechApps\ApiKey\Listeners\SendPlanCancelledNotification;
-use RiseTechApps\ApiKey\Listeners\SendPlanActivatedNotification;
-use RiseTechApps\ApiKey\Listeners\SendPlanExpiredNotification;
-use RiseTechApps\ApiKey\Listeners\SendRequestLimitReachedNotification;
-use RiseTechApps\ApiKey\Listeners\SendUsageThresholdNotification;
 use RiseTechApps\ApiKey\Http\Middlewares\AdminMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\ApiKeyOriginValidatorMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
@@ -29,17 +28,21 @@ use RiseTechApps\ApiKey\Http\Middlewares\CheckPlanFeatureMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckRequestLimitMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\DisableRouteWebMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\LanguageMiddleware;
+use RiseTechApps\ApiKey\Listeners\SendGracePeriodNotification;
+use RiseTechApps\ApiKey\Listeners\SendPlanActivatedNotification;
+use RiseTechApps\ApiKey\Listeners\SendPlanCancelledNotification;
+use RiseTechApps\ApiKey\Listeners\SendPlanExpiredNotification;
+use RiseTechApps\ApiKey\Listeners\SendRequestLimitReachedNotification;
+use RiseTechApps\ApiKey\Listeners\SendUsageThresholdNotification;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 use RiseTechApps\ApiKey\Rules\AuthenticationRules;
 use RiseTechApps\ApiKey\Rules\CouponRules;
 use RiseTechApps\ApiKey\Rules\PlanRules;
 use RiseTechApps\ApiKey\Rules\SignatureRules;
-use RiseTechApps\ApiKey\Console\Commands\Billing\ProcessRenewalsCommand;
-use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
-use RiseTechApps\ApiKey\Console\Commands\MakeAdminCommand;
-use RiseTechApps\ApiKey\Console\Commands\PruneRequestLogsCommand;
-use RiseTechApps\ApiKey\Console\Commands\RotateApiKeysCommand;
+use RiseTechApps\ApiKey\Services\FeatureRegistry;
 use RiseTechApps\FormRequest\RulesRegistry;
+use RiseTechApps\Repository\RepositoryServiceProvider;
 
 class ApiKeyServiceProvider extends ServiceProvider
 {
@@ -49,7 +52,7 @@ class ApiKeyServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->mergeConfigFrom(
-            __DIR__ . '/../config/config.php', 'api-key'
+            __DIR__.'/../config/config.php', 'api-key'
         );
 
         $rulesRegistry = $this->app->make(RulesRegistry::class);
@@ -58,51 +61,50 @@ class ApiKeyServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                $packageRoot . '/config/config.php' => config_path('api-key.php'),
+                $packageRoot.'/config/config.php' => config_path('api-key.php'),
             ], 'api-key-config');
 
             $this->publishes([
-                $packageRoot . '/database/migrations' => database_path('migrations'),
+                $packageRoot.'/database/migrations' => database_path('migrations'),
             ], 'api-key-migrations');
 
             $this->publishes([
-                __DIR__ . '/routes/routes.php' => base_path('routes/routes.php'),
+                __DIR__.'/routes/routes.php' => base_path('routes/routes.php'),
             ], 'api-key-routes');
 
             $this->publishes([
-                __DIR__ . '/lang' => resource_path('lang/vendor/api-key'),
+                __DIR__.'/lang' => resource_path('lang/vendor/api-key'),
             ], 'api-key-lang');
 
             $this->publishes([
-                $packageRoot . '/resources/js' => resource_path('js'),
-                $packageRoot . '/resources/css' => resource_path('css'),
+                $packageRoot.'/resources/js' => resource_path('js'),
+                $packageRoot.'/resources/css' => resource_path('css'),
             ], 'api-key-frontend');
 
             $this->publishes([
-                $packageRoot . '/resources/views/app.blade.php' => resource_path('views/vendor/api-key/app.blade.php'),
+                $packageRoot.'/resources/views/app.blade.php' => resource_path('views/vendor/api-key/app.blade.php'),
             ], 'api-key-views');
 
             $this->publishes([
-                $packageRoot . '/stubs/package.json' => base_path('package.json'),
-                $packageRoot . '/stubs/vite.config.ts' => base_path('vite.config.ts'),
-                $packageRoot . '/stubs/tsconfig.json' => base_path('tsconfig.json'),
+                $packageRoot.'/stubs/package.json' => base_path('package.json'),
+                $packageRoot.'/stubs/vite.config.ts' => base_path('vite.config.ts'),
+                $packageRoot.'/stubs/tsconfig.json' => base_path('tsconfig.json'),
             ], 'api-key-build');
 
             $this->publishes([
-                $packageRoot . '/dist' => public_path('vendor/api-key'),
+                $packageRoot.'/dist' => public_path('vendor/api-key'),
             ], 'api-key-assets');
         }
 
-        $this->loadMigrationsFrom($packageRoot . '/database/migrations');
-        $this->loadTranslationsFrom(__DIR__ . '/lang', 'api-key');
-        $this->loadViewsFrom($packageRoot . '/resources/views', 'api-key');
+        $this->loadMigrationsFrom($packageRoot.'/database/migrations');
+        $this->loadTranslationsFrom(__DIR__.'/lang', 'api-key');
+        $this->loadViewsFrom($packageRoot.'/resources/views', 'api-key');
 
-        ResetPassword::createUrlUsing(fn($notifiable, string $token) => url('/reset-password?token=' . $token . '&email=' . urlencode((string)$notifiable->getEmailForPasswordReset())));
+        ResetPassword::createUrlUsing(fn ($notifiable, string $token) => url('/reset-password?token='.$token.'&email='.urlencode((string) $notifiable->getEmailForPasswordReset())));
 
         $this->registerRouter();
         $this->registerRepository();
         $this->registerSpaRoute();
-
 
         // Replacing the host application's user model is a big thing for a package
         // to do, and it used to happen unconditionally and silently. Still on by
@@ -111,7 +113,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         if (config('api-key.override_auth_provider', true)) {
             Config::set(
                 'auth.providers.users.model',
-                \RiseTechApps\ApiKey\Models\Authentication\Authentication::class
+                Authentication::class
             );
         }
 
@@ -151,13 +153,13 @@ class ApiKeyServiceProvider extends ServiceProvider
     #[\Override]
     public function register(): void
     {
-        $this->app->singleton('apikey', fn($app) => new \RiseTechApps\ApiKey\FeatureManager());
+        $this->app->singleton('apikey', fn ($app) => new FeatureManager);
 
-        $this->app->singleton('apikey.features', fn($app) => new \RiseTechApps\ApiKey\Services\FeatureRegistry(
+        $this->app->singleton('apikey.features', fn ($app) => new FeatureRegistry(
             $app->make('apikey')
         ));
 
-        $this->app->alias('apikey.features', \RiseTechApps\ApiKey\Services\FeatureRegistry::class);
+        $this->app->alias('apikey.features', FeatureRegistry::class);
 
         $this->registerCommands();
     }
@@ -189,7 +191,7 @@ class ApiKeyServiceProvider extends ServiceProvider
 
         $spaEnabled = config('api-key.spa.enabled', false);
 
-        if (!$spaEnabled && config('api-key.disable_web_middleware.enabled', true)) {
+        if (! $spaEnabled && config('api-key.disable_web_middleware.enabled', true)) {
             $router->pushMiddlewareToGroup('web', DisableRouteWebMiddleware::class);
         }
 
@@ -203,19 +205,19 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->middlewareGroup('plan', $middlewareGroup);
 
         if (config('api-key.routes.enabled', true)) {
-            $this->loadRoutesFrom(__DIR__ . '/routes/routes.php');
+            $this->loadRoutesFrom(__DIR__.'/routes/routes.php');
         }
     }
 
     protected function registerSpaRoute(): void
     {
-        if (!config('api-key.spa.enabled', false)) {
+        if (! config('api-key.spa.enabled', false)) {
             return;
         }
 
         Route::middleware(['web'])
             ->group(function () {
-                Route::get('/{any?}', fn() => view('api-key::app'))
+                Route::get('/{any?}', fn () => view('api-key::app'))
                     ->where('any', '^(?!api).*$')
                     ->name('api-key.spa');
             });
@@ -223,7 +225,7 @@ class ApiKeyServiceProvider extends ServiceProvider
 
     protected function registerRepository(): void
     {
-        if ($this->app->providerIsLoaded(\RiseTechApps\Repository\RepositoryServiceProvider::class)) {
+        if ($this->app->providerIsLoaded(RepositoryServiceProvider::class)) {
             $this->app->bind(PlanRepository::class, Repositories\Plan\PlanEloquentRepository::class);
             $this->app->bind(Repositories\Coupon\CouponRepository::class, Repositories\Coupon\CouponEloquentRepository::class);
         }

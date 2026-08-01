@@ -11,11 +11,6 @@ class ApiResponse
 {
     /**
      * Return a successful response.
-     *
-     * @param array|object|null $data
-     * @param string|null $message
-     * @param int $code
-     * @return JsonResponse
      */
     public static function success(array|object|null $data = [], ?string $message = null, int $code = 200): JsonResponse
     {
@@ -26,12 +21,6 @@ class ApiResponse
 
     /**
      * Return an error response.
-     *
-     * @param string $message
-     * @param int $code
-     * @param array $errors
-     * @param string|null $error_code
-     * @return JsonResponse
      */
     public static function error(string $message, int $code = 500, array $errors = [], ?string $error_code = null): JsonResponse
     {
@@ -42,11 +31,6 @@ class ApiResponse
 
     /**
      * Return a paginated collection response.
-     *
-     * @param ResourceCollection $collection
-     * @param string|null $message
-     * @param int $code
-     * @return JsonResponse
      */
     public static function collection(ResourceCollection $collection, ?string $message = null, int $code = 200): JsonResponse
     {
@@ -62,9 +46,6 @@ class ApiResponse
 
     /**
      * Return a not found error response.
-     *
-     * @param string $resource
-     * @return JsonResponse
      */
     public static function notFound(string $resource = 'Resource'): JsonResponse
     {
@@ -77,9 +58,6 @@ class ApiResponse
 
     /**
      * Return an unauthorized error response.
-     *
-     * @param string|null $message
-     * @return JsonResponse
      */
     public static function unauthorized(?string $message = null): JsonResponse
     {
@@ -92,9 +70,6 @@ class ApiResponse
 
     /**
      * Return a forbidden error response.
-     *
-     * @param string|null $message
-     * @return JsonResponse
      */
     public static function forbidden(?string $message = null): JsonResponse
     {
@@ -107,10 +82,6 @@ class ApiResponse
 
     /**
      * Return a validation error response.
-     *
-     * @param array $errors
-     * @param string|null $message
-     * @return JsonResponse
      */
     public static function validationError(array $errors, ?string $message = null): JsonResponse
     {
