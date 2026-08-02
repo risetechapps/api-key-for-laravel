@@ -114,30 +114,31 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     /**
-     * Cadastra e devolve a API key gerada.
+     * Cadastra o usuário.
      *
      * O registro **não autentica**. A API responde { message, api_key } — sem
      * token e sem usuário. A versão anterior chamava setAuth(data, data.token)
      * com token undefined, gravava a string "undefined" no localStorage, passava
      * a mandar `Authorization: Bearer undefined` em tudo e ainda empurrava o
-     * usuário para o dashboard, onde toda chamada respondia 401. De quebra
-     * descartava a `api_key`, que é a única vez em que a chave existe em texto
-     * puro — depois disso só o hash fica guardado.
+     * usuário para o dashboard, onde toda chamada respondia 401.
+     *
+     * A `api_key` que vem na resposta é deliberadamente ignorada. Quem se
+     * cadastra pode usar apenas o painel e nunca consumir a API, e entregar um
+     * segredo irrecuperável na primeira tela obriga todo mundo a lidar com ele
+     * antes de saber se vai precisar. Quem for usar a API gera a chave no
+     * perfil, onde a exibição é única e explícita.
      *
      * Além disso o login exige e-mail verificado, então o destino após cadastrar
      * é a tela de login, nunca o painel.
      */
-    async function register(userData: RegisterPayload): Promise<{ message?: string; apiKey: string | null }> {
+    async function register(userData: RegisterPayload): Promise<{ message?: string }> {
         loading.value = true;
         error.value = null;
         try {
             const response = await axios.post('/register', userData);
             const data = response.data?.data || response.data;
 
-            return {
-                message: data?.message,
-                apiKey: data?.api_key ?? null,
-            };
+            return { message: data?.message };
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao registrar';
             throw err;

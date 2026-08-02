@@ -234,6 +234,15 @@
                             <div v-if="hasGeneratedKey" class="flex items-center gap-1">
                                 <button
                                     type="button"
+                                    @click="toggleKeyVisibility"
+                                    class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                                    :title="keyRevealed ? 'Ocultar' : 'Visualizar'"
+                                >
+                                    <PhEyeSlash v-if="keyRevealed" :size="18" class="text-slate-400"/>
+                                    <PhEye v-else :size="18" class="text-slate-400"/>
+                                </button>
+                                <button
+                                    type="button"
                                     @click="copyApiKey"
                                     class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                                     :title="copied ? 'Copiado!' : 'Copiar'"
@@ -251,7 +260,7 @@
                     class="flex items-center gap-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30">
                     <PhWarning :size="24" class="text-amber-500 flex-shrink-0"/>
                     <p class="text-sm text-amber-800 dark:text-amber-200">
-                        Copie sua API Key agora — por segurança ela é exibida <strong>apenas esta vez</strong> e não poderá ser recuperada depois.
+                        Copie sua API Key agora. Use o olho para vê-la enquanto esta página estiver aberta — ao recarregar ela <strong>não poderá mais ser recuperada</strong>.
                     </p>
                 </div>
 
@@ -347,7 +356,10 @@ import {
     PhHouse,
     PhHash,
     PhNote,
+    PhEye,
+    PhEyeSlash,
 } from '@phosphor-icons/vue';
+import Swal from 'sweetalert2';
 
 const authStore = useAuthStore();
 
@@ -449,17 +461,30 @@ const searchAddressByZipCode = async (cep) => {
 }
 
 
-// The key is stored hashed on the server and can never be retrieved again.
-// It is shown in plain text only once, right after it is (re)generated.
+// A chave fica hasheada no servidor e nunca mais é recuperável. Ela existe em
+// texto puro apenas nesta aba, na memória, entre a regeneração e o próximo
+// recarregamento da página.
 const generatedKey = ref('');
 const apiKeyMask = '••••••••••••••••••••••••••••••••';
 
-// Whether a freshly generated plain key is currently being shown.
+// Existe uma chave recém-gerada em memória.
 const hasGeneratedKey = computed(() => !!generatedKey.value);
 
-// What the (readonly) input displays: the real key once after regeneration,
-// otherwise a mask so the secret is never implied to be recoverable.
-const apiKey = computed(() => generatedKey.value || apiKeyMask);
+// O olho revela a chave que ACABOU de ser gerada, e só enquanto esta página
+// estiver aberta. Não é "ver minha chave quando quiser": recarregar apaga o
+// valor, e o servidor não tem como devolvê-lo. Por isso o botão só aparece
+// junto de hasGeneratedKey — oferecê-lo sempre prometeria algo impossível.
+const keyRevealed = ref(false);
+
+// O input nasce mascarado mesmo logo após gerar: o valor cheio vai no aviso
+// bloqueante, e quem quiser conferir na tela usa o olho.
+const apiKey = computed(() =>
+    hasGeneratedKey.value && keyRevealed.value ? generatedKey.value : apiKeyMask
+);
+
+function toggleKeyVisibility() {
+    keyRevealed.value = !keyRevealed.value;
+}
 
 onMounted(async () => {
     await reloadProfile();
@@ -629,15 +654,51 @@ async function regenerateKey() {
     try {
         const response = await axios.post('/dashboard/profile/regenerate-key');
         if (response.data?.data?.key) {
-            // Show the new plain key once — it cannot be retrieved again.
-            generatedKey.value = response.data.data.key;
+            const key = response.data.data.key;
+
+            generatedKey.value = key;
+            keyRevealed.value = false;
+
             await authStore.fetchProfile();
+
             regenerateSuccess.value = true;
             setTimeout(() => regenerateSuccess.value = false, 3000);
+
+            // Exibição bloqueante, e não um valor solto num campo da página: a
+            // chave é irrecuperável a partir daqui, e um input entre outros não
+            // comunica que aquela é a única oportunidade de copiá-la. Regenerar
+            // também invalida a chave anterior na hora, então integrações que
+            // ainda a usam param de responder — o aviso precisa ser lido.
+            await Swal.fire({
+                icon: 'success',
+                title: 'Nova API Key gerada',
+                html: `
+                    <p class="text-sm">Esta é a sua nova API key. <strong>Guarde agora</strong> — ela não será exibida novamente.</p>
+                    <p class="text-sm" style="margin-top:8px;">A chave anterior deixou de funcionar neste momento.</p>
+                    <code style="display:block;word-break:break-all;text-align:left;padding:12px;margin-top:12px;border-radius:8px;background:#f1f5f9;color:#0f172a;font-size:12px;">${key}</code>
+                `,
+                confirmButtonText: 'Copiei minha chave',
+                showCancelButton: true,
+                cancelButtonText: 'Copiar',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    const copyButton = Swal.getCancelButton();
+                    copyButton?.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        navigator.clipboard?.writeText(key);
+                        copyButton.textContent = 'Copiado!';
+                    });
+                },
+            });
         }
     } catch (err) {
         console.error('Erro ao regenerar API key:', err);
-        alert(err.response?.data?.message || 'Erro ao regenerar API Key');
+        await Swal.fire({
+            icon: 'error',
+            title: 'Não foi possível regenerar',
+            text: err.response?.data?.message || 'Tente novamente em alguns instantes.',
+        });
     } finally {
         regenerating.value = false;
     }
