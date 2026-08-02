@@ -190,7 +190,7 @@ import { ref, computed, onMounted } from 'vue';
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuthStore } from '@/stores/auth';
-import { useDashboardStore, type RefundPreview } from '@/stores/dashboard';
+import { useDashboardStore } from '@/stores/dashboard';
 import {
     PhReceipt,
     PhCreditCard,
@@ -323,7 +323,9 @@ async function cancelSubscription() {
     // opostos — com estorno o acesso acaba na hora, sem estorno ele segue até o
     // vencimento — e o painel prometia o segundo para todo mundo. Prometer que
     // "nada será interrompido" e revogar em seguida é pior do que não avisar.
-    let preview: RefundPreview | null = null;
+    // Este bloco é <script setup> sem lang="ts": nada de anotação de tipo aqui.
+    // O formato da resposta está tipado como RefundPreview na store.
+    let preview = null;
 
     try {
         preview = await dashboardStore.fetchRefundPreview();
@@ -338,7 +340,7 @@ async function cancelSubscription() {
     const confirmation = willRefund
         ? {
               title: 'Cancelar e receber o estorno?',
-              html: `Vamos devolver <strong>${formatPrice(preview!.amount)}</strong> no cartão usado na compra.<br><br>
+              html: `Vamos devolver <strong>${formatPrice(preview.amount)}</strong> no cartão usado na compra.<br><br>
                      <strong>O acesso é encerrado imediatamente</strong>, porque o valor está sendo devolvido.
                      Sua chave de API para de responder assim que você confirmar.`,
               confirmButtonText: 'Sim, cancelar e estornar',
