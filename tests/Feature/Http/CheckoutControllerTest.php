@@ -235,6 +235,65 @@ describe('Checkout, at the gateway', function () {
         expect((float) $userPlan->credit_applied)->toBeGreaterThan(29.0);
     });
 
+    it('sends the notification url when it is configured', function () {
+        // A revisão de qualidade do Mercado Pago cobra `notification_url` no
+        // corpo do pagamento; cadastrar a URL no painel não satisfaz a checagem.
+        config(['api-key.mercadopago.notification_url' => 'https://exemplo.com/api/v1/dashboard/checkout/webhook']);
+
+        $this->gateway->pushResponse(mpPayment());
+
+        $this->postJson('/api/v1/dashboard/checkout/process', [
+            'plan_id' => $this->plan->getKey(),
+            ...cardPayload(),
+        ])->assertStatus(200);
+
+        expect($this->gateway->payload()['notification_url'])
+            ->toBe('https://exemplo.com/api/v1/dashboard/checkout/webhook');
+    });
+
+    it('omits the notification url when it is not configured', function () {
+        // O gateway valida a URL e recusa o pagamento se ela não for HTTPS
+        // pública. Mandar um valor vazio ou localhost derrubaria todo checkout
+        // em desenvolvimento.
+        config(['api-key.mercadopago.notification_url' => null]);
+
+        $this->gateway->pushResponse(mpPayment());
+
+        $this->postJson('/api/v1/dashboard/checkout/process', [
+            'plan_id' => $this->plan->getKey(),
+            ...cardPayload(),
+        ])->assertStatus(200);
+
+        expect($this->gateway->payload())->not->toHaveKey('notification_url');
+    });
+
+    it('forwards the device fingerprint as a gateway header', function () {
+        // Sinal de antifraude coletado no navegador. Sem ele a análise de risco
+        // decide com menos informação e recusas high_risk ficam mais frequentes.
+        $this->gateway->pushResponse(mpPayment());
+
+        $this->postJson('/api/v1/dashboard/checkout/process', [
+            'plan_id' => $this->plan->getKey(),
+            'device_id' => 'armor.abc123',
+            ...cardPayload(),
+        ])->assertStatus(200);
+
+        expect($this->gateway->header('X-meli-session-id'))->toBe('armor.abc123');
+    });
+
+    it('omits the device header when the browser did not collect one', function () {
+        // Bloqueador de script ou rede lenta não podem impedir o pagamento; o
+        // header some e o resto segue igual.
+        $this->gateway->pushResponse(mpPayment());
+
+        $this->postJson('/api/v1/dashboard/checkout/process', [
+            'plan_id' => $this->plan->getKey(),
+            ...cardPayload(),
+        ])->assertStatus(200);
+
+        expect($this->gateway->header('X-meli-session-id'))->toBeNull();
+    });
+
     it('forwards the idempotency key the client sent', function () {
         $this->gateway->pushResponse(mpPayment());
 

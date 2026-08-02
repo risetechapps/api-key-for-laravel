@@ -175,6 +175,7 @@ import { PhCheckCircle, PhTag, PhX, PhWarningCircle, PhCreditCard, PhPlus, PhChe
 import Swal from 'sweetalert2';
 import { useAuthStore } from '@/stores/auth';
 import { useDashboardStore } from '@/stores/dashboard';
+import { primeDeviceSession } from '@/mercadopago-device';
 import Modal from '@/views/componentes/Modal.vue';
 import Button from '@/views/componentes/Button.vue';
 
@@ -273,6 +274,10 @@ async function onSelectCard(card) {
 }
 
 async function loadMpSdk() {
+    // Junto do SDK: o identificador de dispositivo leva um instante para ficar
+    // pronto e é pedido no momento do pagamento.
+    primeDeviceSession();
+
     if (window.MercadoPago) return;
     return new Promise((resolve, reject) => {
         const s = document.createElement('script');

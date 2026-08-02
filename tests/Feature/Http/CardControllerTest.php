@@ -138,6 +138,28 @@ describe('Saving a card', function () {
         expect($this->gateway->payload()['payer']['identification']['number'])->toBe('52998224725');
     });
 
+    it('sends the notification url on the validation charge too', function () {
+        // A cobrança de validação é um pagamento como outro qualquer para o
+        // Mercado Pago, e a revisão de qualidade olha todos.
+        config(['api-key.mercadopago.notification_url' => 'https://exemplo.com/api/v1/dashboard/checkout/webhook']);
+
+        $this->gateway->pushResponse(validationCharge())->pushResponse(['id' => 900]);
+
+        $this->postJson('/api/v1/dashboard/cards', storeCard())->assertStatus(201);
+
+        expect($this->gateway->payload()['notification_url'])
+            ->toBe('https://exemplo.com/api/v1/dashboard/checkout/webhook');
+    });
+
+    it('forwards the device fingerprint', function () {
+        $this->gateway->pushResponse(validationCharge())->pushResponse(['id' => 900]);
+
+        $this->postJson('/api/v1/dashboard/cards', storeCard(['device_id' => 'armor.xyz789']))
+            ->assertStatus(201);
+
+        expect($this->gateway->header('X-meli-session-id'))->toBe('armor.xyz789');
+    });
+
     it('forwards the idempotency key', function () {
         $this->gateway->pushResponse(validationCharge())->pushResponse(['id' => 900]);
 

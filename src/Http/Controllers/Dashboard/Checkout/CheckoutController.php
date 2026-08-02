@@ -15,11 +15,12 @@ use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 use RiseTechApps\ApiKey\Repositories\Coupon\CouponRepository;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
+use RiseTechApps\ApiKey\Traits\BuildsPaymentPayer;
 use RiseTechApps\ApiKey\Traits\SendsIdempotentPayments;
 
 class CheckoutController extends Controller
 {
-    use SendsIdempotentPayments;
+    use BuildsPaymentPayer, SendsIdempotentPayments;
 
     public function __construct(
         protected readonly PlanRepository $planRepository,
@@ -87,6 +88,10 @@ class CheckoutController extends Controller
             // makes a re-submitted form provably the same purchase. See
             // idempotencyKey() for what happens when it is absent.
             'idempotency_key' => ['nullable', 'string', 'max:64'],
+            // Coletado no navegador pelo security.js do Mercado Pago. Opcional:
+            // um cliente que nao o envie continua conseguindo pagar, apenas com
+            // analise de risco mais pobre.
+            'device_id' => ['nullable', 'string', 'max:255'],
         ]);
 
         $plan = $this->planRepository->findActiveById($validated['plan_id']);
@@ -166,7 +171,9 @@ class CheckoutController extends Controller
             MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
             $client = new PaymentClient;
 
-            $payerData = ['email' => $payerEmail];
+            $authUser = $this->payerUser();
+
+            $payerData = ['email' => $payerEmail, ...$this->payerNames($authUser->name)];
             $identification = $validated['payer']['identification'] ?? $request->input('payer.identification');
             if (! empty($identification['type']) && ! empty($identification['number'])) {
                 $payerData['identification'] = $identification;
@@ -175,9 +182,6 @@ class CheckoutController extends Controller
             if ($savedCard?->mp_customer_id) {
                 $payerData['id'] = $savedCard->mp_customer_id;
             }
-
-            $authUser = auth()->user();
-            $nameParts = explode(' ', $authUser->name ?? '', 2);
 
             $description = __('api-key::messages.plan_subscription_description', ['plan' => $plan->name]);
 
@@ -192,9 +196,7 @@ class CheckoutController extends Controller
                 'statement_descriptor' => mb_substr((string) config('app.name') ?: 'Assinatura', 0, 22),
                 'additional_info' => [
                     'payer' => [
-                        'first_name' => $nameParts[0] ?? '',
-                        'last_name' => $nameParts[1] ?? '',
-                        'registration_date' => $authUser->created_at?->toIso8601String(),
+                        ...$this->payerAdditionalInfo($authUser),
                         'is_prime_user' => '0',
                         'is_first_purchase_online' => '1',
                     ],
@@ -215,9 +217,14 @@ class CheckoutController extends Controller
                 $paymentPayload['issuer_id'] = (int) $validated['issuer_id'];
             }
 
+            if ($notificationUrl = $this->notificationUrl()) {
+                $paymentPayload['notification_url'] = $notificationUrl;
+            }
+
             $payment = $client->create($paymentPayload, $this->idempotentRequest(
                 $validated['idempotency_key'] ?? null,
-                ['checkout', auth()->id(), $plan->getKey(), $transactionAmount, $token]
+                ['checkout', auth()->id(), $plan->getKey(), $transactionAmount, $token],
+                $validated['device_id'] ?? null
             ));
 
             // Only the fields needed to trace a payment. The full $payment object

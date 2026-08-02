@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import axios from 'axios';
+import { getDeviceSessionId } from '@/mercadopago-device';
 
 export interface DashboardStats {
     today_requests: number;
@@ -267,6 +268,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     async function processCheckout(planId: string, formData: any, couponCode: string | null = null) {
         loading.value = true;
         try {
+            // Coletado aqui, e não em cada tela, para que todo caminho de
+            // checkout carregue o sinal de antifraude sem depender de alguém
+            // lembrar de repassá-lo. Devolve null quando o script de segurança
+            // não respondeu, e nesse caso o campo simplesmente não vai.
+            const deviceId = await getDeviceSessionId();
+
             const response = await axios.post('/dashboard/checkout/process', {
                 plan_id: planId,
                 coupon_code: couponCode ?? undefined,
@@ -274,6 +281,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
                 // é o que permite ao gateway reconhecer o reenvio do formulário como
                 // a mesma cobrança em vez de criar uma segunda.
                 idempotency_key: idempotencyKeyFor(planId),
+                device_id: deviceId ?? undefined,
                 ...formData,
                 additional_info: {
                     items: [

@@ -100,7 +100,7 @@ class ProcessPlanRenewalJob implements ShouldBeUnique, ShouldQueue
         $token = $mpService->tokenizeRecurring($card->mp_customer_id, $card->mp_card_id);
         $amount = (float) $plan->price;
 
-        $payment = new PaymentClient()->create([
+        $renewalPayload = [
             'transaction_amount' => $amount,
             'token' => $token,
             'installments' => 1,
@@ -124,7 +124,15 @@ class ProcessPlanRenewalJob implements ShouldBeUnique, ShouldQueue
                     ],
                 ],
             ],
-        ], $this->idempotentRequest(null, [
+        ];
+
+        if ($notificationUrl = $this->notificationUrl()) {
+            $renewalPayload['notification_url'] = $notificationUrl;
+        }
+
+        // Sem device id: a renovacao roda em fila, sem navegador do assinante
+        // para coletar a impressao do dispositivo.
+        $payment = new PaymentClient()->create($renewalPayload, $this->idempotentRequest(null, [
             // ShouldBeUnique stops the same job running twice at once, and
             // tries = 1 stops a retry after a timeout. Neither covers the gap
             // where the charge is accepted, the write that records it fails, and

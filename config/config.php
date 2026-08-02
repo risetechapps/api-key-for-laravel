@@ -326,6 +326,22 @@ return [
         'public_key' => env('MP_PUBLIC_KEY'),
         'access_token' => env('MP_ACCESS_TOKEN'),
         'webhook_secret' => env('MP_WEBHOOK_SECRET'),
+
+        /*
+        | URL absoluta do webhook, enviada em `notification_url` a cada
+        | pagamento. A revisão de qualidade da integração do Mercado Pago cobra
+        | esse campo no corpo da requisição — cadastrar a URL apenas no painel
+        | não satisfaz a checagem.
+        |
+        | Deixe NULA em desenvolvimento. O Mercado Pago valida a URL e recusa a
+        | criação do pagamento se ela não for HTTPS acessível publicamente, então
+        | preencher com localhost derruba todo o checkout local. O campo só é
+        | enviado quando definido.
+        |
+        | Aponte para a rota de webhook do pacote, por padrão:
+        | https://seu-dominio/api/v1/dashboard/checkout/webhook
+        */
+        'notification_url' => env('MP_NOTIFICATION_URL'),
     ],
 
     /*

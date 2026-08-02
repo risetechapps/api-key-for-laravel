@@ -28,12 +28,39 @@ trait SendsIdempotentPayments
      * @param  array  $parts  Values identifying this charge, used to derive
      *                        a key when the caller supplied none.
      */
-    protected function idempotentRequest(?string $clientKey, array $parts): RequestOptions
+    protected function idempotentRequest(?string $clientKey, array $parts, ?string $deviceId = null): RequestOptions
     {
+        $headers = ['X-Idempotency-Key: '.$this->idempotencyKey($clientKey, $parts)];
+
+        // Identificacao do dispositivo, coletada no navegador pelo security.js
+        // do Mercado Pago. É sinal de antifraude: sem ela a analise de risco
+        // trabalha com menos informacao e recusas cc_rejected_high_risk ficam
+        // mais frequentes em cartao legitimo. Enviada apenas quando o cliente a
+        // coletou — um valor vazio no header nao ajuda e polui a requisicao.
+        if ($deviceId !== null && trim($deviceId) !== '') {
+            $headers[] = 'X-meli-session-id: '.trim($deviceId);
+        }
+
         $options = new RequestOptions;
-        $options->setCustomHeaders(['X-Idempotency-Key: '.$this->idempotencyKey($clientKey, $parts)]);
+        $options->setCustomHeaders($headers);
 
         return $options;
+    }
+
+    /**
+     * URL de notificacao a enviar no pagamento, ou null quando nao configurada.
+     *
+     * A revisao de qualidade do Mercado Pago exige `notification_url` no corpo
+     * da requisicao; cadastrar a URL apenas no painel nao satisfaz a checagem.
+     * Em contrapartida o gateway valida o endereco e recusa o pagamento se ele
+     * nao for HTTPS publico, entao em desenvolvimento a config fica nula e o
+     * campo simplesmente nao vai.
+     */
+    protected function notificationUrl(): ?string
+    {
+        $url = config('api-key.mercadopago.notification_url');
+
+        return is_string($url) && trim($url) !== '' ? trim($url) : null;
     }
 
     /**

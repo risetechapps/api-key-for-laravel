@@ -12,11 +12,12 @@ use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
+use RiseTechApps\ApiKey\Traits\BuildsPaymentPayer;
 use RiseTechApps\ApiKey\Traits\SendsIdempotentPayments;
 
 class CardController extends Controller
 {
-    use SendsIdempotentPayments;
+    use BuildsPaymentPayer, SendsIdempotentPayments;
 
     public function __construct(
         protected readonly MpCustomerService $mpCustomerService,
@@ -43,19 +44,18 @@ class CardController extends Controller
             'holder_name' => ['required', 'string', 'max:255'],
             'brand' => ['required', 'string', 'max:50'],
             'idempotency_key' => ['nullable', 'string', 'max:64'],
+            'device_id' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $user = auth()->user();
+        $user = $this->payerUser();
         $cpf = preg_replace('/\D/', '', $validated['cpf']);
 
         MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
         $paymentClient = new PaymentClient;
 
         try {
-            $nameParts = explode(' ', $user->name ?? '', 2);
-
             // Cobrança de R$5,00 para validar o cartão
-            $payment = $paymentClient->create([
+            $validationPayload = [
                 'transaction_amount' => 5.00,
                 'token' => $validated['mp_token'],
                 'description' => 'Validação de cartão',
@@ -66,13 +66,13 @@ class CardController extends Controller
                 'payer' => [
                     'email' => strtolower((string) $user->email),
                     'identification' => ['type' => 'CPF', 'number' => $cpf],
+                    // Nome no proprio payer, e nao so em additional_info: o
+                    // Mercado Pago lista payer.last_name entre os fatores de
+                    // aprovacao dos pagamentos.
+                    ...$this->payerNames($user->name),
                 ],
                 'additional_info' => [
-                    'payer' => [
-                        'first_name' => $nameParts[0] ?? '',
-                        'last_name' => $nameParts[1] ?? '',
-                        'registration_date' => $user->created_at?->toIso8601String(),
-                    ],
+                    'payer' => $this->payerAdditionalInfo($user),
                     'items' => [
                         [
                             'id' => 'card_validation',
@@ -84,9 +84,16 @@ class CardController extends Controller
                         ],
                     ],
                 ],
-            ], $this->idempotentRequest(
+            ];
+
+            if ($notificationUrl = $this->notificationUrl()) {
+                $validationPayload['notification_url'] = $notificationUrl;
+            }
+
+            $payment = $paymentClient->create($validationPayload, $this->idempotentRequest(
                 $validated['idempotency_key'] ?? null,
-                ['card_validation', $user->getKey(), $validated['mp_token']]
+                ['card_validation', $user->getKey(), $validated['mp_token']],
+                $validated['device_id'] ?? null
             ));
 
             Log::info('Card validation payment', [

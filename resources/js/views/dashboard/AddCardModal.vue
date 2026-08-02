@@ -109,6 +109,7 @@ import axios from 'axios';
 import Modal from '@/views/componentes/Modal.vue';
 import Button from '@/views/componentes/Button.vue';
 import { useAuthStore } from '@/stores/auth';
+import { primeDeviceSession, getDeviceSessionId } from '@/mercadopago-device';
 
 const authStore = useAuthStore();
 const emit      = defineEmits(['update:modelValue', 'saved']);
@@ -151,6 +152,11 @@ watch(() => isOpen.value, async (open) => {
 });
 
 async function loadMpSdk() {
+    // Disparado junto do SDK para o identificador de dispositivo já estar
+    // pronto quando o usuário clicar em salvar; pedido só no clique, ele
+    // costuma não ter terminado a tempo.
+    primeDeviceSession();
+
     if (window.MercadoPago) return;
     return new Promise((resolve, reject) => {
         const s   = document.createElement('script');
@@ -261,12 +267,17 @@ async function handleSubmit() {
             identificationNumber: cpf,
         });
 
+        // Melhor esforço: se o script de segurança não respondeu, segue sem o
+        // identificador em vez de impedir o cadastro do cartão.
+        const deviceId = await getDeviceSessionId();
+
         await axios.post('dashboard/cards', {
             mp_token:          token.id,
             cpf:               form.value.cpf,
             payment_method_id: paymentMethodId.value,
             holder_name:       form.value.holder,
             brand:             paymentMethodId.value,
+            device_id:         deviceId,
         });
 
         isOpen.value = false;
