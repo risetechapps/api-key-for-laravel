@@ -18,15 +18,18 @@ Gerenciamento de API keys, planos de assinatura e um painel SPA Vue 3 pronto par
 - **Sistema de Cupons** — limite de usos, data de expiração, descontos percentuais
 - **Validação de Origem** — proteção por API key similar ao CORS
 - **Throttling e Rate Limiting** — contadores atômicos por usuário
-- **Sistema de Eventos** — `PlanChanged`, `PlanExpired`, `PlanGracePeriodStarted`, `RequestLimitReached`, `PlanUsageThresholdReached`, `UserStatusChanged`
-- **Notificações por E-mail** — plano ativado, aviso de uso (80%), limite atingido, carência, expiração, verificação de e-mail e redefinição de senha (pt-BR) — todas substituíveis por config
+- **Cancelamento pelo assinante** — interrompe a renovação sem revogar o período já pago, com reativação enquanto o ciclo corre
+- **Política de reembolso** — janela de arrependimento configurável, com teto de consumo, estorno integral e revogação imediata
+- **Sistema de Eventos** — `PlanChanged`, `PlanExpired`, `PlanGracePeriodStarted`, `PlanCancelled`, `PlanRefunded`, `PaymentRejected`, `RequestLimitReached`, `PlanUsageThresholdReached`, `UserStatusChanged`
+- **Notificações por E-mail** — plano ativado, aviso de uso (80%), limite atingido, carência, expiração, cancelamento, estorno, pagamento recusado, verificação de e-mail e redefinição de senha (pt-BR) — todas substituíveis por config
 - **Fluxo de Redefinição de Senha** — ciclo completo de recuperação com URLs assinadas apontando para a SPA
 - **Verificação de E-mail** — redireciona para a SPA após o clique
-- **Integração MercadoPago** — checkout com Secure Fields, cartões salvos, webhook, estornos
+- **Integração MercadoPago** — checkout com Secure Fields, cartões salvos com pagamento em um clique, webhook assinado e IPN, idempotência, identificação de dispositivo, estornos
+- **Pagamentos em análise** — compras que o gateway retém são registradas e resolvidas por webhook ou por reconciliação agendada
 - **Painel SPA Vue 3** — assets pré-compilados, sem necessidade de Node.js no servidor host
 - **Internacionalização** — inglês e português (pt-BR), detectado automaticamente via `Accept-Language`
 - **Camada de Cache** — suporte a Redis/Memcached para validação de API keys
-- **Suite de Testes** — 63 testes Pest
+- **Suite de Testes** — 351 testes Pest, análise estática com Larastan e estilo com Pint no CI
 
 ## Requisitos
 
@@ -125,6 +128,10 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 | `GET` | `api/v1/dashboard/cards` | Listar cartões salvos |
 | `POST` | `api/v1/dashboard/cards` | Adicionar cartão |
 | `DELETE` | `api/v1/dashboard/cards/{id}` | Remover cartão |
+| `POST` | `api/v1/dashboard/signature` | Ativar plano de preço zero |
+| `POST` | `api/v1/dashboard/signature/cancel` | Cancelar a renovação (estorna se a política conceder) |
+| `POST` | `api/v1/dashboard/signature/resume` | Reativar a renovação antes do vencimento |
+| `GET` | `api/v1/dashboard/signature/refund-preview` | O que acontece se cancelar agora: estorno, valor e até quando vai o acesso |
 | `GET` | `api/v1/dashboard/history` | Histórico de assinaturas |
 | `GET` | `api/v1/dashboard/log` | Log de requisições (ordenado do mais recente) |
 | `GET` | `api/v1/dashboard/stats` | Estatísticas agregadas do dashboard (uso, restantes, hoje) |
@@ -226,7 +233,36 @@ POST /api/v1/dashboard/signature/resume    # desfaz, enquanto o período corre
 
 Uma coluna só (`user_plans.cancelled_at`) em vez de um par `cancelled_at` / `auto_renew`: dois campos carregando o mesmo fato acabam discordando, e a renovação precisa de uma fonte única. Null renova; timestamp é ao mesmo tempo a decisão e o registro de quando ela foi tomada.
 
-> O pacote **não envia e-mail** de confirmação de cancelamento. As 7 notificações existentes cobrem outros eventos; se quiser uma aqui, o caminho é o mesmo dos demais — evento, listener e entrada no mapa `notifications`.
+O cancelamento dispara `PlanCancelled`, que envia o e-mail de confirmação.
+
+### Reembolso no cancelamento
+
+Janela de arrependimento, **desligada por padrão**. Mover dinheiro sozinho não pode ser comportamento herdado por quem apenas atualizou o pacote:
+
+```env
+API_KEY_REFUND_WINDOW_DAYS=7          # 0 desliga
+API_KEY_REFUND_MAX_USAGE_PERCENT=50
+```
+
+Com a política ligada, cancelar concede estorno quando **as duas** comportas passam:
+
+1. **Dentro da janela** — contada da *primeira* vez que o cliente contratou aquele plano, não de cada renovação. Contar do ciclo corrente reabriria o direito todo mês, e daria para assinar, usar abaixo do teto e cancelar no último dia, indefinidamente.
+2. **Abaixo do teto de consumo** — `requests_used` sobre o `request_limit` do plano. Sem essa comporta a janela sozinha entrega o produto de graça: bastaria esgotar a cota nos primeiros dias e pedir o dinheiro de volta. Plano ilimitado (`request_limit = 0`) não tem percentual a exceder, então a comporta não se aplica.
+
+Concedido o estorno, o valor devolvido é o `payment_amount` — o que saiu do cartão, já considerando cupom e crédito de troca — e **o acesso é encerrado na hora**. Manter o período depois de devolver o dinheiro seria entregá-lo de graça.
+
+Se o gateway recusar o estorno, o cancelamento continua valendo e o acesso **não** é revogado: tirar o acesso sem ter devolvido o dinheiro é o pior desfecho possível. A devolução vira tarefa do painel admin, e o log carrega o que o operador precisa.
+
+A recusa devolve o motivo, porque `window_expired` e `usage_exceeded` levam o cliente a conclusões diferentes:
+
+```
+GET /api/v1/dashboard/signature/refund-preview
+{ "eligible": true, "reason": "eligible", "amount": 149.9, "access_until": null }
+```
+
+Consulte antes de pedir confirmação. Sem isso a tela só descobre que houve estorno — e que o acesso acabou — depois do fato, e a única saída seria prometer "você não perde o acesso agora" para todo mundo, o que é falso justamente para quem tem direito à devolução.
+
+Estorno concedido dispara `PlanRefunded`, com e-mail próprio.
 
 ### Troca de plano no meio do ciclo
 
@@ -362,15 +398,60 @@ MP_WEBHOOK_SECRET=seu-webhook-secret
 
 > **Não adicione** `VITE_MP_PUBLIC_KEY`. A chave pública é entregue ao frontend pelo endpoint autenticado `/auth/me` (campo `mp_public_key`), funcionando corretamente com os assets pré-compilados da SPA sem precisar de variável de build.
 
-### Webhook
+### Webhook e IPN
 
-Cadastre a URL do webhook na sua conta do MercadoPago:
+Cadastre a URL na sua conta do MercadoPago e informe a mesma em `MP_NOTIFICATION_URL`:
 
 ```
 https://seudominio.com/api/v1/dashboard/checkout/webhook
 ```
 
-Defina `MP_WEBHOOK_SECRET` com o secret gerado pelo MercadoPago para verificação HMAC.
+```env
+MP_WEBHOOK_SECRET=seu-webhook-secret
+MP_NOTIFICATION_URL=https://seudominio.com/api/v1/dashboard/checkout/webhook
+MP_ACCEPT_IPN=true
+```
+
+`MP_NOTIFICATION_URL` vai no corpo de **cada pagamento**, no campo `notification_url`. A revisão de qualidade da integração do MercadoPago cobra esse campo na requisição — cadastrar a URL apenas no painel não satisfaz a checagem.
+
+> **Deixe vazio em desenvolvimento.** O gateway valida a URL e recusa a criação do pagamento se ela não for HTTPS acessível publicamente, então apontar para `localhost` derruba todo o checkout local. O campo só é enviado quando definido.
+
+O MercadoPago entrega em **dois formatos**, e o endpoint aceita os dois:
+
+| | Webhook | IPN |
+|---|---|---|
+| Corpo | `{type, data:{id}}` | `{resource, topic}` |
+| Query | — | `?topic=payment&id=…` |
+| Assinatura | `x-signature` + `x-request-id` | nenhuma, por definição |
+
+O caminho é escolhido pela presença do header `x-signature`. Assinado segue com validação HMAC, e segredo ausente fecha a porta: um endpoint que aceita qualquer assinatura é o mesmo que não ter assinatura. Assinatura presente e inválida continua sendo recusa.
+
+O IPN chega justamente porque o pagamento carrega `notification_url`, e **não tem HMAC a conferir**. Quem verifica é o pacote, indo buscar o pagamento na API com o seu access token — só pagamentos da sua própria conta produzem efeito. Como é verificação mais fraca, dá para recusar o formato com `MP_ACCEPT_IPN=false`; nesse caso remova também o `notification_url`, senão o gateway reentrega indefinidamente contra um 400.
+
+### Pagamentos em análise
+
+Quando o gateway responde `pending` ou `in_process`, não há assinatura ainda: ele decide depois e avisa pelo webhook. O pacote grava a espera em `pending_payments` — usuário, plano, valor, cupom reservado e `payment_id`.
+
+- **Aprovado depois** → assina o plano e registra o rastro do pagamento
+- **Recusado depois** → devolve a reserva do cupom e dispara `PaymentRejected`, cumprindo o "você será notificado em breve" que o checkout prometeu
+
+Sem esse registro a recusa não teria a quem se referir: o comprador não seria avisado e a vaga do cupom, tomada antes de falar com o gateway, ficaria queimada sem venda.
+
+O webhook falha de formas fora do controle do pacote — servidor fora do ar na entrega, segredo trocado, `notification_url` ausente. Por isso `api-key:reconcile-payments` roda a cada 15 minutos, consulta o gateway sobre esperas mais antigas que isso e aplica **o mesmo desfecho** que o webhook aplicaria. Sem ele, um pagamento pendente sem webhook ficaria pendente para sempre — dinheiro cobrado sem serviço entregue.
+
+Renovações automáticas que caem em análise também são registradas, e a notificação de recusa usa texto próprio: ali a assinatura existe e apenas não vai continuar.
+
+### Identificação de dispositivo
+
+`POST /dashboard/checkout/process` e `POST /dashboard/cards` aceitam `device_id`, repassado ao gateway no header `X-meli-session-id`. É sinal de antifraude: sem ele a análise de risco decide com menos informação e recusas `cc_rejected_high_risk` em cartão legítimo ficam mais frequentes.
+
+A SPA do pacote já coleta: `resources/js/mercadopago-device.ts` injeta o `security.js` do MercadoPago e lê `window.MP_DEVICE_SESSION_ID`. É melhor esforço com limite de 5 segundos — bloqueador de script ou rede lenta não podem impedir alguém de pagar.
+
+Em frontend próprio, colete e envie o campo:
+
+```html
+<script src="https://www.mercadopago.com/v2/security.js" view="checkout" output="MP_DEVICE_SESSION_ID"></script>
+```
 
 ### Idempotência das cobranças
 
@@ -429,6 +510,9 @@ O pacote dispara eventos automaticamente e **já registra os listeners** que env
 | `RequestLimitReached` | Limite de requisições do plano atingido (100%) |
 | `UserStatusChanged` | Status do usuário alterado |
 | `ApiKeyCreated` / `ApiKeyStatusChanged` | API key criada / ativada-desativada |
+| `PlanCancelled` | Assinante cancelou a renovação (nada foi retirado ainda) |
+| `PlanRefunded` | Valor devolvido e acesso encerrado no mesmo ato |
+| `PaymentRejected` | Compra que estava em análise acabou recusada |
 
 ### Notificações embutidas (e-mail, pt-BR)
 
@@ -486,6 +570,9 @@ Assinaturas de construtor de cada chave:
 | `limit_reached` | `($plan, $userPlan, $used, $limit)` |
 | `grace_period` | `($plan, $userPlan, $graceDays, $graceEndDate)` |
 | `plan_expired` | `($plan, $userPlan)` |
+| `plan_cancelled` | `($plan, $userPlan)` |
+| `plan_refunded` | `($plan, $userPlan, $amount)` |
+| `payment_rejected` | `($plan, $amount, $reason = null, $isRenewal = false)` |
 
 ### Ouvindo eventos você mesmo
 
@@ -545,6 +632,19 @@ php artisan api-key:prune-logs --days=30          # sobrescreve a retenção con
 # Promover um usuário a admin
 php artisan apikey:make-admin {email}
 
+# Resolver compras que ficaram em análise e cujo webhook não chegou
+# (roda automaticamente a cada 15 minutos)
+php artisan api-key:reconcile-payments
+php artisan api-key:reconcile-payments --dry-run          # consulta o gateway e relata, sem aplicar
+php artisan api-key:reconcile-payments --minutes=30       # só esperas mais antigas que isso
+php artisan api-key:reconcile-payments --limit=50         # teto por execução
+
+# Reprocessar estornos pendentes da validação de cartão
+# (roda automaticamente de hora em hora)
+php artisan api-key:retry-validation-refunds
+php artisan api-key:retry-validation-refunds --dry-run    # lista as pendências
+php artisan api-key:retry-validation-refunds --amount=5.00
+
 # Emitir novas API keys em lote
 php artisan api-key:rotate-keys --legacy --output=keys.csv   # só o backlog v1 -> v2 (lookup_hash NULL)
 php artisan api-key:rotate-keys --user=cliente@exemplo.com   # um dono só, imprime a key no console
@@ -560,12 +660,28 @@ php artisan api-key:rotate-keys --legacy --dry-run           # apenas conta quan
 > acesso total à API: distribua e apague. O pacote **não notifica** ninguém sobre a
 > troca — avisar os donos é com você.
 
-> **Filas e agendamento.** A partir da 2.1.0, listeners de notificação, o log de
-> requisições (quando `request_log.queue` está definido) e o billing rodam em fila.
-> Para os ganhos de latência, mantenha um worker ativo (`php artisan queue:work` /
-> Horizon) na conexão `queue.connection` (padrão `redis`) e garanta o `schedule:run`
-> no cron. Sem worker de fila: use `QUEUE_CONNECTION=sync` **ou** deixe
-> `API_KEY_LOG_QUEUE` nulo (o log volta a gravar via `afterResponse`).
+> **Filas e agendamento.** Listeners de notificação, o log de requisições (quando
+> `request_log.queue` está definido) e o billing rodam em fila. Para os ganhos de
+> latência, mantenha um worker ativo (`php artisan queue:work` / Horizon) na
+> conexão `queue.connection` (padrão `redis`). Sem worker de fila: use
+> `QUEUE_CONNECTION=sync` **ou** deixe `API_KEY_LOG_QUEUE` nulo (o log volta a
+> gravar via `afterResponse`).
+>
+> **O `schedule:run` no cron não é opcional.** Sem ele a reconciliação de
+> pagamentos não roda, e uma compra que ficar em análise sem receber webhook fica
+> pendente indefinidamente — dinheiro cobrado sem assinatura entregue. Também
+> param a cobrança de renovações, a poda de logs e o reprocessamento de estornos.
+
+### Rotinas agendadas
+
+| Comando | Frequência | Desligável por |
+|---------|------------|----------------|
+| `billing:process-renewals` | diária, 08:00 | — |
+| `api-key:prune-logs` | diária, 03:30 | `request_log.prune_enabled` |
+| `api-key:reconcile-payments` | a cada 15 min | `reconciliation.payments_enabled` |
+| `api-key:retry-validation-refunds` | de hora em hora | `reconciliation.validation_refunds_enabled` |
+
+Todas com `withoutOverlapping()` e `onOneServer()`, com saída em log próprio dentro de `storage/logs`.
 
 ---
 
@@ -583,6 +699,20 @@ return [
 
     'request_limit' => [
         'warning_threshold' => 80,   // % de uso que dispara o e-mail de aviso (0 = desliga)
+    ],
+
+    // Janela de arrependimento no cancelamento. window_days = 0 DESLIGA o
+    // estorno automático (padrão). Veja "Reembolso no cancelamento".
+    'refund' => [
+        'window_days'       => 0,
+        'max_usage_percent' => 50,
+    ],
+
+    // Rotinas que fecham o que o gateway deveria ter avisado e não avisou.
+    // Dependem do schedule:run da aplicação estar ativo.
+    'reconciliation' => [
+        'payments_enabled'            => true,   // api-key:reconcile-payments, a cada 15 min
+        'validation_refunds_enabled'  => true,   // api-key:retry-validation-refunds, de hora em hora
     ],
 
     'cache' => [
@@ -658,6 +788,14 @@ return [
         'public_key'     => env('MP_PUBLIC_KEY'),
         'access_token'   => env('MP_ACCESS_TOKEN'),
         'webhook_secret' => env('MP_WEBHOOK_SECRET'),
+
+        // Enviada em notification_url a cada pagamento. Deixe NULA em
+        // desenvolvimento: o gateway recusa URL que não seja HTTPS pública.
+        'notification_url' => env('MP_NOTIFICATION_URL'),
+
+        // Aceitar o formato IPN, que chega sem assinatura. Desligue apenas se
+        // você também remover o notification_url.
+        'accept_ipn' => env('MP_ACCEPT_IPN', true),
     ],
 
     'demo_user_id'   => env('API_KEY_DEMO_USER_ID'),
@@ -673,6 +811,9 @@ return [
         'limit_reached'   => \RiseTechApps\ApiKey\Notifications\RequestLimitReachedNotification::class,
         'grace_period'    => \RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification::class,
         'plan_expired'    => \RiseTechApps\ApiKey\Notifications\PlanExpiredNotification::class,
+        'plan_cancelled'  => \RiseTechApps\ApiKey\Notifications\PlanCancelledNotification::class,
+        'plan_refunded'   => \RiseTechApps\ApiKey\Notifications\PlanRefundedNotification::class,
+        'payment_rejected' => \RiseTechApps\ApiKey\Notifications\PaymentRejectedNotification::class,
     ],
 
     'spa' => [
@@ -718,6 +859,12 @@ return [
 | `MP_PUBLIC_KEY` | Chave pública do MercadoPago | — |
 | `MP_ACCESS_TOKEN` | Access token do MercadoPago | — |
 | `MP_WEBHOOK_SECRET` | Secret HMAC do webhook do MercadoPago | — |
+| `MP_NOTIFICATION_URL` | URL enviada em `notification_url` a cada pagamento. Vazia em desenvolvimento | — |
+| `MP_ACCEPT_IPN` | Aceitar notificações IPN, que chegam sem assinatura | `true` |
+| `API_KEY_REFUND_WINDOW_DAYS` | Dias de janela para estorno no cancelamento (`0` = desliga) | `0` |
+| `API_KEY_REFUND_MAX_USAGE_PERCENT` | Teto de consumo do ciclo que ainda dá direito a estorno | `50` |
+| `API_KEY_RECONCILE_PAYMENTS_ENABLED` | Agendar a reconciliação de pagamentos em análise | `true` |
+| `API_KEY_RETRY_VALIDATION_REFUNDS_ENABLED` | Agendar o reprocessamento de estornos de validação | `true` |
 
 ---
 

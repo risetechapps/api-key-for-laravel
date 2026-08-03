@@ -97,6 +97,76 @@ describe('Webhook signature', function () {
     });
 });
 
+describe('Notificacao IPN, sem assinatura', function () {
+    /**
+     * Formato real recebido em producao apos o pagamento passar a carregar
+     * notification_url: query com topic e id, corpo com resource e topic, e
+     * nenhum header de assinatura. O IPN nao tem HMAC por definicao.
+     */
+    function ipnNotification(string $paymentId): TestResponse
+    {
+        return test()->postJson(
+            "/api/v1/dashboard/checkout/webhook?id={$paymentId}&topic=payment",
+            ['resource' => $paymentId, 'topic' => 'payment', 'id' => $paymentId]
+        );
+    }
+
+    it('aceita e liquida o pagamento', function () {
+        // Antes respondia 400 "Assinatura invalida", e o gateway reentregava
+        // para sempre porque nunca recebia 200.
+        $this->gateway->pushResponse([
+            'id' => 170917444983,
+            'status' => 'approved',
+            'external_reference' => $this->user->getKey().'|'.$this->plan->getKey(),
+            'transaction_amount' => 100.00,
+        ]);
+
+        ipnNotification('170917444983')->assertStatus(200);
+
+        expect($this->user->fresh()->hasActivePlan())->toBeTrue();
+    });
+
+    it('ignora topico que nao e pagamento', function () {
+        test()->postJson(
+            '/api/v1/dashboard/checkout/webhook?id=1&topic=merchant_order',
+            ['resource' => '1', 'topic' => 'merchant_order']
+        )->assertStatus(200);
+
+        expect($this->gateway->requests)->toBeEmpty();
+    });
+
+    it('recusa requisicao sem assinatura que nao tem a forma de IPN', function () {
+        // Sem isto o endpoint aceitaria qualquer corpo JSON sem assinatura, o
+        // que anularia a validacao do webhook assinado.
+        $this->postJson('/api/v1/dashboard/checkout/webhook', [
+            'type' => 'payment',
+            'data' => ['id' => '1'],
+        ])->assertStatus(400);
+
+        expect($this->gateway->requests)->toBeEmpty();
+    });
+
+    it('recusa IPN quando o operador desliga o formato', function () {
+        config(['api-key.mercadopago.accept_ipn' => false]);
+
+        ipnNotification('170917444983')->assertStatus(400);
+
+        expect($this->gateway->requests)->toBeEmpty();
+    });
+
+    it('nao aceita assinatura invalida so porque ha forma de IPN', function () {
+        // Assinatura presente e errada continua sendo recusa: a presenca do
+        // header e o que escolhe o caminho da validacao.
+        test()->postJson(
+            '/api/v1/dashboard/checkout/webhook?id=1&topic=payment',
+            ['resource' => '1', 'topic' => 'payment'],
+            ['x-signature' => 'ts=1,v1=deadbeef', 'x-request-id' => 'req-1']
+        )->assertStatus(400);
+
+        expect($this->gateway->requests)->toBeEmpty();
+    });
+});
+
 describe('Webhook routing', function () {
     it('ignores notifications that are not about a payment', function () {
         // O Mercado Pago manda merchant_order, plan, subscription… Consultar a API
