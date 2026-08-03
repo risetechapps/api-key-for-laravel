@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use RiseTechApps\ApiKey\Console\Commands\Billing\ProcessRenewalsCommand;
 use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
+use RiseTechApps\ApiKey\Console\Commands\CheckInstallationCommand;
 use RiseTechApps\ApiKey\Console\Commands\MakeAdminCommand;
 use RiseTechApps\ApiKey\Console\Commands\PruneRequestLogsCommand;
 use RiseTechApps\ApiKey\Console\Commands\ReconcilePendingPaymentsCommand;
@@ -199,6 +200,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 CheckExpiredPlans::class,
+                CheckInstallationCommand::class,
                 MakeAdminCommand::class,
                 ProcessRenewalsCommand::class,
                 PruneRequestLogsCommand::class,
