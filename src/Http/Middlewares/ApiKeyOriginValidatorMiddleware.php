@@ -30,6 +30,10 @@ class ApiKeyOriginValidatorMiddleware
         $apiKey = $request->attributes->get('api_key_model') ?? auth()->user()?->apiKey;
 
         if (! $apiKey) {
+            // Este middleware roda depois da reserva de cota no grupo `plan`;
+            // ser barrado aqui não pode custar uma requisição do plano.
+            $request->attributes->set(CheckRequestLimitMiddleware::NOT_BILLABLE, true);
+
             return response()->json(['message' => 'Unauthorized: Request origin/IP not permitted.'], Response::HTTP_FORBIDDEN);
         }
 
@@ -44,6 +48,8 @@ class ApiKeyOriginValidatorMiddleware
                 'url' => $request->url(),
                 'user_agent' => $request->userAgent(),
             ]);
+
+            $request->attributes->set(CheckRequestLimitMiddleware::NOT_BILLABLE, true);
 
             return response()->json(['message' => 'Unauthorized: Request origin/IP not permitted.'], Response::HTTP_FORBIDDEN);
         }

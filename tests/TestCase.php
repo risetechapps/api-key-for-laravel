@@ -136,5 +136,12 @@ abstract class TestCase extends BaseTestCase
         $router->middleware('plan')->get('/api/v1/test-endpoint-client-error', function () {
             abort(422);
         });
+
+        // Recusa do próprio pacote, que acontece DEPOIS da reserva de cota. A
+        // rota nunca roda: o middleware `feature` barra antes.
+        $router->middleware(['plan', 'feature:test-missing-feature'])
+            ->get('/api/v1/test-endpoint-feature', function () {
+                return response()->json(['message' => 'ok']);
+            });
     }
 }

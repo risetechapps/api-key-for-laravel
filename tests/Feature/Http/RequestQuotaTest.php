@@ -75,6 +75,38 @@ describe('Quota accounting', function () {
         ]);
     });
 
+    it('does not charge a request the package itself refused', function () {
+        // O grupo `plan` reserva a cota antes de `api.key.origin` e do `feature:`
+        // da rota, entao uma recusa vinda deles ja consumiu a vaga: o cliente
+        // pagaria uma requisicao para ouvir "voce nao tem esta feature". Quem
+        // decidia isso era a ordem dos middlewares, nao uma politica.
+        callQuotaEndpoint('/api/v1/test-endpoint-feature')->assertStatus(402);
+
+        expect($this->userPlan->fresh()->requests_used)->toBe(500);
+    });
+
+    it('does not charge a request refused by origin validation', function () {
+        test()->apiKey->update(['allowed_origins' => ['https://permitido.example.com']]);
+
+        test()->withHeaders([
+            'X-API-KEY' => test()->apiKey->plainKey,
+            'Origin' => 'https://intruso.example.com',
+        ])->getJson('/api/v1/test-endpoint')->assertStatus(403);
+
+        expect($this->userPlan->fresh()->requests_used)->toBe(500);
+    });
+
+    it('still logs the refused request', function () {
+        // O estorno e da cota, nao do registro: a chamada aconteceu e o dono da
+        // chave precisa ve-la no historico para entender por que foi barrado.
+        callQuotaEndpoint('/api/v1/test-endpoint-feature')->assertStatus(402);
+
+        $this->assertDatabaseHas('request_logs', [
+            'authentication_id' => $this->user->id,
+            'response_code' => 402,
+        ]);
+    });
+
     it('stops exactly at the limit under repeated calls', function () {
         $this->userPlan->update(['requests_used' => 998]);
 

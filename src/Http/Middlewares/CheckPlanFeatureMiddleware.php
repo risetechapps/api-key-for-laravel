@@ -25,6 +25,11 @@ class CheckPlanFeatureMiddleware
         if (! $hasAccess) {
             $featuresList = implode(', ', $features);
 
+            // O grupo `plan` já reservou a cota antes deste middleware rodar.
+            // Recusar acesso a uma feature que o plano não tem não pode custar
+            // uma requisição ao cliente.
+            $request->attributes->set(CheckRequestLimitMiddleware::NOT_BILLABLE, true);
+
             if ($request->expectsJson()) {
                 return response()->json([
                     'status' => 'upgrade_required',

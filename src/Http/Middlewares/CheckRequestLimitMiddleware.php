@@ -15,6 +15,15 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CheckRequestLimitMiddleware
 {
+    /**
+     * Marca uma requisição que não deve consumir cota.
+     *
+     * Usada pelas recusas do próprio pacote que acontecem DEPOIS da reserva —
+     * origem não permitida e feature ausente. Sem ela, ser barrado custa uma
+     * requisição do plano.
+     */
+    public const NOT_BILLABLE = '_quota_not_billable';
+
     public function handle(Request $request, Closure $next): Response
     {
         if ($request->attributes->get('_internal')) {
@@ -127,7 +136,14 @@ class CheckRequestLimitMiddleware
         // errors (4xx) stay charged on purpose: those come from the caller's own
         // malformed requests, and refunding them would make the quota trivially
         // bypassable by anyone willing to send garbage.
-        if ($status >= 500) {
+        //
+        // A recusa do próprio pacote é o terceiro caso, e não é nenhum dos dois.
+        // Este middleware reserva a cota antes de `api.key.origin` e do
+        // `feature:` da rota, então uma recusa vinda deles já consumiu a vaga —
+        // o cliente pagaria uma requisição para ouvir "não", e o que decide isso
+        // é a ordem dos middlewares, não uma política. Elas se marcam como não
+        // cobráveis e a vaga volta.
+        if ($status >= 500 || $request->attributes->get(self::NOT_BILLABLE)) {
             $this->releaseQuota($activePlan);
         }
 
