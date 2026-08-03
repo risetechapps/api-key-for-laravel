@@ -41,9 +41,17 @@ class UserCard extends Model
     // credenciais — mover dinheiro no Mercado Pago exige o access token, que fica
     // no servidor —, mas são as referências usadas para tokenizar e cobrar o cartão
     // salvo, e nenhuma tela precisa delas.
+    // `mp_card_id` NÃO entra aqui: o pagamento em um clique depende dele. O SDK
+    // do Mercado Pago tokeniza um cartão salvo com
+    // `createCardToken({ cardId, securityCode })`, no navegador do dono do
+    // cartão — é o fluxo desenhado pelo próprio gateway. Escondê-lo fazia a
+    // tela nunca reconhecer o cartão como vinculado e pedir o número completo a
+    // cada compra, anulando o recurso.
+    //
+    // `mp_customer_id` continua oculto: identifica o cliente no gateway, não é
+    // usado por nenhuma tela e a listagem serializa o model cru.
     protected $hidden = [
         'mp_customer_id',
-        'mp_card_id',
         // Rastro interno da cobrança de validação: serve ao reprocessamento do
         // estorno, não à tela de cartões do cliente.
         'validation_payment_id',

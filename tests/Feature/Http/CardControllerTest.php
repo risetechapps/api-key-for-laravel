@@ -82,6 +82,39 @@ describe('Listing cards', function () {
             ->and($response->json('data.0.last_four'))->toBe('1111');
     });
 
+    it('exposes the gateway card id so one-click payment works', function () {
+        // O SDK do Mercado Pago tokeniza um cartao salvo com
+        // createCardToken({ cardId, securityCode }) no navegador do dono. Sem
+        // este campo na listagem, o checkout nunca reconhece o cartao como
+        // vinculado e volta a pedir o numero completo a cada compra.
+        UserCard::create([
+            'authentication_id' => $this->user->getKey(),
+            'holder_name' => 'Meu Cartao', 'last_four' => '1111',
+            'brand' => 'visa', 'expiry_month' => '01', 'expiry_year' => '2031',
+            'mp_customer_id' => 'cus_1', 'mp_card_id' => 'card_mp_1',
+        ]);
+
+        $card = $this->getJson('/api/v1/dashboard/cards')->assertStatus(200)->json('data.0');
+
+        expect($card['mp_card_id'])->toBe('card_mp_1');
+    });
+
+    it('keeps the gateway customer id off the wire', function () {
+        // Identifica o cliente no gateway e nenhuma tela precisa dele; a
+        // listagem serializa o model cru, entao so o $hidden o segura.
+        UserCard::create([
+            'authentication_id' => $this->user->getKey(),
+            'holder_name' => 'Meu Cartao', 'last_four' => '1111',
+            'brand' => 'visa', 'expiry_month' => '01', 'expiry_year' => '2031',
+            'mp_customer_id' => 'cus_secreto', 'mp_card_id' => 'card_mp_1',
+        ]);
+
+        $response = $this->getJson('/api/v1/dashboard/cards')->assertStatus(200);
+
+        expect($response->json('data.0'))->not->toHaveKey('mp_customer_id')
+            ->and($response->getContent())->not->toContain('cus_secreto');
+    });
+
     it('serialises is_default as a boolean', function () {
         // Sem o cast o JSON devolvia o que o driver entregasse — bool no
         // PostgreSQL, inteiro no SQLite —, fazendo o contrato da API variar com
