@@ -131,8 +131,11 @@
                     <span class="text-sm text-slate-700 dark:text-slate-300">Cupom ativo</span>
                 </label>
 
-                <div v-if="formError" class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-                    {{ formError }}
+                <div v-if="formError || fieldErrors.length" class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400 space-y-1">
+                    <p v-if="formError">{{ formError }}</p>
+                    <ul v-if="fieldErrors.length" class="list-disc list-inside space-y-0.5">
+                        <li v-for="(msg, i) in fieldErrors" :key="i">{{ msg }}</li>
+                    </ul>
                 </div>
 
                 <Button type="submit" variant="primary" class="w-full" :loading="saving">
@@ -162,6 +165,7 @@ const showModal = ref(false);
 const editing   = ref(null);
 const saving    = ref(false);
 const formError = ref('');
+const fieldErrors = ref([]);
 
 const emptyForm = () => ({ code: '', type: 'percentage', value: 10, max_uses: 1, expires_at: '', is_active: true });
 const form = ref(emptyForm());
@@ -181,12 +185,14 @@ function openModal(coupon = null) {
         ? { code: coupon.code, type: coupon.type, value: coupon.value, max_uses: coupon.usage?.max, expires_at: coupon.expires_at?.substring(0, 10) ?? '', is_active: coupon.is_active }
         : emptyForm();
     formError.value = '';
+    fieldErrors.value = [];
     showModal.value = true;
 }
 
 async function save() {
     saving.value = true;
     formError.value = '';
+    fieldErrors.value = [];
     try {
         const payload = { ...form.value, expires_at: form.value.expires_at || null };
         if (editing.value) {
@@ -196,7 +202,19 @@ async function save() {
         }
         showModal.value = false;
     } catch (err) {
-        formError.value = err?.response?.data?.message || 'Erro ao salvar cupom.';
+        // A recusa por codigo duplicado chega como 422 com errors.code; a
+        // mensagem do envelope e generica e nao diz qual campo falhou. Sem ler
+        // errors, o operador ve "dados invalidos" e nao "ja existe um cupom com
+        // este codigo".
+        const data = err?.response?.data;
+        const errors = data?.errors ?? {};
+        const flat = Object.values(errors).flat();
+
+        if (flat.length) {
+            fieldErrors.value = flat;
+        } else {
+            formError.value = data?.message || 'Erro ao salvar cupom.';
+        }
     } finally {
         saving.value = false;
     }
