@@ -629,6 +629,10 @@ php artisan api-key:prune-logs
 php artisan api-key:prune-logs --dry-run          # apenas relata quantas linhas seriam apagadas
 php artisan api-key:prune-logs --days=30          # sobrescreve a retenção configurada
 
+# Diagnosticar a instalação: tabelas, credenciais do gateway, fila do log,
+# supervisors do Horizon, agendador e chaves legadas
+php artisan api-key:check
+
 # Promover um usuário a admin
 php artisan apikey:make-admin {email}
 
@@ -667,6 +671,20 @@ php artisan api-key:rotate-keys --legacy --dry-run           # apenas conta quan
 > `QUEUE_CONNECTION=sync` **ou** deixe `API_KEY_LOG_QUEUE` nulo (o log volta a
 > gravar via `afterResponse`).
 >
+> **O log de requisições exige worker por padrão.** `API_KEY_LOG_QUEUE` vem com
+> `logs` e `API_KEY_LOG_CONNECTION` com `redis`, então sem um worker consumindo
+> essa fila os jobs se acumulam e o histórico fica vazio. A falha é silenciosa:
+> a contagem de cota é síncrona e continua correta, então o dashboard mostra o
+> consumo certo enquanto a tabela `request_logs` não recebe nada.
+>
+> ```bash
+> php artisan queue:work redis --queue=logs   # ou Horizon observando a fila
+> php artisan queue:monitor logs              # conferir acúmulo
+> ```
+>
+> Sem worker, defina `API_KEY_LOG_QUEUE=` (vazio) e o log passa a gravar no
+> próprio processo após a resposta.
+>
 > **O `schedule:run` no cron não é opcional.** Sem ele a reconciliação de
 > pagamentos não roda, e uma compra que ficar em análise sem receber webhook fica
 > pendente indefinidamente — dinheiro cobrado sem assinatura entregue. Também
@@ -682,6 +700,54 @@ php artisan api-key:rotate-keys --legacy --dry-run           # apenas conta quan
 | `api-key:retry-validation-refunds` | de hora em hora | `reconciliation.validation_refunds_enabled` |
 
 Todas com `withoutOverlapping()` e `onOneServer()`, com saída em log próprio dentro de `storage/logs`.
+
+### Filas usadas pelo pacote
+
+Três destinos diferentes, e é importante saber quais são porque **um worker só na fila `default` não cobre todos**:
+
+| O que é enfileirado | Conexão | Fila | Padrão |
+|---------------------|---------|------|--------|
+| Log de cada requisição | `API_KEY_LOG_CONNECTION` | `API_KEY_LOG_QUEUE` | `redis` / **`logs`** |
+| Listeners de notificação | `API_KEY_QUEUE_CONNECTION` | `API_KEY_QUEUE_NAME` | `redis` / `default` |
+| Renovação de assinatura | conexão default do app | `API_KEY_BILLING_QUEUE` | default / `default` |
+
+### Usando com Horizon
+
+O pacote funciona com Horizon sem adaptação, **desde que os supervisors observem as filas acima**. O Horizon processa apenas o que está declarado em `config/horizon.php`; jobs enviados a uma fila não declarada ficam acumulados sem que nada acuse erro.
+
+O caso que morde na prática é o log: ele vai para `logs`, que a configuração padrão do Horizon **não** observa. O resultado é o dashboard mostrando o consumo correto — a contagem é síncrona — enquanto o histórico de requisições fica permanentemente vazio.
+
+```php
+// config/horizon.php
+
+'defaults' => [
+    'supervisor-1' => [
+        'connection' => 'redis',
+        'queue'      => ['default', 'logs'],   // 'logs' precisa estar aqui
+        'balance'    => 'auto',
+        // ...
+    ],
+],
+```
+
+Se preferir isolar o log, o que faz sentido porque ele é alto volume e baixa prioridade, use um supervisor próprio:
+
+```php
+'supervisor-logs' => [
+    'connection' => 'redis',
+    'queue'      => ['logs'],
+    'balance'    => 'simple',
+    'maxProcesses' => 2,
+],
+```
+
+Para conferir se há acúmulo:
+
+```bash
+php artisan queue:monitor logs
+```
+
+Quem não usa Horizon nem worker algum: defina `API_KEY_LOG_QUEUE=` (vazio) e o log passa a gravar no próprio processo, após a resposta.
 
 ---
 
@@ -741,7 +807,7 @@ return [
         'retention_days' => 90,     // api-key:prune-logs apaga registros mais antigos (0 = manter tudo)
         'prune_enabled'  => true,
         'prune_chunk'    => 5000,
-        'queue'          => env('API_KEY_LOG_QUEUE', 'logs'),        // fila do INSERT; null = grava afterResponse
+        'queue'          => env('API_KEY_LOG_QUEUE', 'logs'),        // EXIGE worker nesta fila; vazio = grava afterResponse
         'connection'     => env('API_KEY_LOG_CONNECTION', 'redis'),  // conexão da fila (Horizon observa redis)
     ],
 
@@ -840,7 +906,7 @@ return [
 | `API_KEY_LOG_RETENTION_DAYS` | Dias de retenção do log de requisições (`0` = manter tudo) | `90` |
 | `API_KEY_LOG_PRUNE_ENABLED` | Agendar `api-key:prune-logs` automaticamente | `true` |
 | `API_KEY_LOG_PRUNE_CHUNK` | Tamanho do lote de exclusão do prune | `5000` |
-| `API_KEY_LOG_QUEUE` | Fila do log de requisições (`null` = grava `afterResponse`) | `logs` |
+| `API_KEY_LOG_QUEUE` | Fila do log de requisições. **Exige worker consumindo essa fila**; vazio = grava `afterResponse` | `logs` |
 | `API_KEY_LOG_CONNECTION` | Conexão da fila do log (Horizon observa `redis`) | `redis` |
 | `API_KEY_QUEUE_CONNECTION` | Conexão dos listeners/notificações enfileirados | `redis` |
 | `API_KEY_QUEUE_NAME` | Fila dos listeners/notificações (`null` = default da conexão) | — |

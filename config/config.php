@@ -192,10 +192,19 @@ return [
         'prune_chunk' => env('API_KEY_LOG_PRUNE_CHUNK', 5000),
 
         // Fila usada para gravar o log de cada requisição fora do worker web.
-        // Deixe null para gravar no próprio processo após a resposta
-        // (afterResponse), sem exigir um worker de fila. Defina o nome de uma
-        // fila (ex.: 'logs') para descarregar o INSERT em um worker dedicado —
-        // recomendado sob carga alta, onde a escrita síncrona reduz o throughput.
+        //
+        // ATENÇÃO: o padrão é a fila 'logs', então O PACOTE EXIGE UM WORKER
+        // consumindo essa fila desde a instalação. Sem worker, os jobs se
+        // acumulam e NENHUMA linha é gravada — e a falha é silenciosa, porque a
+        // contagem de cota é síncrona e continua correta. O sintoma é o
+        // dashboard mostrando o consumo certo com o histórico vazio.
+        //
+        //   php artisan queue:work redis --queue=logs
+        //
+        // Deixe NULA para gravar no próprio processo após a resposta
+        // (afterResponse), sem depender de fila. É o caminho para quem não tem
+        // worker; o custo é um INSERT no worker web, fora da rota crítica da
+        // resposta.
         'queue' => env('API_KEY_LOG_QUEUE', 'logs'),
 
         // Conexão de fila do job de log. O Horizon só observa a conexão `redis`;
