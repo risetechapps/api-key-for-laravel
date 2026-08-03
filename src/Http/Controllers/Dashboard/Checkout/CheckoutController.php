@@ -11,10 +11,12 @@ use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
+use RiseTechApps\ApiKey\Models\PendingPayment\PendingPayment;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 use RiseTechApps\ApiKey\Repositories\Coupon\CouponRepository;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
+use RiseTechApps\ApiKey\Services\PaymentOutcomeService;
 use RiseTechApps\ApiKey\Traits\BuildsPaymentPayer;
 use RiseTechApps\ApiKey\Traits\SendsIdempotentPayments;
 
@@ -26,6 +28,7 @@ class CheckoutController extends Controller
         protected readonly PlanRepository $planRepository,
         protected readonly MpCustomerService $mpCustomerService,
         protected readonly CouponRepository $couponRepository,
+        protected readonly PaymentOutcomeService $paymentOutcome,
     ) {}
 
     public function validateCoupon(Request $request): JsonResponse
@@ -264,6 +267,20 @@ class CheckoutController extends Controller
                 // redemption stays claimed.
                 $couponSettled = true;
 
+                // A espera vira registro. Sem ela uma recusa posterior não teria
+                // a quem se referir: o comprador não seria avisado, a reserva do
+                // cupom ficaria queimada e um webhook que não chegasse deixaria o
+                // pagamento órfão.
+                PendingPayment::create([
+                    'authentication_id' => auth()->id(),
+                    'plan_id' => $plan->getKey(),
+                    'payment_id' => (string) $payment->id,
+                    'amount' => $transactionAmount,
+                    'coupon_id' => $appliedCoupon?->getKey(),
+                    'credit_applied' => $credit ?: null,
+                    'status' => (string) $payment->status,
+                ]);
+
                 return response()->jsonSuccess(['status' => 'pending', 'message' => __('api-key::messages.payment_pending')]);
             }
 
@@ -351,28 +368,38 @@ class CheckoutController extends Controller
         Log::info('Card synced after payment', ['card_id' => $card->id, 'mp_card_id' => $mpCardId]);
     }
 
+    /**
+     * Recebe as notificações do Mercado Pago.
+     *
+     * O gateway entrega em dois formatos, e o pacote precisa dos dois:
+     *
+     *   Webhook  — corpo `{type, data:{id}}` com os headers `x-signature` e
+     *              `x-request-id`. Assinado, validado por HMAC.
+     *   IPN      — query `?topic=payment&id=…` com corpo `{resource, topic}`.
+     *              Sem assinatura nenhuma; é assim que o formato foi desenhado.
+     *
+     * O IPN chega porque o pagamento carrega `notification_url`, que a revisão
+     * de qualidade do Mercado Pago exige. Rejeitá-lo não é opção: sem responder
+     * 200 o gateway reentrega indefinidamente.
+     *
+     * A autenticidade do IPN vem de nós irmos buscar o pagamento na API com o
+     * nosso access token — só agimos sobre pagamentos da nossa própria conta.
+     * É verificação mais fraca que o HMAC, e por isso desligável.
+     */
     public function webhook(Request $request): JsonResponse
     {
-        $secret = config('api-key.mercadopago.webhook_secret');
+        $signature = (string) $request->header('x-signature', '');
 
-        // Fail closed. An unsigned webhook endpoint accepts any caller's claim
-        // that a payment happened, so a missing secret is a misconfiguration to
-        // reject loudly, not a check to skip.
-        if (! $secret) {
-            Log::error('MP webhook rejected: no webhook secret configured');
+        if ($signature !== '') {
+            if (! $this->signatureIsValid($request, $signature)) {
+                return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
+            }
+        } elseif (! $this->acceptsUnsignedNotification($request)) {
+            Log::warning('MP notification rejected: unsigned and not a recognised IPN', [
+                'topic' => $request->input('topic'),
+                'has_secret' => (bool) config('api-key.mercadopago.webhook_secret'),
+            ]);
 
-            return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
-        }
-
-        $xSignature = $request->header('x-signature', '');
-        $xRequestId = $request->header('x-request-id', '');
-        $dataId = $request->query('data_id', $request->input('data.id', ''));
-
-        $ts = $this->extractSignaturePart($xSignature, 'ts');
-        $v1 = $this->extractSignaturePart($xSignature, 'v1');
-        $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$xRequestId};ts:{$ts};", (string) $secret);
-
-        if (! hash_equals($hash, $v1)) {
             return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
         }
 
@@ -382,89 +409,75 @@ class CheckoutController extends Controller
             return response()->json(['message' => 'ok']);
         }
 
-        $paymentId = $request->input('data.id') ?? $request->input('id');
+        // `resource` e a query `id` são os campos do IPN; `data.id` é o do
+        // webhook assinado.
+        $paymentId = $request->input('data.id')
+            ?? $request->input('id')
+            ?? $request->input('resource')
+            ?? $request->query('id');
 
         MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
         $client = new PaymentClient;
         $payment = $client->get((int) $paymentId);
 
-        if ($payment->status !== 'approved' || ! $payment->external_reference) {
-            return response()->json(['message' => 'ok']);
-        }
-
-        $reference = $this->parseExternalReference((string) $payment->external_reference);
-
-        if (! $reference) {
-            Log::warning('MP webhook: unrecognised external_reference', [
-                'external_reference' => $payment->external_reference,
-                'payment_id' => $payment->id,
-            ]);
-
-            return response()->json(['message' => 'ok']);
-        }
-
-        if ($reference['plan_id'] === 'card_validation') {
-            return response()->json(['message' => 'ok']);
-        }
-
-        $user = Authentication::find($reference['user_id']);
-        // findById, not findActiveById: the money has already changed hands. A plan
-        // taken off sale between checkout and confirmation must still be delivered
-        // to the buyer who paid for it — only *acquiring* a plan is gated on is_active.
-        $plan = $this->planRepository->findById($reference['plan_id']);
-
-        if (! $user || ! $plan) {
-            return response()->json(['message' => 'ok']);
-        }
-
-        $alreadySubscribed = $user->userPlan()
-            ->where('plan_id', $plan->getKey())
-            ->where('active', true)
-            ->where('payment_id', (string) $payment->id)
-            ->exists();
-
-        if ($alreadySubscribed) {
-            return response()->json(['message' => 'ok']);
-        }
-
-        $userPlan = $user->subscribeToPlan($plan);
-
-        // The direct checkout flow records these; the webhook flow used not to,
-        // which left webhook-confirmed subscriptions with no payment trail and
-        // invisible to the refund screen (it filters on payment_id).
-        $userPlan->update([
-            'payment_id' => (string) $payment->id,
-            'payment_amount' => (float) $payment->transaction_amount,
-        ]);
+        // O que fazer com cada desfecho vive no serviço, e não aqui: o comando
+        // de reconciliação precisa decidir exatamente a mesma coisa quando o
+        // webhook não chega. A resposta é sempre 'ok' — o Mercado Pago reentrega
+        // enquanto não receber 200, e um pagamento que não nos diz respeito não
+        // é motivo para pedir reentrega.
+        $this->paymentOutcome->apply($payment);
 
         return response()->json(['message' => 'ok']);
     }
 
     /**
-     * Split a Mercado Pago external_reference into its parts.
+     * Confere o HMAC do webhook assinado.
      *
-     * Two shapes are emitted by this package:
-     *   "<userId>|<planId>"                        — checkout and card validation
-     *   "renewal|<userId>|<planId>|<userPlanId>"   — automatic renewal
-     *
-     * The previous parser always split into two pieces, so a renewal reference
-     * yielded userId = "renewal" and every renewal webhook was silently dropped.
-     *
-     * @return array{user_id: string, plan_id: string}|null
+     * Continua fechando por falta de segredo: um endpoint que aceita qualquer
+     * assinatura é o mesmo que não ter assinatura, e segredo ausente é erro de
+     * configuração para gritar, não checagem a pular.
      */
-    private function parseExternalReference(string $reference): ?array
+    private function signatureIsValid(Request $request, string $signature): bool
     {
-        $parts = explode('|', $reference);
+        $secret = config('api-key.mercadopago.webhook_secret');
 
-        if (($parts[0] ?? null) === 'renewal') {
-            return isset($parts[1], $parts[2])
-                ? ['user_id' => $parts[1], 'plan_id' => $parts[2]]
-                : null;
+        if (! $secret) {
+            Log::error('MP webhook rejected: no webhook secret configured');
+
+            return false;
         }
 
-        return isset($parts[0], $parts[1]) && $parts[0] !== ''
-            ? ['user_id' => $parts[0], 'plan_id' => $parts[1]]
-            : null;
+        $xRequestId = (string) $request->header('x-request-id', '');
+        $dataId = $request->query('data_id', $request->input('data.id', ''));
+
+        $ts = $this->extractSignaturePart($signature, 'ts');
+        $v1 = $this->extractSignaturePart($signature, 'v1');
+        $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$xRequestId};ts:{$ts};", (string) $secret);
+
+        return hash_equals($hash, $v1);
+    }
+
+    /**
+     * Se esta requisição sem assinatura é um IPN legítimo do Mercado Pago.
+     *
+     * Exige a forma do IPN — `topic` mais `resource` ou o `id` na query — para
+     * que uma requisição qualquer sem assinatura não passe. Não é autenticação:
+     * quem autentica é a consulta do pagamento na API logo adiante, com o nosso
+     * access token. Serve para não abrir o endpoint a qualquer corpo JSON.
+     *
+     * Desligável por `api-key.mercadopago.accept_ipn` para quem recebe só
+     * webhooks assinados e prefere recusar o resto.
+     */
+    private function acceptsUnsignedNotification(Request $request): bool
+    {
+        if (! config('api-key.mercadopago.accept_ipn', true)) {
+            return false;
+        }
+
+        $hasTopic = $request->input('topic') !== null || $request->query('topic') !== null;
+        $hasResource = $request->input('resource') !== null || $request->query('id') !== null;
+
+        return $hasTopic && $hasResource;
     }
 
     private function extractSignaturePart(string $signature, string $key): string

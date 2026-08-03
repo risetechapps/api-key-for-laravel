@@ -55,36 +55,6 @@ parameters:
 			path: src/Http/Controllers/Authentication/ProfileController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/Dashboard/Cards/CardController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/Dashboard/Cards/CardController.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$mp_card_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/Dashboard/Cards/CardController.php
-
-		-
-			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: src/Http/Controllers/Dashboard/Cards/CardController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method RiseTechApps\\ApiKey\\Services\\MpCustomerService\:\:getOrCreateCustomer\(\) expects RiseTechApps\\ApiKey\\Models\\Authentication\\Authentication, Illuminate\\Foundation\\Auth\\User\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Http/Controllers/Dashboard/Cards/CardController.php
-
-		-
 			message: '#^Using nullsafe method call on non\-nullable type MercadoPago\\Net\\MPResponse\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -109,18 +79,6 @@ parameters:
 			path: src/Http/Controllers/Dashboard/Cards/CardController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\>\|RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$mp_customer_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:activePlan\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -129,18 +87,6 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Foundation\\Auth\\User\:\:subscribeToPlan\(\)\.$#'
 			identifier: method.notFound
-			count: 2
-			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
-
-		-
-			message: '#^Offset 0 on non\-empty\-list\<string\> in isset\(\) always exists and is not nullable\.$#'
-			identifier: isset.offset
-			count: 1
-			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
-
-		-
-			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
 			count: 2
 			path: src/Http/Controllers/Dashboard/Checkout/CheckoutController.php
 
@@ -497,24 +443,6 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: src/Http/Resources/UserResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$brand\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Jobs/ProcessPlanRenewalJob.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$mp_card_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Jobs/ProcessPlanRenewalJob.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\UserCard\\UserCard\:\:\$mp_customer_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Jobs/ProcessPlanRenewalJob.php
 
 		-
 			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\ApiKey\\ApiKey\:\:\$allowed_origins\.$#'

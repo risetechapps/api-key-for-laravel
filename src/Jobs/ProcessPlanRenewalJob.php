@@ -11,6 +11,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\MercadoPagoConfig;
+use RiseTechApps\ApiKey\Models\PendingPayment\PendingPayment;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
@@ -160,6 +161,24 @@ class ProcessPlanRenewalJob implements ShouldBeUnique, ShouldQueue
             ]);
 
             return;
+        }
+
+        // Em análise: o gateway decide depois e avisa por webhook. Registrar a
+        // espera é o que permite ao `api-key:reconcile-payments` alcançá-la se
+        // esse webhook não chegar — caso em que o assinante teria pago sem a
+        // renovação acontecer, e ninguém perceberia: este job já terminou e o
+        // log abaixo diria "not approved", que naquele instante era verdade.
+        //
+        // Sem cupom aqui: renovação cobra o preço cheio, então não há reserva a
+        // devolver como no checkout.
+        if (in_array($payment->status ?? '', ['pending', 'in_process'], true)) {
+            PendingPayment::create([
+                'authentication_id' => $user->getKey(),
+                'plan_id' => $plan->getKey(),
+                'payment_id' => (string) $payment->id,
+                'amount' => $amount,
+                'status' => (string) $payment->status,
+            ]);
         }
 
         Log::warning('billing renewal not approved', [

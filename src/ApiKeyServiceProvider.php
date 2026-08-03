@@ -13,8 +13,10 @@ use RiseTechApps\ApiKey\Console\Commands\Billing\ProcessRenewalsCommand;
 use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
 use RiseTechApps\ApiKey\Console\Commands\MakeAdminCommand;
 use RiseTechApps\ApiKey\Console\Commands\PruneRequestLogsCommand;
+use RiseTechApps\ApiKey\Console\Commands\ReconcilePendingPaymentsCommand;
 use RiseTechApps\ApiKey\Console\Commands\RetryValidationRefundsCommand;
 use RiseTechApps\ApiKey\Console\Commands\RotateApiKeysCommand;
+use RiseTechApps\ApiKey\Events\PaymentRejected;
 use RiseTechApps\ApiKey\Events\PlanCancelled;
 use RiseTechApps\ApiKey\Events\PlanChanged;
 use RiseTechApps\ApiKey\Events\PlanExpired;
@@ -31,6 +33,7 @@ use RiseTechApps\ApiKey\Http\Middlewares\CheckRequestLimitMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\DisableRouteWebMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\LanguageMiddleware;
 use RiseTechApps\ApiKey\Listeners\SendGracePeriodNotification;
+use RiseTechApps\ApiKey\Listeners\SendPaymentRejectedNotification;
 use RiseTechApps\ApiKey\Listeners\SendPlanActivatedNotification;
 use RiseTechApps\ApiKey\Listeners\SendPlanCancelledNotification;
 use RiseTechApps\ApiKey\Listeners\SendPlanExpiredNotification;
@@ -147,6 +150,30 @@ class ApiKeyServiceProvider extends ServiceProvider
                     ->onOneServer()
                     ->appendOutputTo(storage_path('logs/prune-logs.log'));
             }
+
+            if (config('api-key.reconciliation.payments_enabled', true)) {
+                // De quinze em quinze minutos porque do outro lado há dinheiro
+                // cobrado sem assinatura entregue. O comando ignora esperas com
+                // menos de 15 minutos, então isto não corre contra o webhook —
+                // só alcança o que ele não entregou. Sem pendências, custa uma
+                // consulta indexada que não devolve nada.
+                $schedule->command('api-key:reconcile-payments')
+                    ->everyFifteenMinutes()
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->appendOutputTo(storage_path('logs/reconcile-payments.log'));
+            }
+
+            if (config('api-key.reconciliation.validation_refunds_enabled', true)) {
+                // De hora em hora: o valor da validação está no cartão do
+                // cliente até voltar, mas o estorno já foi tentado uma vez no
+                // cadastro, então aqui se trata da exceção.
+                $schedule->command('api-key:retry-validation-refunds')
+                    ->hourly()
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->appendOutputTo(storage_path('logs/validation-refunds.log'));
+            }
         });
     }
 
@@ -175,6 +202,7 @@ class ApiKeyServiceProvider extends ServiceProvider
                 MakeAdminCommand::class,
                 ProcessRenewalsCommand::class,
                 PruneRequestLogsCommand::class,
+                ReconcilePendingPaymentsCommand::class,
                 RetryValidationRefundsCommand::class,
                 RotateApiKeysCommand::class,
             ]);
@@ -247,6 +275,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         Event::listen(PlanExpired::class, SendPlanExpiredNotification::class);
         Event::listen(PlanCancelled::class, SendPlanCancelledNotification::class);
         Event::listen(PlanRefunded::class, SendPlanRefundedNotification::class);
+        Event::listen(PaymentRejected::class, SendPaymentRejectedNotification::class);
         Event::listen(PlanChanged::class, SendPlanActivatedNotification::class);
         Event::listen(RequestLimitReached::class, SendRequestLimitReachedNotification::class);
         Event::listen(PlanUsageThresholdReached::class, SendUsageThresholdNotification::class);

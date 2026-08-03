@@ -2,6 +2,7 @@
 
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification;
+use RiseTechApps\ApiKey\Notifications\PaymentRejectedNotification;
 use RiseTechApps\ApiKey\Notifications\PlanActivatedNotification;
 use RiseTechApps\ApiKey\Notifications\PlanCancelledNotification;
 use RiseTechApps\ApiKey\Notifications\PlanExpiredNotification;
@@ -82,6 +83,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Reconciliação com o gateway
+    |--------------------------------------------------------------------------
+    |
+    | Rotinas que fecham o que o Mercado Pago deveria ter avisado e não avisou.
+    | Dependem do `schedule:run` da aplicação estar ativo.
+    |
+    | `payments_enabled` agenda `api-key:reconcile-payments` a cada quinze
+    | minutos: pergunta ao gateway o desfecho de compras que ficaram em análise
+    | e cujo webhook não chegou. Sem ela, um pagamento pendente sem webhook fica
+    | pendente para sempre — dinheiro cobrado sem assinatura entregue.
+    |
+    | `validation_refunds_enabled` agenda `api-key:retry-validation-refunds` de
+    | hora em hora: reprocessa o estorno da cobrança de validação de cartão que
+    | falhou no cadastro.
+    |
+    */
+    'reconciliation' => [
+        'payments_enabled' => env('API_KEY_RECONCILE_PAYMENTS_ENABLED', true),
+        'validation_refunds_enabled' => env('API_KEY_RETRY_VALIDATION_REFUNDS_ENABLED', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Notifications
     |--------------------------------------------------------------------------
     |
@@ -101,6 +125,7 @@ return [
         'plan_expired' => PlanExpiredNotification::class,
         'plan_cancelled' => PlanCancelledNotification::class,
         'plan_refunded' => PlanRefundedNotification::class,
+        'payment_rejected' => PaymentRejectedNotification::class,
     ],
 
     /*
@@ -342,6 +367,22 @@ return [
         | https://seu-dominio/api/v1/dashboard/checkout/webhook
         */
         'notification_url' => env('MP_NOTIFICATION_URL'),
+
+        /*
+        | Aceitar as notificações IPN, o formato legado que o Mercado Pago envia
+        | para a `notification_url`: query `?topic=payment&id=…` e corpo
+        | `{resource, topic}`, sem assinatura nenhuma.
+        |
+        | Deixe LIGADO se você preencheu `notification_url`, senão essas
+        | notificações são recusadas com 400 e o gateway reentrega sem parar.
+        |
+        | O IPN não tem HMAC a conferir — quem verifica é o pacote, indo buscar
+        | o pagamento na API com o access token, de modo que só pagamentos da
+        | sua própria conta produzem efeito. Ainda assim é verificação mais
+        | fraca que a do webhook assinado: desligue se você recebe apenas
+        | webhooks configurados no painel.
+        */
+        'accept_ipn' => env('MP_ACCEPT_IPN', true),
     ],
 
     /*
