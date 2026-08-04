@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\ApiKeyCreated;
 use RiseTechApps\ApiKey\Events\ApiKeyStatusChanged;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
@@ -291,9 +290,9 @@ class ApiKey extends Model
         }
 
         if ($budgetSpent) {
-            Log::warning('api-key: legacy key scan hit the time budget before resolving a key; unmigrated keys remain. Consider rotating legacy API keys.', [
+            logglyWarning()->withContext([
                 'max_seconds' => $maxSeconds,
-            ]);
+            ])->log('api-key: legacy key scan hit the time budget before resolving a key; unmigrated keys remain. Consider rotating legacy API keys.');
         }
 
         return null;
