@@ -7,7 +7,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\URL;
 use RiseTechApps\ApiKey\Http\Request\Authentication\LoginRequest;
@@ -32,11 +31,11 @@ class AuthController extends Controller
 
             $user->sendEmailVerificationNotification();
 
-            Log::info('User registered', [
+            logglyInfo()->withContext([
                 'user_id' => $user->getKey(),
                 'email' => $user->email,
                 'ip' => $request->ip(),
-            ]);
+            ])->log('User registered');
 
             return response()->jsonSuccess([
                 'message' => __('api-key::messages.registration_success'),
@@ -44,10 +43,10 @@ class AuthController extends Controller
                 'api_key' => $user->apiKey?->plainKey,
             ]);
         } catch (Throwable $exception) {
-            Log::error('Registration failed', [
+            logglyError()->withContext([
                 'error' => $exception->getMessage(),
                 'ip' => $request->ip(),
-            ]);
+            ])->log('Registration failed');
             report($exception);
 
             return response()->jsonGone(__('api-key::messages.registration_failed'));
@@ -79,7 +78,7 @@ class AuthController extends Controller
         ];
 
         if (! URL::hasValidSignature($request)) {
-            Log::warning('Email verification failed: invalid signature', $context);
+            logglyWarning()->withContext($context)->log('Email verification failed: invalid signature');
 
             return redirect('/login?error=invalid_link');
         }
@@ -87,7 +86,7 @@ class AuthController extends Controller
         $user = Authentication::find($id);
 
         if (! $user || ! hash_equals((string) $hash, sha1((string) $user->getEmailForVerification()))) {
-            Log::warning('Email verification failed: user not found or hash mismatch', $context);
+            logglyWarning()->withContext($context)->log('Email verification failed: user not found or hash mismatch');
 
             return redirect('/login?error=invalid_link');
         }
@@ -107,13 +106,13 @@ class AuthController extends Controller
         $user = $this->authService->findUserByEmail($credentials['email']);
 
         if (! $user) {
-            Log::info('Login failed: user not found', $context);
+            logglyInfo()->withContext($context)->log('Login failed: user not found');
 
             return response()->jsonGone(__('api-key::messages.user_not_found'));
         }
 
         if (! $user->hasVerifiedEmail()) {
-            Log::info('Login failed: email not verified', $context);
+            logglyInfo()->withContext($context)->log('Login failed: email not verified');
             $user->sendEmailVerificationNotification();
 
             return response()->jsonGone(__('api-key::messages.account_not_verified'));
@@ -122,12 +121,12 @@ class AuthController extends Controller
         $result = $this->authService->attemptLogin($credentials);
 
         if (! $result) {
-            Log::info('Login failed: incorrect credentials', $context);
+            logglyInfo()->withContext($context)->log('Login failed: incorrect credentials');
 
             return response()->jsonGone(__('api-key::messages.incorrect_credentials'));
         }
 
-        Log::info('User logged in', ['user_id' => $result['user']->getKey(), ...$context]);
+        logglyInfo()->withContext(['user_id' => $result['user']->getKey(), ...$context])->log('User logged in');
 
         $data = AuthenticationMeResource::make($result['user'])->jsonSerialize();
         $data['token'] = $result['token'];
@@ -143,12 +142,12 @@ class AuthController extends Controller
         $status = Password::sendResetLink($request->only('email'));
 
         if ($status === Password::RESET_LINK_SENT) {
-            Log::info('Password reset link sent', ['email' => $email, 'ip' => $request->ip()]);
+            logglyInfo()->withContext(['email' => $email, 'ip' => $request->ip()])->log('Password reset link sent');
 
             return response()->jsonSuccess(['message' => __('api-key::messages.password_reset_sent')]);
         }
 
-        Log::warning('Password reset link failed', ['email' => $email, 'status' => $status, 'ip' => $request->ip()]);
+        logglyWarning()->withContext(['email' => $email, 'status' => $status, 'ip' => $request->ip()])->log('Password reset link failed');
 
         return response()->jsonGone(__('api-key::messages.password_reset_failed'));
     }
@@ -173,12 +172,12 @@ class AuthController extends Controller
         );
 
         if ($status === Password::PASSWORD_RESET) {
-            Log::info('Password reset completed', ['email' => $email, 'ip' => $request->ip()]);
+            logglyInfo()->withContext(['email' => $email, 'ip' => $request->ip()])->log('Password reset completed');
 
             return response()->jsonSuccess(['message' => __('api-key::messages.password_reset_success')]);
         }
 
-        Log::warning('Password reset failed', ['email' => $email, 'status' => $status, 'ip' => $request->ip()]);
+        logglyWarning()->withContext(['email' => $email, 'status' => $status, 'ip' => $request->ip()])->log('Password reset failed');
 
         return response()->jsonGone(__('api-key::messages.password_reset_failed'));
     }
@@ -188,7 +187,7 @@ class AuthController extends Controller
         $user = $request->user();
         $user?->currentAccessToken()->delete();
 
-        Log::info('User logged out', ['user_id' => $user?->getKey(), 'ip' => $request->ip()]);
+        logglyInfo()->withContext(['user_id' => $user?->getKey(), 'ip' => $request->ip()])->log('User logged out');
 
         return response()->jsonSuccess(['message' => __('api-key::messages.logout_success')]);
     }
