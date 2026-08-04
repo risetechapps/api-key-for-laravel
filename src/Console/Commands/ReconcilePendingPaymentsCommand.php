@@ -3,7 +3,6 @@
 namespace RiseTechApps\ApiKey\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Models\PendingPayment\PendingPayment;
@@ -81,13 +80,13 @@ class ReconcilePendingPaymentsCommand extends Command
                 // aplicaria.
                 $outcome->apply($remote);
 
-                Log::warning('Pending payment resolved without webhook', [
+                logglyWarning()->withContext([
                     'payment_id' => $payment->payment_id,
                     'gateway_status' => $status,
                     'user_id' => $payment->authentication_id,
                     'plan_id' => $payment->plan_id,
                     'created_at' => $payment->created_at?->toIso8601String(),
-                ]);
+                ])->log('Pending payment resolved without webhook');
 
                 $this->line("  - payment {$payment->payment_id} -> {$status}");
                 $resolved++;
@@ -96,10 +95,10 @@ class ReconcilePendingPaymentsCommand extends Command
                 // um comprador diferente aguardando resposta.
                 $failed++;
 
-                Log::warning('Pending payment reconciliation failed', [
+                logglyWarning()->withContext([
                     'payment_id' => $payment->payment_id,
                     'error' => $e->getMessage(),
-                ]);
+                ])->log('Pending payment reconciliation failed');
             }
         }
 

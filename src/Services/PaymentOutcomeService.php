@@ -2,7 +2,6 @@
 
 namespace RiseTechApps\ApiKey\Services;
 
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PaymentRejected;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\PendingPayment\PendingPayment;
@@ -69,13 +68,13 @@ class PaymentOutcomeService
             $this->couponRepository->releaseUse($pending->coupon);
         }
 
-        Log::info('Pending payment settled as rejected', [
+        logglyInfo()->withContext([
             'payment_id' => $payment->id,
             'user_id' => $pending->authentication_id,
             'plan_id' => $pending->plan_id,
             'status_detail' => $payment->status_detail ?? null,
             'coupon_released' => $pending->coupon !== null,
-        ]);
+        ])->log('Pending payment settled as rejected');
 
         if ($pending->authentication && $pending->plan) {
             PaymentRejected::dispatch(
@@ -105,10 +104,10 @@ class PaymentOutcomeService
         $reference = $this->parseExternalReference((string) $payment->external_reference);
 
         if (! $reference) {
-            Log::warning('MP payment outcome: unrecognised external_reference', [
+            logglyWarning()->withContext([
                 'external_reference' => $payment->external_reference,
                 'payment_id' => $payment->id,
-            ]);
+            ])->log('MP payment outcome: unrecognised external_reference');
 
             return false;
         }

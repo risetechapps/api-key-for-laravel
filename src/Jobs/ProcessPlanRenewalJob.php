@@ -8,7 +8,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Models\PendingPayment\PendingPayment;
@@ -63,10 +62,10 @@ class ProcessPlanRenewalJob implements ShouldBeUnique, ShouldQueue
         // can sit in the queue while the subscriber cancels, and charging a card
         // after someone asked you to stop is the worst failure mode this has.
         if ($userPlan->isCancelled()) {
-            Log::info('billing renewal skipped: subscription cancelled', [
+            logglyInfo()->withContext([
                 'user_plan_id' => $this->userPlanId,
                 'cancelled_at' => $userPlan->cancelled_at?->toIso8601String(),
-            ]);
+            ])->log('billing renewal skipped: subscription cancelled');
 
             return;
         }
@@ -75,9 +74,9 @@ class ProcessPlanRenewalJob implements ShouldBeUnique, ShouldQueue
         $plan = $userPlan->plan;
 
         if (! $user || ! $plan) {
-            Log::warning('billing renewal skipped: missing user or plan', [
+            logglyWarning()->withContext([
                 'user_plan_id' => $this->userPlanId,
-            ]);
+            ])->log('billing renewal skipped: missing user or plan');
 
             return;
         }
@@ -88,10 +87,10 @@ class ProcessPlanRenewalJob implements ShouldBeUnique, ShouldQueue
             ->first();
 
         if (! $card) {
-            Log::warning('billing renewal skipped: no default card', [
+            logglyWarning()->withContext([
                 'user_id' => $user->getKey(),
                 'user_plan_id' => $this->userPlanId,
-            ]);
+            ])->log('billing renewal skipped: no default card');
 
             return;
         }
@@ -154,11 +153,11 @@ class ProcessPlanRenewalJob implements ShouldBeUnique, ShouldQueue
                 'payment_amount' => $amount,
             ]);
 
-            Log::info('billing renewal approved', [
+            logglyInfo()->withContext([
                 'user_id' => $user->getKey(),
                 'plan' => $plan->name,
                 'payment_id' => $payment->id,
-            ]);
+            ])->log('billing renewal approved');
 
             return;
         }
@@ -181,19 +180,19 @@ class ProcessPlanRenewalJob implements ShouldBeUnique, ShouldQueue
             ]);
         }
 
-        Log::warning('billing renewal not approved', [
+        logglyWarning()->withContext([
             'user_id' => $user->getKey(),
             'user_plan_id' => $this->userPlanId,
             'status' => $payment->status,
             'status_detail' => $payment->status_detail,
-        ]);
+        ])->log('billing renewal not approved');
     }
 
     public function failed(\Throwable $e): void
     {
-        Log::error('billing renewal failed', [
+        logglyError()->withContext([
             'user_plan_id' => $this->userPlanId,
             'error' => $e->getMessage(),
-        ]);
+        ])->log('billing renewal failed');
     }
 }

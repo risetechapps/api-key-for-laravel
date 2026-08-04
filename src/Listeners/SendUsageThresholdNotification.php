@@ -5,7 +5,6 @@ namespace RiseTechApps\ApiKey\Listeners;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Notifications\UsageThresholdNotification;
 
@@ -52,12 +51,12 @@ class SendUsageThresholdNotification implements ShouldQueue
             $event->threshold
         ));
 
-        Log::info('Usage threshold notification sent', [
+        logglyInfo()->withContext([
             'user_id' => $event->user->id,
             'plan_id' => $event->plan->id,
             'requests_used' => $event->requestsUsed,
             'requests_limit' => $event->requestsLimit,
             'threshold' => $event->threshold,
-        ]);
+        ])->log('Usage threshold notification sent');
     }
 }

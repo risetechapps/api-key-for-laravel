@@ -5,7 +5,6 @@ namespace RiseTechApps\ApiKey\Listeners;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
 use RiseTechApps\ApiKey\Notifications\RequestLimitReachedNotification;
 
@@ -48,11 +47,11 @@ class SendRequestLimitReachedNotification implements ShouldQueue
             $event->requestsLimit
         ));
 
-        Log::info('Request limit reached notification sent', [
+        logglyInfo()->withContext([
             'user_id' => $event->user->id,
             'plan_id' => $event->plan->id,
             'requests_used' => $event->requestsUsed,
             'requests_limit' => $event->requestsLimit,
-        ]);
+        ])->log('Request limit reached notification sent');
     }
 }

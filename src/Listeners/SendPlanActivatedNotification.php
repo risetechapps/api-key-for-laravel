@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Listeners;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanChanged;
 use RiseTechApps\ApiKey\Notifications\PlanActivatedNotification;
 
@@ -34,10 +33,10 @@ class SendPlanActivatedNotification implements ShouldQueue
             $event->previousPlan
         ));
 
-        Log::info('Plan activated notification sent', [
+        logglyInfo()->withContext([
             'user_id' => $event->user->id,
             'plan_id' => $event->plan->id,
             'previous_plan_id' => $event->previousPlan?->id,
-        ]);
+        ])->log('Plan activated notification sent');
     }
 }

@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Listeners;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanGracePeriodStarted;
 use RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification;
 
@@ -35,11 +34,11 @@ class SendGracePeriodNotification implements ShouldQueue
             $event->gracePeriodEndDate
         ));
 
-        Log::info('Grace period notification sent', [
+        logglyInfo()->withContext([
             'user_id' => $event->user->id,
             'plan_id' => $event->plan->id,
             'grace_period_days' => $event->gracePeriodDays,
             'grace_period_end' => $event->gracePeriodEndDate->format('Y-m-d'),
-        ]);
+        ])->log('Grace period notification sent');
     }
 }

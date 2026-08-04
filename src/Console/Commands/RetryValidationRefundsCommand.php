@@ -3,7 +3,6 @@
 namespace RiseTechApps\ApiKey\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 use MercadoPago\Client\Payment\PaymentRefundClient;
 use MercadoPago\MercadoPagoConfig;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
@@ -71,11 +70,11 @@ class RetryValidationRefundsCommand extends Command
                 // diferente com dinheiro parado.
                 $failed++;
 
-                Log::warning('Validation refund retry failed', [
+                logglyWarning()->withContext([
                     'card_id' => $card->getKey(),
                     'payment_id' => $card->validation_payment_id,
                     'error' => $e->getMessage(),
-                ]);
+                ])->log('Validation refund retry failed');
             }
         }
 

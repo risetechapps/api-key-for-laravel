@@ -3,7 +3,6 @@
 namespace RiseTechApps\ApiKey\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
@@ -129,10 +128,10 @@ class RotateApiKeysCommand extends Command
             $this->warn('That file grants full API access. Distribute it and delete it.');
         }
 
-        Log::warning('api-key: bulk key rotation completed', [
+        logglyWarning()->withContext([
             'rotated' => $rotated,
             'scope' => $this->scopeLabel(),
-        ]);
+        ])->log('api-key: bulk key rotation completed');
 
         $this->info("Rotated {$rotated} API key(s).");
         $this->warn('Clients using the previous keys now receive 401 until they are given the new ones.');

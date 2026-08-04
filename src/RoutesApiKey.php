@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use RiseTechApps\ApiKey\Http\Controllers\Authentication\AuthController;
 use RiseTechApps\ApiKey\Http\Controllers\Authentication\ProfileController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Admin\AdminController;
+use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Admin\LogController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Cards\CardController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Checkout\CheckoutController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Coupons\CouponsController;
@@ -76,6 +77,9 @@ class RoutesApiKey
                     Route::get('/dashboard/admin/refunds', [AdminController::class, 'refunds']);
                     Route::post('/dashboard/admin/refunds/{id}', [AdminController::class, 'processRefund']);
                     Route::get('/dashboard/admin/features', [AdminController::class, 'features']);
+
+                    Route::get('/dashboard/admin/logs', [LogController::class, 'index']);
+                    Route::get('/dashboard/admin/logs/{id}', [LogController::class, 'show']);
                 });
 
                 Route::get('/dashboard/cards', [CardController::class, 'index']);

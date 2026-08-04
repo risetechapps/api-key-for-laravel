@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Listeners;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PaymentRejected;
 use RiseTechApps\ApiKey\Notifications\PaymentRejectedNotification;
 
@@ -35,10 +34,10 @@ class SendPaymentRejectedNotification implements ShouldQueue
             $event->isRenewal
         ));
 
-        Log::info('Payment rejected notification sent', [
+        logglyInfo()->withContext([
             'user_id' => $event->user->id,
             'plan_id' => $event->plan->id,
             'payment_id' => $event->paymentId,
-        ]);
+        ])->log('Payment rejected notification sent');
     }
 }

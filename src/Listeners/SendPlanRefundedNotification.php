@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Listeners;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanRefunded;
 use RiseTechApps\ApiKey\Notifications\PlanRefundedNotification;
 
@@ -34,11 +33,11 @@ class SendPlanRefundedNotification implements ShouldQueue
             $event->amount
         ));
 
-        Log::info('Plan refunded notification sent', [
+        logglyInfo()->withContext([
             'user_id' => $event->user->id,
             'plan_id' => $event->plan->id,
             'amount' => $event->amount,
             'refund_id' => $event->refundId,
-        ]);
+        ])->log('Plan refunded notification sent');
     }
 }

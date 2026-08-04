@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Listeners;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanExpired;
 use RiseTechApps\ApiKey\Notifications\PlanExpiredNotification;
 
@@ -33,10 +32,10 @@ class SendPlanExpiredNotification implements ShouldQueue
             $event->userPlan
         ));
 
-        Log::warning('Plan expired notification sent', [
+        logglyWarning()->withContext([
             'user_id' => $event->user->id,
             'plan_id' => $event->plan->id,
             'expired_at' => $event->expiredAt->format('Y-m-d H:i:s'),
-        ]);
+        ])->log('Plan expired notification sent');
     }
 }
