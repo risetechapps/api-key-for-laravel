@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use Symfony\Component\HttpFoundation\Response;
@@ -32,14 +31,14 @@ class AuthenticateApiKey
 
                 return $next($request);
             }
-            Log::warning('Internal auth failed: user not found', ['user_id' => $userId, ...$context]);
+            logglyWarning()->withContext(['user_id' => $userId, ...$context])->log('Internal auth failed: user not found');
         }
 
         $headerName = config('api-key.header_name', 'X-API-KEY');
         $key = $request->header($headerName);
 
         if (! $key) {
-            Log::info('API key authentication failed: missing key', $context);
+            logglyInfo()->withContext($context)->log('API key authentication failed: missing key');
 
             return response()->json(['error' => 'Unauthorized'], 401);
         }
@@ -47,7 +46,7 @@ class AuthenticateApiKey
         $apiKey = ApiKey::validateKey($key);
 
         if (! $apiKey) {
-            Log::info('API key authentication failed: invalid key', $context);
+            logglyInfo()->withContext($context)->log('API key authentication failed: invalid key');
 
             return response()->json(['error' => 'Unauthorized'], 401);
         }
@@ -55,9 +54,9 @@ class AuthenticateApiKey
         $user = $apiKey->authentication;
 
         if (! $user) {
-            Log::warning('API key authentication failed: key has no owner', [
+            logglyWarning()->withContext([
                 'api_key_id' => $apiKey->id, ...$context,
-            ]);
+            ])->log('API key authentication failed: key has no owner');
 
             return response()->json(['error' => 'Unauthorized'], 401);
         }

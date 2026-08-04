@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanExpired;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -34,9 +33,9 @@ class CheckActivePlanMiddleware
                 ->first();
 
             if ($expiredPlan?->isCompletelyExpired()) {
-                Log::info('Plan completely expired, deactivating', [
+                logglyInfo()->withContext([
                     'plan_id' => $expiredPlan->plan_id, ...$context,
-                ]);
+                ])->log('Plan completely expired, deactivating');
 
                 $expiredPlan->update(['active' => false]);
                 $user->apiKey?->update(['active' => false]);
@@ -51,7 +50,7 @@ class CheckActivePlanMiddleware
                 ], 403);
             }
 
-            Log::warning('No active plan found', $context);
+            logglyWarning()->withContext($context)->log('No active plan found');
 
             return response()->json(['error' => __('api-key::messages.plan_expired_or_inactive')], 403);
         }
@@ -59,11 +58,11 @@ class CheckActivePlanMiddleware
         if ($userPlan->isExpired()) {
             $remainingDays = $userPlan->getGracePeriodRemainingDays();
 
-            Log::info('Plan in grace period', [
+            logglyInfo()->withContext([
                 'plan_id' => $userPlan->plan_id,
                 'remaining_days' => $remainingDays,
                 ...$context,
-            ]);
+            ])->log('Plan in grace period');
 
             $response = $next($request);
             $response->header('X-Plan-Status', 'grace-period');

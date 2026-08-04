@@ -5,7 +5,6 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Checkout;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
@@ -233,11 +232,11 @@ class CheckoutController extends Controller
             // Only the fields needed to trace a payment. The full $payment object
             // carries cardholder name, last four digits and the payer document —
             // none of which belongs in an application log.
-            Log::info('MP payment response', [
+            logglyInfo()->withContext([
                 'status' => $payment->status,
                 'status_detail' => $payment->status_detail,
                 'id' => $payment->id,
-            ]);
+            ])->log('MP payment response');
 
             if ($payment->status === 'approved') {
                 $userPlan = auth()->user()->subscribeToPlan($plan);
@@ -255,7 +254,7 @@ class CheckoutController extends Controller
                     try {
                         $this->syncCardAfterPayment(auth()->user(), $payment, $validated);
                     } catch (\Exception $e) {
-                        Log::warning('Card sync after payment failed', ['error' => $e->getMessage()]);
+                        logglyWarning()->withContext(['error' => $e->getMessage()])->log('Card sync after payment failed');
                     }
                 }
 
@@ -291,11 +290,11 @@ class CheckoutController extends Controller
         } catch (MPApiException $e) {
             $body = $e->getApiResponse()?->getContent();
             $detail = $body['status_detail'] ?? $body['message'] ?? '';
-            Log::error('MP API exception', ['body' => $body, 'status' => $e->getApiResponse()?->getStatusCode()]);
+            logglyError()->withContext(['body' => $body, 'status' => $e->getApiResponse()?->getStatusCode()])->log('MP API exception');
 
             return response()->json(['success' => false, 'message' => $this->translateStatusDetail($detail) ?: ($detail ?: __('api-key::messages.payment_declined'))], 422);
         } catch (\Exception $e) {
-            Log::error('Checkout process error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            logglyError()->withContext(['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()])->log('Checkout process error');
 
             return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 500);
         } finally {
@@ -365,7 +364,7 @@ class CheckoutController extends Controller
             ]
         );
 
-        Log::info('Card synced after payment', ['card_id' => $card->id, 'mp_card_id' => $mpCardId]);
+        logglyInfo()->withContext(['card_id' => $card->id, 'mp_card_id' => $mpCardId])->log('Card synced after payment');
     }
 
     /**
@@ -395,10 +394,10 @@ class CheckoutController extends Controller
                 return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
             }
         } elseif (! $this->acceptsUnsignedNotification($request)) {
-            Log::warning('MP notification rejected: unsigned and not a recognised IPN', [
+            logglyWarning()->withContext([
                 'topic' => $request->input('topic'),
                 'has_secret' => (bool) config('api-key.mercadopago.webhook_secret'),
-            ]);
+            ])->log('MP notification rejected: unsigned and not a recognised IPN');
 
             return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
         }
@@ -442,7 +441,7 @@ class CheckoutController extends Controller
         $secret = config('api-key.mercadopago.webhook_secret');
 
         if (! $secret) {
-            Log::error('MP webhook rejected: no webhook secret configured');
+            logglyError()->log('MP webhook rejected: no webhook secret configured');
 
             return false;
         }
