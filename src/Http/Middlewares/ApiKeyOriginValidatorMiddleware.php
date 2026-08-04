@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\RiseTools\Features\Device\Device;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -40,14 +39,14 @@ class ApiKeyOriginValidatorMiddleware
         $requestOrigin = $request->header('Origin') ?? Device::getClientPublicIp();
 
         if (! $apiKey->isOriginAllowed($requestOrigin)) {
-            Log::warning('API key origin validation failed', [
+            logglyWarning()->withContext([
                 'ip' => $request->ip(),
                 'origin' => $requestOrigin,
                 'api_key_id' => $apiKey?->id,
                 'user_id' => auth()->id(),
                 'url' => $request->url(),
                 'user_agent' => $request->userAgent(),
-            ]);
+            ])->log('API key origin validation failed');
 
             $request->attributes->set(CheckRequestLimitMiddleware::NOT_BILLABLE, true);
 
