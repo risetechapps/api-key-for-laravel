@@ -20,7 +20,7 @@ As tags anteriores serviram apenas a testes de distribuição durante o desenvol
 ### Planos, cota e features
 
 - Planos com ciclo de cobrança, limite de requisições e features, administráveis por API
-- Contagem de cota por período com contadores atômicos: a reserva volta quando o servidor falha e o consumo se mantém quando o erro é do cliente, senão bastaria mandar requisição malformada para nunca gastar o plano
+- Contagem de cota por período com contadores atômicos: a reserva volta quando o servidor falha e o consumo se mantém quando o erro é do cliente, senão bastaria mandar requisição malformada para nunca gastar o plano. Recusa do próprio pacote — origem não permitida, plano sem a feature — não consome cota: o cliente não paga uma requisição para ouvir "não"
 - Aviso por e-mail ao atingir o limiar de uso configurável (padrão 80%), no máximo uma vez por período
 - Período de carência configurável após o vencimento, com evento próprio ao entrar e ao encerrar
 - `FeatureRegistry` para declarar features em código, com sincronização no banco e middleware `feature`
@@ -53,6 +53,13 @@ As tags anteriores serviram apenas a testes de distribuição durante o desenvol
 - `GET /dashboard/signature/refund-preview` informa o desfecho antes da confirmação, para a tela não prometer o que não vai cumprir
 - Estorno manual pelo painel admin, gravando o mesmo rastro do automático
 
+### Observabilidade
+
+- Registros gravados pelo `risetechapps/monitoring-for-laravel`, que os persiste em banco em vez de arquivo. Substitui a facade `Log` do Laravel em todo o pacote
+- Tela administrativa de logs no painel, com filtro por tipo, nível, período e busca em mensagem e contexto, mais o detalhe de cada registro. Mostra tanto o que o pacote grava de propósito quanto as exceções capturadas pelo handler — um estorno que falha produz as duas, e só o par conta a história inteira
+- Trace de exceção gravado de forma estruturada, apenas arquivo, linha, classe e função por frame, com teto de 20. O trace em texto do PHP inclui os argumentos de cada chamada, e é por eles que passam token de cartão e dados do pagador
+- `api-key:check` diagnostica a instalação: tabelas, credenciais do gateway, fila do log e supervisors do Horizon, agendador e chaves legadas. Existe porque as falhas do pacote são silenciosas por natureza — fila sem worker não dá erro, cron parado não dá erro —, e o sintoma aparece dias depois
+
 ### Eventos e notificações
 
 - Onze eventos: `PlanChanged`, `PlanExpired`, `PlanGracePeriodStarted`, `PlanCancelled`, `PlanRefunded`, `PaymentRejected`, `PlanUsageThresholdReached`, `RequestLimitReached`, `UserStatusChanged`, `ApiKeyCreated` e `ApiKeyStatusChanged`
@@ -61,12 +68,13 @@ As tags anteriores serviram apenas a testes de distribuição durante o desenvol
 ### Painel
 
 - SPA em Vue 3 com assets pré-compilados, sem exigir Node.js no servidor
-- Telas de uso, faturamento, cartões, perfil, planos e cupons, além da administração
+- Telas de uso, faturamento, cartões, perfil, planos, cupons e logs, além da administração
+- Cartão salvo paga em um clique, tokenizando apenas o CVV pelo SDK do gateway no navegador do dono
 - A API key não é exibida no cadastro: quem se inscreve pode nunca consumir a API, e um segredo irrecuperável na primeira tela obriga todo mundo a lidar com ele antes de saber se vai precisar. A emissão fica no perfil, com exibição única e opção de copiar
 
 ### Qualidade
 
-- 351 testes Pest cobrindo autenticação, cota, middlewares, checkout, webhook, IPN, cupons, reembolso, comandos e agendamento
+- 384 testes Pest cobrindo autenticação, cota, middlewares, checkout, webhook, IPN, cupons, reembolso, logs, comandos e agendamento
 - Larastan no nível 5 e Laravel Pint, ambos no CI
 - Matriz de CI cruzando PHP 8.4 e 8.5 com `prefer-lowest` e `prefer-stable`
 
@@ -74,3 +82,14 @@ As tags anteriores serviram apenas a testes de distribuição durante o desenvol
 
 - PHP 8.4 ou superior
 - Laravel 12
+- `risetechapps/monitoring-for-laravel` ^4.0, que armazena os logs
+
+### Operação
+
+Três coisas precisam estar de pé, e nenhuma delas acusa erro quando falta:
+
+- **Worker de fila** consumindo `logs`, senão o histórico de requisições fica vazio enquanto a contagem de cota segue correta
+- **`schedule:run` no cron**, senão um pagamento em análise sem webhook fica pendente para sempre
+- **`vendor:publish --tag=api-key-assets --force`** a cada atualização, porque a publicação copia o `dist/` e o painel não é servido do pacote
+
+`php artisan api-key:check` verifica o que é verificável e aponta o que falta.

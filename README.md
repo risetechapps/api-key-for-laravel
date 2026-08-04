@@ -26,6 +26,8 @@ Gerenciamento de API keys, planos de assinatura e um painel SPA Vue 3 pronto par
 - **Verificação de E-mail** — redireciona para a SPA após o clique
 - **Integração MercadoPago** — checkout com Secure Fields, cartões salvos com pagamento em um clique, webhook assinado e IPN, idempotência, identificação de dispositivo, estornos
 - **Pagamentos em análise** — compras que o gateway retém são registradas e resolvidas por webhook ou por reconciliação agendada
+- **Logs em banco** — registros gravados pelo monitoring, com tela administrativa de consulta e filtros
+- **Diagnóstico da instalação** — `api-key:check` aponta fila sem worker, cron parado e credenciais faltando
 - **Painel SPA Vue 3** — assets pré-compilados, sem necessidade de Node.js no servidor host
 - **Internacionalização** — inglês e português (pt-BR), detectado automaticamente via `Accept-Language`
 - **Camada de Cache** — suporte a Redis/Memcached para validação de API keys
@@ -36,6 +38,7 @@ Gerenciamento de API keys, planos de assinatura e um painel SPA Vue 3 pronto par
 - PHP ^8.4
 - Laravel ^12
 - Laravel Sanctum ^4.0
+- `risetechapps/monitoring-for-laravel` ^4.0 — armazena os logs do pacote em banco; instalado automaticamente pelo Composer
 
 ---
 
@@ -81,7 +84,27 @@ O pacote também serve um painel Vue 3 pré-compilado. Não é necessário Node.
 php artisan vendor:publish --tag="api-key-assets"
 ```
 
-Isso copia os arquivos pré-compilados do `dist/` para `public/vendor/api-key/`.
+Isso **copia** os arquivos pré-compilados do `dist/` para `public/vendor/api-key/`.
+
+> **Publicação é cópia, não link.** O blade carrega `asset('vendor/api-key/app.js')`, ou seja, a cópia em `public/` — nunca o `dist/` do pacote. Toda atualização do pacote, e todo rebuild seu do frontend, exige republicar:
+>
+> ```bash
+> php artisan vendor:publish --tag="api-key-assets" --force
+> ```
+>
+> Sem o `--force` o Laravel não sobrescreve o que já existe, e o painel continua o antigo sem nenhum aviso. O sintoma é uma mudança de tela que "não aparece" — item de menu novo que não surge, correção de formulário que não pega — enquanto o backend já responde com o comportamento novo.
+>
+> Em desenvolvimento, um link simbólico elimina o passo:
+>
+> ```bash
+> # Linux/macOS
+> ln -s ../../vendor/risetechapps/api-key-for-laravel/dist public/vendor/api-key
+>
+> # Windows, com privilégio de criação de link
+> mklink /D public\vendor\api-key ..\..\vendor\risetechapps\api-key-for-laravel\dist
+> ```
+>
+> Não use link em produção: `public/` costuma ser servido pelo servidor web com `disable_symlinks` ligado.
 
 **Passo 2 — habilitar a SPA no `.env`:**
 
@@ -147,6 +170,8 @@ Rotas exclusivas de admin (requerem middleware `admin`):
 | `GET` | `api/v1/dashboard/admin/refunds` | Listar pagamentos com opção de estorno |
 | `POST` | `api/v1/dashboard/admin/refunds/{id}` | Processar estorno via MercadoPago |
 | `GET` | `api/v1/dashboard/admin/features` | Listar features registradas (`FeatureRegistry`) |
+| `GET` | `api/v1/dashboard/admin/logs` | Listar logs e exceções, com filtros |
+| `GET` | `api/v1/dashboard/admin/logs/{id}` | Detalhe de um registro |
 
 ### Registro manual de rotas com `RoutesApiKey`
 
@@ -492,6 +517,40 @@ if ($coupon->isValid()) {
     // aplicar desconto no checkout
 }
 ```
+
+---
+
+## Logs
+
+O pacote registra pelo `risetechapps/monitoring-for-laravel`, que persiste em banco em vez de arquivo. Todo log interno usa os helpers `loggly*()`:
+
+```php
+logglyError()->withContext(['payment_id' => $id])->log('Refund failed');
+logglyError()->exception($e)->log('Checkout process error');
+```
+
+Rode as migrations do monitoring — o `php artisan migrate` já as inclui — senão a tela responde 410 dizendo que o armazenamento não está disponível.
+
+### Tela administrativa
+
+`/dashboard/admin/logs` no painel, restrita a admin. Filtra por tipo, nível e período, e busca em mensagem e contexto.
+
+Ela mostra **dois tipos**, e a distinção importa:
+
+| Tipo | Origem |
+|------|--------|
+| `log` | O que o pacote grava de propósito, pelos helpers `loggly*()` |
+| `exception` | O que o handler da aplicação captura via `report()` |
+
+Um estorno que falha produz os dois: o log com o código de correlação que aparece na resposta ao operador, e a exceção com o detalhe completo. Só o par conta a história inteira — por isso a tela não se limita a um deles.
+
+A listagem traz apenas nível, mensagem e origem. Contexto, trace e tags ficam no detalhe, porque em log de exceção passam de alguns KB por entrada.
+
+### O que entra no registro
+
+Trace de exceção é gravado de forma **estruturada** — arquivo, linha, classe e função por frame, com teto de 20 — e não como o texto de `getTraceAsString()`, que inclui os argumentos de cada chamada. É por eles que passariam token de cartão e dados do pagador, agora legíveis numa tela do painel.
+
+> Alguns registros de erro carregam a mensagem da exceção no contexto, e uma `QueryException` traz o SQL com os valores bindados. Isso vive no banco e é visível para admin. Se no seu produto "admin" for um time de suporte amplo, vale revisar esses pontos ou usar `->to('file')` neles, que grava fora do banco.
 
 ---
 
