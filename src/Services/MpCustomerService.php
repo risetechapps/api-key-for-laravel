@@ -3,7 +3,6 @@
 namespace RiseTechApps\ApiKey\Services;
 
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 
@@ -43,7 +42,7 @@ class MpCustomerService
             return $this->findCustomerByEmail($email);
         }
 
-        Log::error('MP create customer failed', ['body' => $response->body()]);
+        logglyError()->withContext(['body' => $response->body()])->log('MP create customer failed');
         throw new \RuntimeException('Falha ao registrar cliente no Mercado Pago.');
     }
 
@@ -55,7 +54,7 @@ class MpCustomerService
         $id = $response->json('results.0.id');
 
         if (! $id) {
-            Log::error('MP find customer by email failed', ['body' => $response->body()]);
+            logglyError()->withContext(['body' => $response->body()])->log('MP find customer by email failed');
             throw new \RuntimeException('Falha ao localizar cliente no Mercado Pago.');
         }
 
@@ -81,7 +80,7 @@ class MpCustomerService
         }
 
         if (! $response->successful()) {
-            Log::error('MP attach card failed', ['body' => $response->body()]);
+            logglyError()->withContext(['body' => $response->body()])->log('MP attach card failed');
             throw new \RuntimeException('Falha ao salvar cartão no Mercado Pago.');
         }
 
@@ -98,7 +97,7 @@ class MpCustomerService
             ]);
 
         if (! $response->successful()) {
-            Log::error('MP tokenize card failed', ['body' => $response->body()]);
+            logglyError()->withContext(['body' => $response->body()])->log('MP tokenize card failed');
             throw new \RuntimeException('Falha ao validar cartão. Verifique o CVV e tente novamente.');
         }
 
@@ -114,7 +113,7 @@ class MpCustomerService
             ]);
 
         if (! $response->successful()) {
-            Log::error('MP recurring token failed', ['body' => $response->body()]);
+            logglyError()->withContext(['body' => $response->body()])->log('MP recurring token failed');
             throw new \RuntimeException('Falha ao gerar token recorrente.');
         }
 

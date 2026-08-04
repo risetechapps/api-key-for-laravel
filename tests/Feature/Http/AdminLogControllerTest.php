@@ -37,7 +37,7 @@ function monitoringEntry(array $overrides = []): string
         'uuid' => $uuid,
         'type' => $overrides['type'] ?? 'log',
         'content' => json_encode([
-            'level' => $overrides['level'] ?? 'error',
+            'level' => array_key_exists('level', $overrides) ? $overrides['level'] : 'error',
             'message' => $overrides['message'] ?? 'Refund failed',
             'context' => $overrides['context'] ?? ['payment_id' => '4400111222'],
             'properties' => ['class' => 'RiseTechApps\ApiKey\Http\Controllers\Dashboard\Admin\AdminController'],
@@ -75,14 +75,38 @@ describe('Listagem', function () {
             ->and($response->json('data.total'))->toBe(2);
     });
 
-    it('traz apenas entradas de log', function () {
+    it('traz log e excecao, e nada mais', function () {
         // A mesma tabela guarda requisicoes, queries e jobs; nada disso pertence
-        // a esta tela.
+        // a esta tela. Excecao entra porque os report() do pacote caem nela.
         monitoringEntry(['message' => 'Um log']);
+        monitoringEntry(['type' => 'exception', 'message' => 'Uma excecao']);
         monitoringEntry(['type' => 'request', 'message' => 'Uma requisicao']);
         monitoringEntry(['type' => 'query', 'message' => 'Uma query']);
 
-        expect($this->getJson('/api/v1/dashboard/admin/logs')->json('data.total'))->toBe(1);
+        expect($this->getJson('/api/v1/dashboard/admin/logs')->json('data.total'))->toBe(2);
+    });
+
+    it('filtra por tipo', function () {
+        monitoringEntry(['message' => 'Um log']);
+        monitoringEntry(['type' => 'exception', 'message' => 'Uma excecao']);
+
+        $response = $this->getJson('/api/v1/dashboard/admin/logs?type=exception')->assertStatus(200);
+
+        expect($response->json('data.total'))->toBe(1)
+            ->and($response->json('data.data.0.message'))->toBe('Uma excecao');
+    });
+
+    it('recusa tipo fora da lista permitida', function () {
+        // Sem isto, ?type=request abriria a tela para o restante da tabela.
+        $this->getJson('/api/v1/dashboard/admin/logs?type=request')->assertStatus(422);
+    });
+
+    it('trata excecao como nivel error, ja que ela nao carrega nivel', function () {
+        // Quem gravou foi o watcher do handler, nao o Loggly; sem isto a coluna
+        // de nivel viria vazia para toda excecao.
+        monitoringEntry(['type' => 'exception', 'level' => null, 'message' => 'Estourou']);
+
+        expect($this->getJson('/api/v1/dashboard/admin/logs')->json('data.data.0.level'))->toBe('error');
     });
 
     it('nao traz contexto na listagem', function () {

@@ -294,7 +294,13 @@ class CheckoutController extends Controller
 
             return response()->json(['success' => false, 'message' => $this->translateStatusDetail($detail) ?: ($detail ?: __('api-key::messages.payment_declined'))], 422);
         } catch (\Exception $e) {
-            logglyError()->withContext(['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()])->log('Checkout process error');
+            // ->exception() em vez de getTraceAsString() no contexto: ele guarda
+            // o trace estruturado, apenas file, line, class e function por frame,
+            // limitado a 20 frames. O trace em texto do PHP inclui os argumentos
+            // de cada chamada em forma abreviada, e este é o caminho por onde
+            // passam token de cartão e dados do pagador — que agora ficariam
+            // legíveis na tela de logs do painel.
+            logglyError()->exception($e)->log('Checkout process error');
 
             return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 500);
         } finally {

@@ -7,7 +7,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanCancelled;
 use RiseTechApps\ApiKey\Events\PlanRefunded;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Signature\SignatureRequest;
@@ -44,23 +43,23 @@ class SignatureController extends Controller
                 PlanRefunded::dispatch($user, $userPlan, $userPlan->plan, $amount, $refundId);
             }
 
-            Log::info('Subscription refunded on cancellation', [
+            logglyInfo()->withContext([
                 'user_id' => $user->getKey(),
                 'user_plan_id' => $userPlan->getKey(),
                 'plan_id' => $userPlan->plan_id,
                 'amount' => $amount,
                 'refund_id' => $refundId,
-            ]);
+            ])->log('Subscription refunded on cancellation');
 
             return true;
         } catch (\Exception $e) {
-            Log::error('Automatic refund failed on cancellation', [
+            logglyError()->withContext([
                 'user_id' => $user->getKey(),
                 'user_plan_id' => $userPlan->getKey(),
                 'payment_id' => $userPlan->payment_id,
                 'amount' => $amount,
                 'exception' => $e->getMessage(),
-            ]);
+            ])->log('Automatic refund failed on cancellation');
 
             report($e);
 
@@ -93,12 +92,12 @@ class SignatureController extends Controller
             }
 
             if ((float) $plan->price > 0) {
-                Log::warning('Free subscription attempted on a paid plan', [
+                logglyWarning()->withContext([
                     'user_id' => auth()->id(),
                     'plan_id' => $plan->getKey(),
                     'price' => $plan->price,
                     'ip' => $request->ip(),
-                ]);
+                ])->log('Free subscription attempted on a paid plan');
 
                 return response()->json([
                     'success' => false,
@@ -172,14 +171,14 @@ class SignatureController extends Controller
                     );
                 }
 
-                Log::info('Subscription cancelled', [
+                logglyInfo()->withContext([
                     'user_id' => auth()->id(),
                     'user_plan_id' => $userPlan->getKey(),
                     'plan_id' => $userPlan->plan_id,
                     'access_until' => $userPlan->end_date?->toIso8601String(),
                     'refund_refused' => $decision->reason,
                     'ip' => $request->ip(),
-                ]);
+                ])->log('Subscription cancelled');
 
                 return response()->jsonSuccess([
                     'cancelled_at' => $userPlan->cancelled_at?->toIso8601String(),
@@ -276,11 +275,11 @@ class SignatureController extends Controller
 
             $userPlan->update(['cancelled_at' => null]);
 
-            Log::info('Subscription resumed', [
+            logglyInfo()->withContext([
                 'user_id' => auth()->id(),
                 'user_plan_id' => $userPlan->getKey(),
                 'ip' => $request->ip(),
-            ]);
+            ])->log('Subscription resumed');
 
             return response()->jsonSuccess([
                 'renews_on' => $userPlan->end_date?->toIso8601String(),

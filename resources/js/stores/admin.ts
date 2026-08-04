@@ -9,6 +9,7 @@ export const useAdminStore = defineStore('admin', () => {
     const features = ref<any[]>([]);
     const users    = ref<any>({ data: [], total: 0, current_page: 1, last_page: 1 });
     const refunds  = ref<any>({ data: [], total: 0, current_page: 1, last_page: 1 });
+    const logs     = ref<any>({ data: [], total: 0, current_page: 1, last_page: 1, levels: [] });
     const loading  = ref(false);
     const error    = ref<string | null>(null);
 
@@ -94,12 +95,31 @@ export const useAdminStore = defineStore('admin', () => {
         return r.data;
     }
 
+    // ── Logs (dashboard/admin/logs) ───────────────────────────────────────
+    // A listagem traz só nível, mensagem e origem. Contexto e stack ficam no
+    // detalhe: em log de exceção eles passam de alguns KB por entrada, e trazer
+    // isso para cinquenta linhas de tabela seria carregar megabytes para exibir
+    // uma coluna de texto.
+    async function fetchLogs(params: any = {}) {
+        loading.value = true;
+        try {
+            const r = await axios.get('dashboard/admin/logs', { params });
+            logs.value = r.data?.data ?? r.data;
+        } finally { loading.value = false; }
+    }
+
+    async function fetchLog(id: string) {
+        const r = await axios.get(`dashboard/admin/logs/${id}`);
+        return r.data?.data ?? r.data;
+    }
+
     return {
-        plans, coupons, features, users, refunds, loading, error,
+        plans, coupons, features, users, refunds, logs, loading, error,
         fetchPlans, createPlan, updatePlan, deletePlan,
         fetchCoupons, createCoupon, updateCoupon, deleteCoupon,
         fetchFeatures,
         fetchUsers,
         fetchRefunds, processRefund,
+        fetchLogs, fetchLog,
     };
 });

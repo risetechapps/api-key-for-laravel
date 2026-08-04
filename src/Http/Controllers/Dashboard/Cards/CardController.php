@@ -5,7 +5,6 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Cards;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Client\Payment\PaymentRefundClient;
 use MercadoPago\Exceptions\MPApiException;
@@ -96,11 +95,11 @@ class CardController extends Controller
                 $validated['device_id'] ?? null
             ));
 
-            Log::info('Card validation payment', [
+            logglyInfo()->withContext([
                 'status' => $payment->status,
                 'status_detail' => $payment->status_detail,
                 'payment_id' => $payment->id,
-            ]);
+            ])->log('Card validation payment');
 
             if ($payment->status !== 'approved') {
                 return response()->json([
@@ -161,13 +160,13 @@ class CardController extends Controller
 
                 $card->update(['validation_refunded_at' => now()]);
 
-                Log::info('Card validation refunded', ['payment_id' => $payment->id]);
+                logglyInfo()->withContext(['payment_id' => $payment->id])->log('Card validation refunded');
             } catch (\Exception $e) {
-                Log::warning('Card validation refund failed', [
+                logglyWarning()->withContext([
                     'card_id' => $card->getKey(),
                     'payment_id' => $payment->id,
                     'error' => $e->getMessage(),
-                ]);
+                ])->log('Card validation refund failed');
             }
 
             // jsonBase e não jsonSuccess: o segundo parâmetro de jsonSuccess é a
@@ -180,7 +179,7 @@ class CardController extends Controller
         } catch (MPApiException $e) {
             $body = $e->getApiResponse()?->getContent();
             $detail = $body['status_detail'] ?? $body['message'] ?? '';
-            Log::error('MP card validation API error', ['body' => $body]);
+            logglyError()->withContext(['body' => $body])->log('MP card validation API error');
 
             return response()->json([
                 'success' => false,
@@ -189,7 +188,7 @@ class CardController extends Controller
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
-            Log::error('Card store error', ['error' => $e->getMessage()]);
+            logglyError()->withContext(['error' => $e->getMessage()])->log('Card store error');
 
             return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 500);
         }

@@ -21,6 +21,7 @@ import adminPlans from '@/views/admin/plans.vue';
 import adminCoupons from '@/views/admin/coupons.vue';
 import adminUsers from '@/views/admin/users.vue';
 import adminRefunds from '@/views/admin/refunds.vue';
+import adminLogs from '@/views/admin/logs.vue';
 
 const routes: RouteRecordRaw[] = [
     {
@@ -53,6 +54,7 @@ const routes: RouteRecordRaw[] = [
             { path: 'admin/coupons', name: 'admin.coupons', component: adminCoupons, meta: { requiresAdmin: true } },
             { path: 'admin/users',   name: 'admin.users',   component: adminUsers,   meta: { requiresAdmin: true } },
             { path: 'admin/refunds', name: 'admin.refunds', component: adminRefunds, meta: { requiresAdmin: true } },
+            { path: 'admin/logs',    name: 'admin.logs',    component: adminLogs,    meta: { requiresAdmin: true } },
             ...appConfig.routes.extraDashboardRoutes,
         ],
     },

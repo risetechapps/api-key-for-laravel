@@ -117,6 +117,7 @@ import {
     PhShieldStar,
     PhUsersThree,
     PhArrowCounterClockwise,
+    PhFileText,
     PhTag,
 } from '@phosphor-icons/vue';
 
@@ -177,6 +178,7 @@ const adminNavigation = [
     { name: 'Cupons',    to: '/dashboard/admin/coupons', icon: PhTag },
     { name: 'Usuários',  to: '/dashboard/admin/users',   icon: PhUsersThree },
     { name: 'Estornos',  to: '/dashboard/admin/refunds', icon: PhArrowCounterClockwise },
+    { name: 'Logs',      to: '/dashboard/admin/logs',    icon: PhFileText },
     ...appConfig.menu.extraAdminItems,
 ];
 
