@@ -5,7 +5,6 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
 use RiseTechApps\ApiKey\Jobs\LogApiRequestJob;
@@ -55,12 +54,12 @@ class CheckRequestLimitMiddleware
         if ($activePlan && ! $this->reserveQuota($activePlan, $requestsLimit)) {
             $requestsMade = $requestsLimit;
 
-            Log::warning('Request limit reached', [
+            logglyWarning()->withContext([
                 'user_id' => $user?->getKey(),
                 'plan_id' => $activePlan->plan_id,
                 'requests_limit' => $requestsLimit,
                 'url' => $request->url(),
-            ]);
+            ])->log('Request limit reached');
 
             // Dispatch event when request limit is reached.
             // O listener já deduplica com Cache::add (um e-mail por período), mas
@@ -97,13 +96,13 @@ class CheckRequestLimitMiddleware
                 $warnAt = (int) ceil($requestsLimit * $threshold / 100);
 
                 if ($requestsMade >= $warnAt && $requestsMade < $requestsLimit) {
-                    Log::info('Usage threshold reached', [
+                    logglyInfo()->withContext([
                         'user_id' => $user?->getKey(),
                         'plan_id' => $activePlan->plan_id,
                         'requests_used' => $requestsMade,
                         'requests_limit' => $requestsLimit,
                         'threshold' => $threshold,
-                    ]);
+                    ])->log('Usage threshold reached');
 
                     if (! Cache::has('api-key:usage-threshold-notified:'.$activePlan->getKey())) {
                         PlanUsageThresholdReached::dispatch(
