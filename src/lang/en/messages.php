@@ -47,6 +47,10 @@ return [
     'error_deleting_coupon' => 'We couldn\'t delete this coupon at the moment, please try again later',
     'coupon_code_taken' => 'A coupon with this code already exists.',
 
+    // Logs
+    'monitoring_unavailable' => 'Log storage is unavailable. Check that the monitoring package migrations have run.',
+    'log_not_found' => 'Log entry not found.',
+
     // Profile Messages
     'error_loading_profile' => 'Error loading data from your profile',
     'error_updating_profile' => 'It is not possible to update your profile at this time',

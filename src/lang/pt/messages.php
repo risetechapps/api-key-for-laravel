@@ -47,6 +47,10 @@ return [
     'error_deleting_coupon' => 'Não foi possível excluir este cupom no momento, por favor tente novamente mais tarde',
     'coupon_code_taken' => 'Já existe um cupom com este código.',
 
+    // Logs
+    'monitoring_unavailable' => 'O armazenamento de logs não está disponível. Verifique se as migrations do pacote de monitoramento foram executadas.',
+    'log_not_found' => 'Registro de log não encontrado.',
+
     // Profile Messages
     'error_loading_profile' => 'Erro ao carregar dados do perfil',
     'error_updating_profile' => 'Não é possível atualizar seu perfil no momento',
