@@ -1,13 +1,13 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Log;
 use MercadoPago\MercadoPagoConfig;
 use MercadoPago\Net\MPDefaultHttpClient;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Tests\Support\FakeMercadoPagoHttpClient;
+use RiseTechApps\Monitoring\Loggly\Loggly;
 
 uses(RefreshDatabase::class);
 
@@ -178,7 +178,23 @@ describe('Processing a refund', function () {
 
     it('answers with a correlation code that is also in the log', function () {
         // O operador precisa de algo para levar ao suporte; o detalhe fica no log.
-        Log::spy();
+        //
+        // O duplo substitui o singleton que os helpers loggly*() resolvem. Os
+        // metodos fluentes devolvem a propria instancia, entao o mock precisa
+        // fazer o mesmo para a cadeia chegar ate log().
+        $captured = [];
+
+        $loggly = Mockery::mock(Loggly::class);
+        $loggly->shouldReceive('level')->andReturnSelf();
+        $loggly->shouldReceive('withContext')
+            ->andReturnUsing(function (array $context) use ($loggly, &$captured) {
+                $captured = $context;
+
+                return $loggly;
+            });
+        $loggly->shouldReceive('log')->once()->with('Refund failed');
+
+        app()->instance(Loggly::class, $loggly);
 
         $userPlan = paidSubscription();
         $this->gateway->pushFailure(['message' => 'gateway exploded']);
@@ -189,14 +205,10 @@ describe('Processing a refund', function () {
             ->assertStatus(410)
             ->json('message');
 
-        expect($message)->toMatch('/[A-Z0-9]{8}/');
-
-        Log::shouldHaveReceived('error')->withArgs(function (string $message, array $context) use ($userPlan) {
-            return $message === 'Refund failed'
-                && $context['user_plan_id'] === $userPlan->getKey()
-                && $context['payment_id'] === $userPlan->payment_id
-                && ! empty($context['error_id']);
-        })->once();
+        expect($message)->toMatch('/[A-Z0-9]{8}/')
+            ->and($captured['user_plan_id'])->toBe($userPlan->getKey())
+            ->and($captured['payment_id'])->toBe($userPlan->payment_id)
+            ->and($captured['error_id'])->not->toBeEmpty();
     });
 
     it('keeps the subscription active when the refund fails', function () {
