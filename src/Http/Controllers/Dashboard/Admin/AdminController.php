@@ -5,7 +5,6 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RiseTechApps\ApiKey\Facades\FeatureRegistry;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
@@ -43,13 +42,13 @@ class AdminController extends Controller
             // already puts the full exception where operators can read it.
             $errorId = strtoupper(Str::random(8));
 
-            Log::error('Refund failed', [
+            logglyError()->withContext([
                 'error_id' => $errorId,
                 'user_plan_id' => $userPlan->getKey(),
                 'payment_id' => $userPlan->payment_id,
                 'admin_id' => auth()->id(),
                 'exception' => $e->getMessage(),
-            ]);
+            ])->log('Refund failed');
 
             report($e);
 
