@@ -9,7 +9,15 @@ use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Client\Payment\PaymentRefundClient;
 use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
+use RiseTechApps\ApiKey\Contracts\CardGateway;
+use RiseTechApps\ApiKey\Exceptions\PaymentMessageException;
+use RiseTechApps\ApiKey\Gateways\GatewayRegistry;
+use RiseTechApps\ApiKey\Gateways\StripeGateway;
+use RiseTechApps\ApiKey\Jobs\ProcessPlanRenewalJob;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
+use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
+use RiseTechApps\ApiKey\Services\AutomaticPaymentService;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
 use RiseTechApps\ApiKey\Traits\BuildsPaymentPayer;
 use RiseTechApps\ApiKey\Traits\SendsIdempotentPayments;
@@ -36,6 +44,10 @@ class CardController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if ($driver = GatewayRegistry::active()) {
+            return $this->storeWithDriver($driver, $request);
+        }
+
         $validated = $request->validate([
             'mp_token' => ['required', 'string'],
             'cpf' => ['required', 'string'],
@@ -44,6 +56,11 @@ class CardController extends Controller
             'brand' => ['required', 'string', 'max:50'],
             'idempotency_key' => ['nullable', 'string', 'max:64'],
             'device_id' => ['nullable', 'string', 'max:255'],
+            // Segundo token do cartão, gerado com o CVV junto do primeiro. Cada
+            // token serve uma vez só: o primeiro paga a validação, este cria o
+            // perfil de Pagamentos Automáticos, que cobra a renovação sem CVV.
+            'profile_token' => ['nullable', 'string', 'max:64'],
+            'payment_type_id' => ['nullable', 'in:credit_card,debit_card,prepaid_card'],
         ]);
 
         $user = $this->payerUser();
@@ -169,6 +186,16 @@ class CardController extends Controller
                 ])->log('Card validation refund failed');
             }
 
+            // Melhor esforço: sem perfil o cartão continua servindo para pagar
+            // com CVV, e a renovação pede o pagamento pelo painel.
+            app(AutomaticPaymentService::class)->registerProfile(
+                $card,
+                $validated['profile_token'] ?? null,
+                $validated['payment_type_id'] ?? null,
+            );
+
+            $this->retryFailedRenewal($user, $card);
+
             // jsonBase e não jsonSuccess: o segundo parâmetro de jsonSuccess é a
             // mensagem, não o status, então o 201 nunca chegava a ser aplicado —
             // e o model, como a Collection do index(), não satisfaz o tipo do
@@ -185,8 +212,12 @@ class CardController extends Controller
                 'success' => false,
                 'message' => $this->translateStatusDetail($detail) ?: __('api-key::messages.error_processing_payment'),
             ], 422);
-        } catch (\RuntimeException $e) {
+        } catch (PaymentMessageException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } catch (\RuntimeException $e) {
+            logglyError()->withContext(['error' => $e->getMessage()])->log('MP card store failed');
+
+            return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 422);
         } catch (\Exception $e) {
             logglyError()->withContext(['error' => $e->getMessage()])->log('Card store error');
 
@@ -194,12 +225,148 @@ class CardController extends Controller
         }
     }
 
+    /**
+     * Cartão nos outros gateways: salvo com o que o navegador gerou (token com
+     * o CVV, cartão criptografado ou SetupIntent confirmado) e validado pelo
+     * próprio gateway, sem a cobrança de R$ 5,00 que o Mercado Pago exige. Já
+     * sai pronto para a renovação sem CVV.
+     */
+    private function storeWithDriver(CardGateway $driver, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            // Cartão criptografado do PagBank passa de 300 caracteres.
+            'card_token' => ['required', 'string', 'max:4096'],
+            'cpf' => [$driver->name() === 'stripe' ? 'nullable' : 'required', 'string', 'max:20'],
+            'holder_name' => ['nullable', 'string', 'max:255'],
+            'extra' => ['nullable', 'array'],
+        ]);
+
+        if (! $driver->configured()) {
+            return response()->jsonError(__('api-key::messages.gateway_not_configured'));
+        }
+
+        $user = $this->payerUser();
+
+        try {
+            $card = $driver->saveCard($user, $validated);
+        } catch (PaymentMessageException $e) {
+            return response()->jsonError($e->getMessage());
+        } catch (\Throwable $e) {
+            // Falha de rede ou resposta inesperada do gateway.
+            logglyError()->withContext(['gateway' => $driver->name(), 'error' => $e->getMessage()])->log('Card store error');
+
+            return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 500);
+        }
+
+        $this->retryFailedRenewal($user, $card);
+
+        return response()->jsonBase(true, __('api-key::messages.card_saved'), $card->toArray(), 201);
+    }
+
+    /**
+     * Stripe: abre o SetupIntent que o Stripe Elements confirma com o cartão.
+     * O id dele volta em `POST /dashboard/cards` (ou no checkout) como
+     * `card_token`.
+     */
+    public function setupIntent(): JsonResponse
+    {
+        $driver = GatewayRegistry::active();
+
+        if (! $driver instanceof StripeGateway || ! $driver->configured()) {
+            return response()->jsonError(__('api-key::messages.gateway_not_configured'));
+        }
+
+        try {
+            return response()->jsonSuccess($driver->createSetupIntent($this->payerUser()));
+        } catch (PaymentMessageException $e) {
+            return response()->jsonError($e->getMessage());
+        } catch (\RuntimeException $e) {
+            logglyError()->withContext(['error' => $e->getMessage()])->log('Stripe setup intent failed');
+
+            return response()->jsonError(__('api-key::messages.error_processing_payment'));
+        }
+    }
+
     public function destroy(int $id): JsonResponse
     {
         $card = UserCard::where('authentication_id', auth()->id())->findOrFail($id);
+
+        // Antes da linha local, que é onde estão os ids do gateway. Falha no
+        // gateway não segura a remoção: fica no log para conferência.
+        $this->mpCustomerService->removeCard($card);
+
         $card->delete();
 
         return response()->jsonSuccess();
+    }
+
+    /**
+     * Ativa a cobrança sem CVV num cartão já salvo, com um token gerado com o
+     * CVV. É o caminho de quem salvou o cartão pelo checkout (o Card Payment
+     * Brick gera um token só, gasto no pagamento) ou antes dos Pagamentos
+     * Automáticos existirem no pacote.
+     */
+    public function enableAutomaticBilling(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'profile_token' => ['required', 'string', 'max:64'],
+            'payment_type_id' => ['nullable', 'in:credit_card,debit_card,prepaid_card'],
+        ]);
+
+        $card = UserCard::where('authentication_id', auth()->id())->findOrFail($id);
+
+        if (! AutomaticPaymentService::enabled() || $card->gateway !== 'mercadopago' || ! $card->mp_customer_id) {
+            return response()->jsonError(__('api-key::messages.automatic_billing_unavailable'));
+        }
+
+        $ready = app(AutomaticPaymentService::class)->registerProfile(
+            $card,
+            $validated['profile_token'],
+            $validated['payment_type_id'] ?? null,
+        );
+
+        if (! $ready) {
+            return response()->jsonError(__('api-key::messages.automatic_billing_unavailable'));
+        }
+
+        // Renovação parada por exigência de CVV volta a ser cobrada agora.
+        $this->retryFailedRenewal($this->payerUser(), $card);
+
+        return response()->jsonBase(true, __('api-key::messages.automatic_billing_enabled'), $card->fresh()->toArray());
+    }
+
+    /**
+     * Renovação recusada esperando nova tentativa: o cartão novo é o que o
+     * e-mail pediu, então a cobrança sai agora em vez de na data marcada.
+     * Vale também depois da última tentativa, enquanto a assinatura não
+     * expirou de vez.
+     */
+    private function retryFailedRenewal(Authentication $user, UserCard $card): void
+    {
+        $userPlan = UserPlan::where('authentication_id', $user->getKey())
+            ->where('active', true)
+            ->whereNull('cancelled_at')
+            ->where(fn ($q) => $q->where('renewal_attempts', '>', 0)->orWhereNotNull('renewal_requires_payment'))
+            ->latest('end_date')
+            ->first();
+
+        // Conta que exige CVV: um cartão novo cai no mesmo erro, a menos que
+        // ele tenha saído daqui com perfil de Pagamentos Automáticos, que cobra
+        // sem CVV. Sem perfil, a renovação segue pelo painel.
+        if (! $userPlan || ($userPlan->renewal_requires_payment === 'cvv_required' && ! $card->automatic_billing)) {
+            return;
+        }
+
+        $userPlan->update([
+            'payment_method' => 'card',
+            'renewal_failed_at' => null,
+            'renewal_requires_payment' => null,
+        ]);
+
+        $queue = config('api-key.billing.queue');
+        $job = new ProcessPlanRenewalJob($userPlan->getKey());
+
+        dispatch($queue ? $job->onQueue($queue) : $job);
     }
 
     private function translateStatusDetail(string $detail): string

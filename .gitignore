@@ -6,3 +6,4 @@ node_modules/
 
 # Manter dist/ rastreado — assets pré-compilados do pacote
 !dist/
+.idea/

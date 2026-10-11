@@ -9,6 +9,7 @@ export interface AuthUser {
     email?: string;
     role?: string;
     token?: string;
+    admin_abilities?: string[];
     active_plan?: {
         cancellation?: { cancelled: boolean; cancelled_at: string | null };
         dates?: { start_date?: string; end_date?: string };
@@ -43,16 +44,27 @@ axios.interceptors.response.use(
     (error) => {
         const status = error?.response?.status;
         const url: string = error?.config?.url ?? '';
-        const isAuthRoute = /\/(login|register|forgot-password|reset-password)$/.test(url);
+        const isAuthRoute = /\/(login|login\/two-factor|register|forgot-password|reset-password|email\/resend)$/.test(url);
 
-        if (status === 401 && !isAuthRoute && !redirectingToLogin) {
+        // Admin sem 2FA: as rotas de admin recusam até ele ativar. Leva para a
+        // tela de segurança em vez de deixar a tela de admin vazia.
+        if (status === 403 && error?.response?.data?.code === 'two_factor_required'
+            && !window.location.pathname.startsWith('/dashboard/security')) {
+            window.location.assign('/dashboard/security?two_factor_required=1');
+        }
+
+        // Conta suspensa pelo admin no meio da sessão: toda chamada passa a
+        // responder 403, e sem isto o painel ficava travado do mesmo jeito.
+        const accountDisabled = status === 403 && error?.response?.data?.code === 'account_disabled';
+
+        if ((status === 401 || accountDisabled) && !isAuthRoute && !redirectingToLogin) {
             redirectingToLogin = true;
 
             localStorage.removeItem('token');
             delete axios.defaults.headers.common['Authorization'];
 
             if (!window.location.pathname.startsWith('/login')) {
-                window.location.assign('/login?error=session_expired');
+                window.location.assign(`/login?error=${accountDisabled ? 'account_disabled' : 'session_expired'}`);
             }
         }
 
@@ -68,6 +80,12 @@ export const useAuthStore = defineStore('auth', () => {
 
     const isAuthenticated = computed(() => !!token.value && !!user.value);
     const isAdmin = computed(() => user.value?.role?.toLowerCase() === 'admin');
+    // Equipe do painel (admin, finance, support) e o que cada um pode fazer.
+    // A regra vale no servidor; aqui só decide o que mostrar.
+    const isStaff = computed(() => (user.value?.admin_abilities ?? []).length > 0);
+    function can(ability: string): boolean {
+        return (user.value?.admin_abilities ?? []).includes(ability);
+    }
 
     function setAuth(userData: AuthUser, authToken: string) {
         user.value = userData;
@@ -96,6 +114,10 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
+    /**
+     * Primeiro passo do login. Com 2FA ativa a API devolve `two_factor: true`
+     * e um `challenge`, e o token só vem em verifyTwoFactor().
+     */
     async function login(credentials: { email: string; password: string }) {
         loading.value = true;
         error.value = null;
@@ -103,6 +125,9 @@ export const useAuthStore = defineStore('auth', () => {
             const response = await axios.post('/login', credentials);
             // A API retorna { success: true, data: { ...user..., token: '...' } }
             const responseData = response.data?.data || response.data;
+            if (responseData?.two_factor) {
+                return responseData;
+            }
             setAuth(responseData, responseData.token);
             return responseData;
         } catch (err: any) {
@@ -141,6 +166,22 @@ export const useAuthStore = defineStore('auth', () => {
             return { message: data?.message };
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao registrar';
+            throw err;
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    async function verifyTwoFactor(payload: { challenge: string; code?: string; recovery_code?: string }) {
+        loading.value = true;
+        error.value = null;
+        try {
+            const response = await axios.post('/login/two-factor', payload);
+            const responseData = response.data?.data || response.data;
+            setAuth(responseData, responseData.token);
+            return responseData;
+        } catch (err: any) {
+            error.value = err.response?.data?.message || 'Código inválido';
             throw err;
         } finally {
             loading.value = false;
@@ -200,10 +241,13 @@ export const useAuthStore = defineStore('auth', () => {
         error,
         isAuthenticated,
         isAdmin,
+        isStaff,
+        can,
         setAuth,
         clearAuth,
         initializeAuth,
         login,
+        verifyTwoFactor,
         register,
         logout,
         fetchProfile,

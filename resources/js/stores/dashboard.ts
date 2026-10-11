@@ -90,6 +90,15 @@ function unwrap<T>(response: any): T {
     return (response?.data?.data ?? response?.data) as T;
 }
 
+/**
+ * Lista da resposta. Lista vazia chega sem `data` (o `jsonSuccess` omite o
+ * campo), e aí `unwrap` devolveria o corpo inteiro, um objeto.
+ */
+function unwrapList<T>(response: any): T[] {
+    const value = response?.data?.data;
+    return Array.isArray(value) ? value : [];
+}
+
 export const useDashboardStore = defineStore('dashboard', () => {
     const stats = ref<DashboardStats>({
         today_requests: 0,
@@ -199,7 +208,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         loading.value = true;
         try {
             const response = await axios.get('/dashboard/plans');
-            plans.value = unwrap<Plan[]>(response) ?? [];
+            plans.value = unwrapList<Plan>(response);
             return plans.value;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao carregar planos';
@@ -347,7 +356,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     async function fetchSavedCards(): Promise<void> {
         try {
             const response = await axios.get('/dashboard/cards');
-            savedCards.value = unwrap<SavedCard[]>(response) ?? [];
+            savedCards.value = unwrapList<SavedCard>(response);
         } catch {
             savedCards.value = [];
         }

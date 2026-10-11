@@ -12,7 +12,7 @@ class UserStatusChanged
 
     public function __construct(
         public readonly Authentication $user,
-        public readonly string $oldStatus,
-        public readonly string $newStatus
+        public readonly ?string $oldStatus,
+        public readonly ?string $newStatus
     ) {}
 }

@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Models\ApiKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use RiseTechApps\ApiKey\Events\ApiKeyCreated;
@@ -14,6 +15,20 @@ use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
 use RiseTechApps\ToUpper\Traits\HasToUpper;
 
+/**
+ * @property string $id
+ * @property string $authentication_id
+ * @property bool $active
+ * @property array<int, string>|null $allowed_origins
+ * @property string|null $name
+ * @property array<int, string>|null $scopes
+ * @property int|null $rate_limit_per_minute
+ * @property Carbon|null $last_used_at
+ * @property Carbon|null $expires_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Authentication|null $authentication
+ */
 class ApiKey extends Model
 {
     use HasCodeGenerate, HasFactory, HasToUpper, HasUuid;
@@ -29,7 +44,7 @@ class ApiKey extends Model
      * The hashed key must never be uppercased, otherwise bcrypt
      * verification (Hash::check) breaks and the key can never validate.
      */
-    protected $no_upper = ['key', 'lookup_hash'];
+    protected $no_upper = ['key', 'lookup_hash', 'name', 'scopes', 'allowed_origins'];
 
     protected $fillable = [
         'code',
@@ -38,6 +53,10 @@ class ApiKey extends Model
         'expires_at',
         'active',
         'allowed_origins',
+        'name',
+        'scopes',
+        'rate_limit_per_minute',
+        'last_used_at',
     ];
 
     protected $hidden = ['key', 'lookup_hash'];
@@ -46,6 +65,9 @@ class ApiKey extends Model
         'expires_at' => 'datetime',
         'active' => 'boolean',
         'allowed_origins' => 'array',
+        'scopes' => 'array',
+        'rate_limit_per_minute' => 'integer',
+        'last_used_at' => 'datetime',
     ];
 
     /**
@@ -327,7 +349,7 @@ class ApiKey extends Model
 
                 // Curinga à direita: "app.example.*" casa "app.example.com".
                 if (str_ends_with($allowedOrigin, '*')
-                    && str_starts_with($normalizedOrigin, rtrim($allowedOrigin, '*'))) {
+                    && self::matchesTrailingWildcard($normalizedOrigin, rtrim($allowedOrigin, '*'))) {
                     return true;
                 }
 
@@ -347,6 +369,33 @@ class ApiKey extends Model
     }
 
     /**
+     * Se `$origin` é `$prefix` seguido de um único rótulo.
+     *
+     * O `*` vale por um rótulo, não por qualquer sufixo: "app.example.*" casa
+     * "app.example.com" mas não "app.example.evil.com", que é um domínio de
+     * terceiro que qualquer um registra. A exceção são prefixos de IP
+     * ("192.168.*"), em que o curinga cobre o restante do endereço.
+     */
+    private static function matchesTrailingWildcard(string $origin, string $prefix): bool
+    {
+        if (! str_starts_with($origin, $prefix)) {
+            return false;
+        }
+
+        $rest = substr($origin, strlen($prefix));
+
+        if ($rest === '') {
+            return false;
+        }
+
+        if (preg_match('/^[0-9.]+$/', $prefix)) {
+            return (bool) preg_match('/^[0-9.]+$/', $rest);
+        }
+
+        return (bool) preg_match('/^[a-z0-9-]+$/', $rest);
+    }
+
+    /**
      * Captura a key em texto puro assim que é atribuída, para poder ser exibida
      * uma única vez após a criação — inclusive antes de persistir. O hash de
      * armazenamento é aplicado no hook `saving`; o guard isHashed evita capturar o
@@ -361,6 +410,7 @@ class ApiKey extends Model
         $this->attributes['key'] = $value;
     }
 
+    /** @return BelongsTo<Authentication, $this> */
     public function authentication(): BelongsTo
     {
         return $this->belongsTo(Authentication::class);

@@ -22,6 +22,17 @@ import adminCoupons from '@/views/admin/coupons.vue';
 import adminUsers from '@/views/admin/users.vue';
 import adminRefunds from '@/views/admin/refunds.vue';
 import adminLogs from '@/views/admin/logs.vue';
+import adminMetrics from '@/views/admin/metrics.vue';
+import adminAudit from '@/views/admin/audit.vue';
+import adminGateways from '@/views/admin/gateways.vue';
+import adminBilling from '@/views/admin/billing.vue';
+import adminDelinquency from '@/views/admin/delinquency.vue';
+import adminHealth from '@/views/admin/health.vue';
+import adminUserDetail from '@/views/admin/userDetail.vue';
+import adminAppearance from '@/views/admin/appearance.vue';
+import security from '@/views/dashboard/security.vue';
+import apiKeys from '@/views/dashboard/apiKeys.vue';
+import webhooks from '@/views/dashboard/webhooks.vue';
 
 const routes: RouteRecordRaw[] = [
     {
@@ -29,16 +40,18 @@ const routes: RouteRecordRaw[] = [
         component: PublicLayout,
         children: [
             { path: '', name: 'home', component: home },
-            { path: 'login', name: 'login', component: login, meta: { guest: true } },
-            { path: 'register', name: 'register', component: register, meta: { guest: true } },
-            { path: 'forgot-password', name: 'forgot-password', component: forgotPassword, meta: { guest: true } },
-            { path: 'reset-password', name: 'reset-password', component: resetPassword, meta: { guest: true } },
             { path: 'terms', name: 'terms', component: terms },
             { path: 'privacy', name: 'privacy', component: privacy },
             { path: 'support', name: 'support', component: support },
             ...appConfig.routes.extraPublicRoutes,
         ],
     },
+    // Telas de entrada: tela cheia, com a moldura própria (AuthShell), fora do
+    // layout público.
+    { path: '/login', name: 'login', component: login, meta: { guest: true } },
+    { path: '/register', name: 'register', component: register, meta: { guest: true } },
+    { path: '/forgot-password', name: 'forgot-password', component: forgotPassword, meta: { guest: true } },
+    { path: '/reset-password', name: 'reset-password', component: resetPassword, meta: { guest: true } },
     {
         path: '/dashboard',
         component: DashboardLayout,
@@ -49,12 +62,23 @@ const routes: RouteRecordRaw[] = [
             { path: 'requests', name: 'dashboard.requests', component: requests },
             { path: 'plans', name: 'dashboard.plans', component: plans },
             { path: 'billing', name: 'dashboard.billing', component: billing },
+            { path: 'security', name: 'dashboard.security', component: security },
+            { path: 'api-keys', name: 'dashboard.api-keys', component: apiKeys },
+            { path: 'webhooks', name: 'dashboard.webhooks', component: webhooks },
             // Admin
-            { path: 'admin/plans',   name: 'admin.plans',   component: adminPlans,   meta: { requiresAdmin: true } },
-            { path: 'admin/coupons', name: 'admin.coupons', component: adminCoupons, meta: { requiresAdmin: true } },
+            { path: 'admin/metrics', name: 'admin.metrics', component: adminMetrics, meta: { requiresAdmin: true } },
+            { path: 'admin/audit',   name: 'admin.audit',   component: adminAudit,   meta: { requiresAdmin: true } },
+            { path: 'admin/plans',   name: 'admin.plans',   component: adminPlans,   meta: { requiresAdmin: true, ability: 'manage' } },
+            { path: 'admin/coupons', name: 'admin.coupons', component: adminCoupons, meta: { requiresAdmin: true, ability: 'manage' } },
             { path: 'admin/users',   name: 'admin.users',   component: adminUsers,   meta: { requiresAdmin: true } },
             { path: 'admin/refunds', name: 'admin.refunds', component: adminRefunds, meta: { requiresAdmin: true } },
             { path: 'admin/logs',    name: 'admin.logs',    component: adminLogs,    meta: { requiresAdmin: true } },
+            { path: 'admin/users/:id', name: 'admin.user', component: adminUserDetail, meta: { requiresAdmin: true } },
+            { path: 'admin/billing', name: 'admin.billing', component: adminBilling, meta: { requiresAdmin: true } },
+            { path: 'admin/delinquency', name: 'admin.delinquency', component: adminDelinquency, meta: { requiresAdmin: true } },
+            { path: 'admin/health', name: 'admin.health', component: adminHealth, meta: { requiresAdmin: true } },
+            { path: 'admin/gateways', name: 'admin.gateways', component: adminGateways, meta: { requiresAdmin: true, ability: 'manage' } },
+            { path: 'admin/appearance', name: 'admin.appearance', component: adminAppearance, meta: { requiresAdmin: true, ability: 'manage' } },
             ...appConfig.routes.extraDashboardRoutes,
         ],
     },
@@ -101,8 +125,12 @@ router.beforeEach(async (to, from, next) => {
         return next({ name: 'login' });
     }
 
-    if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    if (to.meta.requiresAdmin && !authStore.isStaff) {
         return next({ name: 'dashboard' });
+    }
+
+    if (to.meta.ability && !authStore.can(String(to.meta.ability))) {
+        return next({ name: 'admin.users' });
     }
 
     if (to.meta.guest && authStore.isAuthenticated) {

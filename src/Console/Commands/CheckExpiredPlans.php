@@ -61,14 +61,17 @@ class CheckExpiredPlans extends Command
         // the previous isCompletelyExpired() re-check in PHP was redundant.
         UserPlan::where('active', true)
             ->where('end_date', '<', $gracePeriodEndDate)
-            ->with(['authentication.apiKey', 'plan'])
+            // Renovação recusada com nova tentativa marcada: encerrar agora
+            // faria o job da tentativa desistir (assinatura inativa) e o
+            // assinante perderia a chance que o e-mail acabou de prometer.
+            ->where(fn ($q) => $q->whereNull('next_renewal_attempt_at')->orWhereNotNull('renewal_failed_at'))
+            ->with(['authentication.apiKeys', 'plan'])
             ->chunkById(200, function ($plans) use (&$count) {
                 foreach ($plans as $userPlan) {
                     $userPlan->update(['active' => false]);
 
-                    if ($userPlan->authentication?->apiKey) {
-                        $userPlan->authentication->apiKey->update(['active' => false]);
-                    }
+                    // Todas as chaves da conta, não só a principal.
+                    $userPlan->authentication?->apiKeys->each->update(['active' => false]);
 
                     if ($userPlan->authentication && $userPlan->plan) {
                         PlanExpired::dispatch(

@@ -1,193 +1,114 @@
 <template>
-    <div class="flex flex-col h-full">
-        <!-- Logo -->
-        <div class="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-16 border-b border-slate-200 dark:border-slate-800">
-            <router-link :to="appConfig.app.logoHref" class="flex items-center gap-3">
-                <template v-if="appConfig.app.logoImage">
-                    <img :src="appConfig.app.logoImage" class="h-9 w-auto" :alt="appConfig.app.logoText" />
-                </template>
+    <div class="flex h-full flex-col">
+        <!-- Marca -->
+        <div :class="['flex h-16 shrink-0 items-center gap-3 border-b border-slate-200/80 dark:border-slate-800', collapsed ? 'justify-center px-3' : 'justify-between px-5']">
+            <router-link :to="appConfig.app.logoHref || '/'" class="flex min-w-0 items-center gap-3">
+                <img v-if="brand.logo" :src="brand.logo" :alt="brand.name" :class="collapsed ? 'h-8 w-8 object-contain' : 'h-8 w-auto max-w-40 object-contain'" />
                 <template v-else>
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                        <PhHexagon :size="20" weight="fill" class="text-white" />
-                    </div>
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-lg shadow-brand-600/30">
+                        <PhHexagon :size="18" weight="fill" class="text-white" />
+                    </span>
+                    <span v-if="!collapsed" class="truncate text-base font-bold tracking-tight text-slate-900 dark:text-white">{{ brand.name }}</span>
                 </template>
-                <span class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                    {{ appConfig.app.logoText }}
-                </span>
             </router-link>
-            <button
-                @click="$emit('close')"
-                class="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-                <PhX :size="20" class="text-slate-500" />
+            <button v-if="mobile" type="button" class="p-2 -mr-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar menu" @click="$emit('close')">
+                <PhX :size="18" />
             </button>
         </div>
 
-        <!-- Navigation -->
-        <nav class="flex-1 overflow-y-auto px-4 py-6">
-            <div class="space-y-1">
-                <router-link
-                    v-for="item in navigation"
-                    :key="item.name"
-                    :to="item.to"
-                    :class="[
-                        'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200',
-                        isActive(item.to)
-                            ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
-                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white',
-                    ]"
-                >
-                    <component
-                        :is="item.icon"
-                        :size="20"
-                        :weight="isActive(item.to) ? 'fill' : 'regular'"
-                        :class="isActive(item.to) ? 'text-indigo-600 dark:text-indigo-400' : ''"
-                    />
-                    {{ item.name }}
-                </router-link>
-            </div>
+        <!-- Navegação -->
+        <nav class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4" aria-label="Menu principal">
+            <div v-for="(section, si) in sections" :key="section.title ?? si" :class="si > 0 ? 'mt-6' : ''">
+                <p v-if="section.title && !collapsed" class="mb-1.5 flex items-center gap-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    <PhShieldStar v-if="section.title === 'Administração'" :size="12" weight="fill" class="text-brand-500" />
+                    {{ section.title }}
+                </p>
+                <div v-else-if="section.title && collapsed" class="mx-3 mb-2 h-px bg-slate-200 dark:bg-slate-800" />
 
-            <!-- Admin section -->
-            <div v-if="isAdmin" class="mt-6">
-                <div class="flex items-center gap-2 px-4 mb-2">
-                    <PhShieldStar :size="14" weight="fill" class="text-indigo-500" />
-                    <span class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Administração</span>
-                </div>
-                <div class="space-y-1">
-                    <router-link
-                        v-for="item in adminNavigation"
-                        :key="item.name"
-                        :to="item.to"
-                        :class="[
-                            'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-                            isActive(item.to)
-                                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
-                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white',
-                        ]"
-                    >
-                        <component :is="item.icon" :size="18" :weight="isActive(item.to) ? 'fill' : 'regular'" />
-                        {{ item.name }}
-                    </router-link>
-                </div>
-            </div>
-
-            <!-- Plan info -->
-            <div class="mt-8 p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-200 dark:border-indigo-800/30">
-                <div class="flex items-center gap-2 mb-3">
-                    <PhCrown :size="20" weight="fill" class="text-amber-500" />
-                    <span class="font-semibold text-slate-900 dark:text-white">{{ planName }}</span>
-                </div>
-                <div class="mb-3">
-                    <div class="flex justify-between text-xs mb-1">
-                        <span class="text-slate-600 dark:text-slate-400">Uso do plano</span>
-                        <span class="font-medium text-slate-900 dark:text-white">{{ usagePercentage }}%</span>
-                    </div>
-                    <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                            class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
-                            :style="{ width: `${usagePercentage}%` }"
-                        />
-                    </div>
-                </div>
-                <router-link
-                    to="/dashboard/plans"
-                    class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
-                >
-                    Ver planos →
-                </router-link>
+                <ul class="space-y-0.5">
+                    <li v-for="item in section.items" :key="item.to">
+                        <component :is="collapsed ? Tooltip : 'div'" v-bind="collapsed ? { text: item.name, position: 'right' } : {}" class="block w-full">
+                            <router-link
+                                :to="item.to"
+                                :aria-current="isActivePath(route.path, item) ? 'page' : undefined"
+                                :class="[
+                                    'group relative flex w-full items-center rounded-xl text-sm font-medium transition-colors duration-150',
+                                    collapsed ? 'h-10 justify-center' : 'gap-3 px-3 py-2',
+                                    isActivePath(route.path, item)
+                                        ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
+                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/70 dark:hover:text-white',
+                                ]"
+                                @click="$emit('navigate')"
+                            >
+                                <span v-if="isActivePath(route.path, item)" class="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand-600 dark:bg-brand-400" />
+                                <component :is="item.icon" :size="19" :weight="isActivePath(route.path, item) ? 'fill' : 'regular'" class="shrink-0 transition-transform duration-150 group-hover:scale-110" />
+                                <span v-if="!collapsed" class="flex-1 truncate">{{ item.name }}</span>
+                                <Badge v-if="item.badge !== undefined && !collapsed" tone="brand">{{ item.badge }}</Badge>
+                            </router-link>
+                        </component>
+                    </li>
+                </ul>
             </div>
         </nav>
+
+        <!-- Plano -->
+        <div v-if="!collapsed" class="p-3">
+            <router-link to="/dashboard/plans" class="group block rounded-2xl border border-brand-100 dark:border-brand-500/20 bg-gradient-to-br from-brand-50 via-white to-white dark:from-brand-500/10 dark:via-slate-900 dark:to-slate-900 p-4 transition-shadow hover:shadow-md hover:shadow-brand-500/10">
+                <div class="mb-3 flex items-center justify-between">
+                    <span class="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                        <PhCrown :size="16" weight="fill" class="text-amber-500" />
+                        {{ planName }}
+                    </span>
+                    <PhArrowRight :size="14" class="text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                </div>
+                <Progress :value="usage.used" :max="usage.limit || 1" size="sm" />
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    <template v-if="usage.limit">{{ usage.used.toLocaleString('pt-BR') }} de {{ usage.limit.toLocaleString('pt-BR') }} requisições</template>
+                    <template v-else>Escolha um plano para começar</template>
+                </p>
+            </router-link>
+        </div>
+
+        <!-- Recolher -->
+        <div v-if="!mobile" class="border-t border-slate-200/80 dark:border-slate-800 p-3">
+            <button
+                type="button"
+                :class="['flex w-full items-center rounded-xl py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-white transition-colors', collapsed ? 'justify-center' : 'gap-3 px-3']"
+                :aria-label="collapsed ? 'Expandir menu' : 'Recolher menu'"
+                @click="$emit('toggle-collapse')"
+            >
+                <PhSidebarSimple :size="18" :class="collapsed ? 'rotate-180' : ''" class="transition-transform" />
+                <span v-if="!collapsed">Recolher menu</span>
+            </button>
+        </div>
     </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { PhHexagon, PhX, PhShieldStar, PhCrown, PhArrowRight, PhSidebarSimple } from '@phosphor-icons/vue';
 import { useAuthStore } from '@/stores/auth';
 import appConfig from '@/api-key.config';
-import {
-    PhHexagon,
-    PhX,
-    PhHouse,
-    PhUser,
-    PhClockCounterClockwise,
-    PhCreditCard,
-    PhReceipt,
-    PhCrown,
-    PhShieldStar,
-    PhUsersThree,
-    PhArrowCounterClockwise,
-    PhFileText,
-    PhTag,
-} from '@phosphor-icons/vue';
+import { brand } from '@/brand';
+import { useNavigation, isActivePath } from '@/navigation';
+import { Badge, Progress, Tooltip } from '@/ui';
 
-const props = defineProps({
-    isOpen: {
-        type: Boolean,
-        default: false,
-    },
-});
+withDefaults(defineProps<{ collapsed?: boolean; mobile?: boolean }>(), { collapsed: false, mobile: false });
+defineEmits<{ close: []; navigate: []; 'toggle-collapse': [] }>();
 
-defineEmits(['close']);
-
-const route    = useRoute();
+const route = useRoute();
 const authStore = useAuthStore();
-const isAdmin   = computed(() => authStore.isAdmin);
+const { sections } = useNavigation();
 
-const user = computed(() => authStore.user);
+const user = computed<any>(() => authStore.user);
 
-const userInitials = computed(() => {
-    const name = user.value?.personal?.name || user.value?.name;
-    if (!name) return '';
-    return name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
+const planName = computed(() => user.value?.active_plan?.plan?.name || 'Sem plano');
+
+const usage = computed(() => {
+    const u = user.value?.usage;
+    const used = Number(u?.requests_used ?? user.value?.active_plan?.requests_used ?? 0);
+    const limit = Number(u?.requests_limit ?? user.value?.active_plan?.plan?.request_limit ?? 0);
+    return { used, limit };
 });
-
-const planName = computed(() => {
-    return user.value?.active_plan?.plan?.name || 'Sem plano';
-});
-
-const usagePercentage = computed(() => {
-    // Usa dados de usage se disponíveis
-    if (user.value?.usage) {
-        const used = user.value.usage.requests_used || 0;
-        const limit = user.value.usage.requests_limit || 1;
-        return Math.round((used / limit) * 100);
-    }
-    // Fallback para estrutura antiga
-    const used = user.value?.active_plan?.requests_used || 0;
-    const limit = user.value?.active_plan?.plan?.request_limit || 1;
-    return Math.round((used / limit) * 100);
-});
-
-const navigation = [
-    { name: 'Dashboard',   to: '/dashboard',          icon: PhHouse },
-    { name: 'Perfil',      to: '/dashboard/profile',  icon: PhUser },
-    { name: 'Requisições', to: '/dashboard/requests', icon: PhClockCounterClockwise },
-    { name: 'Planos',      to: '/dashboard/plans',    icon: PhCreditCard },
-    { name: 'Faturamento', to: '/dashboard/billing',  icon: PhReceipt },
-    ...appConfig.menu.extraItems,
-];
-
-const adminNavigation = [
-    { name: 'Planos',    to: '/dashboard/admin/plans',   icon: PhCreditCard },
-    { name: 'Cupons',    to: '/dashboard/admin/coupons', icon: PhTag },
-    { name: 'Usuários',  to: '/dashboard/admin/users',   icon: PhUsersThree },
-    { name: 'Estornos',  to: '/dashboard/admin/refunds', icon: PhArrowCounterClockwise },
-    { name: 'Logs',      to: '/dashboard/admin/logs',    icon: PhFileText },
-    ...appConfig.menu.extraAdminItems,
-];
-
-function isActive(path) {
-    // Para /dashboard, só ativa se for exatamente /dashboard (não sub-rotas)
-    if (path === '/dashboard') {
-        return route.path === '/dashboard';
-    }
-    // Para outras rotas, ativa se for exato ou sub-rota
-    return route.path === path || route.path.startsWith(`${path}/`);
-}
 </script>

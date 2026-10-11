@@ -1,12 +1,18 @@
 <?php
 
+use RiseTechApps\ApiKey\Notifications\AccountSecurityNotification;
+use RiseTechApps\ApiKey\Notifications\EmailChangeNotification;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification;
+use RiseTechApps\ApiKey\Notifications\OverageChargeNotification;
+use RiseTechApps\ApiKey\Notifications\OverageStartedNotification;
 use RiseTechApps\ApiKey\Notifications\PaymentRejectedNotification;
 use RiseTechApps\ApiKey\Notifications\PlanActivatedNotification;
 use RiseTechApps\ApiKey\Notifications\PlanCancelledNotification;
 use RiseTechApps\ApiKey\Notifications\PlanExpiredNotification;
 use RiseTechApps\ApiKey\Notifications\PlanRefundedNotification;
+use RiseTechApps\ApiKey\Notifications\RenewalFailedNotification;
+use RiseTechApps\ApiKey\Notifications\RenewalPaymentRequiredNotification;
 use RiseTechApps\ApiKey\Notifications\RequestLimitReachedNotification;
 use RiseTechApps\ApiKey\Notifications\ResetPasswordNotification;
 use RiseTechApps\ApiKey\Notifications\UsageThresholdNotification;
@@ -37,6 +43,37 @@ return [
     */
     'rate_limit' => [
         'cache_ttl' => env('API_KEY_RATE_LIMIT_CACHE_TTL', 3600),
+
+        // Requisições por minuto por chave quando nem a chave nem o plano
+        // definem um limite. Vazio: sem limite por minuto (só a cota do
+        // período). Precedência: chave → plano → este valor.
+        'per_minute' => env('API_KEY_RATE_LIMIT_PER_MINUTE'),
+    ],
+
+    /*
+    | Webhooks de saída: eventos da conta enviados para URLs do cliente.
+    */
+    'webhooks' => [
+        'enabled' => env('API_KEY_WEBHOOKS_ENABLED', true),
+        'queue' => env('API_KEY_WEBHOOKS_QUEUE'),
+        'timeout' => env('API_KEY_WEBHOOKS_TIMEOUT', 10),
+        'max_per_user' => env('API_KEY_WEBHOOKS_MAX_PER_USER', 5),
+        // Falhas seguidas (depois de todas as novas tentativas) que desligam o endpoint.
+        'disable_after_failures' => env('API_KEY_WEBHOOKS_DISABLE_AFTER', 20),
+        // Só HTTPS, e nunca para IP privado, de loopback ou reservado (SSRF).
+        // Desligue apenas em desenvolvimento.
+        'allow_http' => env('API_KEY_WEBHOOKS_ALLOW_HTTP', false),
+        'block_private_networks' => env('API_KEY_WEBHOOKS_BLOCK_PRIVATE', true),
+    ],
+
+    'two_factor' => [
+        // Rotas de admin exigem verificação em duas etapas ativa.
+        'required_for_admins' => env('API_KEY_2FA_REQUIRED_FOR_ADMINS', true),
+    ],
+
+    'api_keys' => [
+        // Máximo de chaves por conta.
+        'max_per_user' => env('API_KEY_MAX_KEYS_PER_USER', 5),
     ],
 
     /*
@@ -126,6 +163,12 @@ return [
         'plan_cancelled' => PlanCancelledNotification::class,
         'plan_refunded' => PlanRefundedNotification::class,
         'payment_rejected' => PaymentRejectedNotification::class,
+        'renewal_failed' => RenewalFailedNotification::class,
+        'renewal_payment_required' => RenewalPaymentRequiredNotification::class,
+        'overage_charge' => OverageChargeNotification::class,
+        'overage_started' => OverageStartedNotification::class,
+        'account_security' => AccountSecurityNotification::class,
+        'email_change' => EmailChangeNotification::class,
     ],
 
     /*
@@ -270,7 +313,9 @@ return [
     | Authentication Throttle Configuration
     |--------------------------------------------------------------------------
     |
-    | Rate limiting settings for authentication endpoints (login/register).
+    | Rate limiting settings for the public authentication endpoints: register,
+    | login, forgot/reset password and resending the verification e-mail. They
+    | share one bucket per IP.
     | Format: 'attempts,decay_minutes'
     |
     */
@@ -278,6 +323,29 @@ return [
         'enabled' => env('API_KEY_AUTH_THROTTLE_ENABLED', true),
         'attempts' => env('API_KEY_AUTH_THROTTLE_ATTEMPTS', 5),
         'decay_minutes' => env('API_KEY_AUTH_THROTTLE_DECAY', 1),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Rate Limiting
+    |--------------------------------------------------------------------------
+    |
+    | Limite para as rotas que tocam o gateway: checkout, validação de cupom e
+    | cadastro de cartão. Elas dividem um contador por usuário.
+    |
+    | Sem limite, o cadastro de cartão — que faz uma cobrança de validação —
+    | serve para testar cartões roubados em massa ("card testing"), e o
+    | antifraude do Mercado Pago pode bloquear a conta do vendedor por isso. A
+    | validação de cupom, sem limite, deixa adivinhar códigos por força bruta.
+    |
+    | O padrão (10 a cada 10 minutos) cobre um comprador que erra o cartão
+    | algumas vezes e testa um cupom.
+    |
+    */
+    'payment_throttle' => [
+        'enabled' => env('API_KEY_PAYMENT_THROTTLE_ENABLED', true),
+        'attempts' => env('API_KEY_PAYMENT_THROTTLE_ATTEMPTS', 10),
+        'decay_minutes' => env('API_KEY_PAYMENT_THROTTLE_DECAY', 10),
     ],
 
     /*
@@ -341,6 +409,8 @@ return [
     'middleware_group' => [
         'plan' => [
             'api.key',
+            // Antes da cota: rajada recusada não gasta o plano.
+            'api.key.rate',
             'check.active.plan',
             'check.limit.plan',
             'api.key.origin',
@@ -356,6 +426,117 @@ return [
     | Credentials for Mercado Pago payment gateway integration.
     |
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Gateway de pagamento
+    |--------------------------------------------------------------------------
+    |
+    | Um gateway ativo por vez atende tudo: checkout, cadastro de cartão, PIX,
+    | renovação e excedente. `mercadopago`, `stripe`, `efi`, `pagbank` ou
+    | `pagarme`. Ao trocar, os cartões salvos no anterior deixam de ser
+    | cobrados até o assinante cadastrar um no gateway novo.
+    |
+    | Tudo o que está em `payment` e na seção de cada gateway pode ser editado
+    | pelo painel admin (Gateways). O que for salvo lá vale por cima do .env,
+    | criptografado no banco com a APP_KEY.
+    */
+    'payment' => [
+        'gateway' => env('API_KEY_PAYMENT_GATEWAY', 'mercadopago'),
+
+        // Gateways que o painel não oferece para ativar. O Pagar.me não aceita
+        // mais cadastro novo (o cadastro vai para a Stone), então fica de fora
+        // por padrão; quem já tem conta pode ativar pelo .env.
+        'hidden_gateways' => ['pagarme'],
+    ],
+
+    /*
+    | Stripe. PIX funciona em conta brasileira, como pagamento avulso (de
+    | R$ 0,50 a R$ 3.000,00). O cartão é salvo por SetupIntent e cobrado sem
+    | CVV como `off_session`. Cadastre o webhook no Dashboard do Stripe com os
+    | eventos `payment_intent.succeeded`, `payment_intent.payment_failed` e
+    | `payment_intent.canceled`, e copie o signing secret (`whsec_…`).
+    */
+    'stripe' => [
+        'publishable_key' => env('STRIPE_PUBLISHABLE_KEY'),
+        'secret_key' => env('STRIPE_SECRET_KEY'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        // Texto no extrato do cartão (até 22 caracteres). O PIX ignora.
+        'statement_descriptor' => env('STRIPE_STATEMENT_DESCRIPTOR'),
+        'pix' => [
+            'enabled' => env('STRIPE_PIX_ENABLED', false),
+            'expiration_minutes' => env('STRIPE_PIX_EXPIRATION_MINUTES', 30),
+        ],
+    ],
+
+    /*
+    | Efí (antiga Gerencianet). Cartão pela API de Cobranças, com o
+    | `payment_token` reutilizável gerado no navegador; o identificador de conta
+    | (payee code) fica em API > Introdução no painel da Efí. A notificação do
+    | cartão vai na própria cobrança, sem cadastro.
+    |
+    | O PIX usa a API Pix, que exige o certificado da aplicação (.p12) em toda
+    | chamada. O certificado é enviado pelo painel e guardado criptografado. O
+    | webhook do PIX da Efí exige mTLS no seu servidor; o pacote não depende
+    | dele: o painel consulta a cobrança enquanto mostra o QR, e a
+    | reconciliação cobre o resto.
+    */
+    'efi' => [
+        'client_id' => env('EFI_CLIENT_ID'),
+        'client_secret' => env('EFI_CLIENT_SECRET'),
+        'account_id' => env('EFI_ACCOUNT_ID'),
+        'sandbox' => env('EFI_SANDBOX', false),
+        'pix' => [
+            'enabled' => env('EFI_PIX_ENABLED', false),
+            'key' => env('EFI_PIX_KEY'),
+            // Conteúdo do .p12 em base64 (pelo painel, ou `base64 -w0 cert.p12`).
+            'certificate' => env('EFI_PIX_CERTIFICATE'),
+            'certificate_password' => env('EFI_PIX_CERTIFICATE_PASSWORD'),
+            'expiration_minutes' => env('EFI_PIX_EXPIRATION_MINUTES', 30),
+        ],
+    ],
+
+    /*
+    | PagBank (PagSeguro). Token da conta em Venda Online > Integrações. O
+    | cartão é criptografado no navegador com a chave pública (criada pelo
+    | pacote na primeira vez, se não for informada) e cobrado depois pelo id
+    | salvo, sem CVV, como recorrência. A notificação vai em cada pedido e é
+    | conferida pelo `x-authenticity-token`.
+    */
+    'pagbank' => [
+        'token' => env('PAGBANK_TOKEN'),
+        'public_key' => env('PAGBANK_PUBLIC_KEY'),
+        'sandbox' => env('PAGBANK_SANDBOX', false),
+        // Texto no extrato do cartão (até 17 caracteres).
+        'statement_descriptor' => env('PAGBANK_STATEMENT_DESCRIPTOR'),
+        'pix' => [
+            'enabled' => env('PAGBANK_PIX_ENABLED', false),
+            'expiration_minutes' => env('PAGBANK_PIX_EXPIRATION_MINUTES', 30),
+        ],
+    ],
+
+    'pagarme' => [
+        'public_key' => env('PAGARME_PUBLIC_KEY'),
+        'secret_key' => env('PAGARME_SECRET_KEY'),
+
+        /*
+        | O webhook do Pagar.me não é assinado. O pacote nunca confia no corpo:
+        | busca o pedido na API com a secret key antes de agir. Usuário e senha
+        | aqui, se definidos, passam a ser exigidos por Basic Auth na URL do
+        | webhook (configure os mesmos no painel do Pagar.me).
+        */
+        'webhook_user' => env('PAGARME_WEBHOOK_USER'),
+        'webhook_password' => env('PAGARME_WEBHOOK_PASSWORD'),
+
+        // Texto no extrato do cartão. O Pagar.me aceita até 13 caracteres em
+        // conta PSP (22 em conta Gateway); o pacote corta em 13.
+        'statement_descriptor' => env('PAGARME_STATEMENT_DESCRIPTOR'),
+
+        'pix' => [
+            'enabled' => env('PAGARME_PIX_ENABLED', false),
+            'expiration_minutes' => env('PAGARME_PIX_EXPIRATION_MINUTES', 30),
+        ],
+    ],
+
     'mercadopago' => [
         'public_key' => env('MP_PUBLIC_KEY'),
         'access_token' => env('MP_ACCESS_TOKEN'),
@@ -392,6 +573,43 @@ return [
         | webhooks configurados no painel.
         */
         'accept_ipn' => env('MP_ACCEPT_IPN', true),
+
+        /*
+        | Idade máxima, em segundos, do `ts` de um webhook assinado. Acima disso
+        | a notificação é recusada mesmo com HMAC válido, o que impede reenviar
+        | uma notificação antiga capturada. 0 desliga a checagem (padrão): ligue
+        | depois de confirmar que o relógio do servidor está sincronizado.
+        */
+        'webhook_tolerance_seconds' => env('MP_WEBHOOK_TOLERANCE_SECONDS', 0),
+
+        /*
+        | PIX. Precisa estar habilitado na conta do Mercado Pago (chave PIX
+        | cadastrada). O QR é sempre gerado no painel, a pedido do assinante,
+        | e vale `expiration_minutes`. Nunca vai por e-mail.
+        */
+        'pix' => [
+            'enabled' => env('MP_PIX_ENABLED', false),
+            'expiration_minutes' => env('MP_PIX_EXPIRATION_MINUTES', 30),
+        ],
+
+        /*
+        | Pagamentos Automáticos: cobrança do cartão salvo sem o CVV do titular,
+        | pela Orders API com um perfil de pagamento por cartão. É o que faz a
+        | renovação e o excedente funcionarem em conta do Mercado Pago que exige
+        | o CVV em toda cobrança comum.
+        |
+        | Precisa de autorização da equipe Comercial do Mercado Pago. Sem ela o
+        | gateway responde 403 e o pacote segue pelo caminho antigo (cartão
+        | tokenizado sem CVV e, se a conta recusar, pagamento pelo painel), então
+        | deixar ligado numa conta ainda não autorizada não quebra nada: a
+        | cobrança automática começa sozinha no dia em que a conta for liberada.
+        |
+        | O perfil é criado quando o titular digita o CVV: ao cadastrar o cartão
+        | e ao pagar com um cartão salvo que ainda não tem perfil.
+        */
+        'automatic_payments' => [
+            'enabled' => env('MP_AUTOMATIC_PAYMENTS_ENABLED', true),
+        ],
     ],
 
     /*
@@ -407,6 +625,22 @@ return [
     */
     'billing' => [
         'queue' => env('API_KEY_BILLING_QUEUE'),
+
+        /*
+        | Novas tentativas da renovação recusada, em dias depois do vencimento.
+        | Cada falha avisa o assinante por e-mail para atualizar o cartão.
+        | Enquanto houver tentativa pendente, o check-expired-plans não encerra
+        | a assinatura; o acesso continua seguindo o período de carência.
+        | Lista vazia desliga as novas tentativas.
+        */
+        // Excedente abaixo deste valor não é cobrado (o gateway recusa valores
+        // muito baixos); fica registrado como perdoado.
+        'overage_minimum_charge' => env('API_KEY_OVERAGE_MINIMUM_CHARGE', 1.00),
+
+        'retry_days' => array_values(array_filter(array_map(
+            'intval',
+            explode(',', (string) env('API_KEY_RENEWAL_RETRY_DAYS', '1,3,5'))
+        ))),
     ],
 
     /*
@@ -429,6 +663,12 @@ return [
     | Secret token used for server-to-server calls (dashboard test feature).
     | Generate with: php artisan tinker --execute="echo Str::random(64);"
     |
+    | Only accepted from loopback. Both the socket address (REMOTE_ADDR) and the
+    | resolved client IP ($request->ip()) must be loopback, so behind a reverse
+    | proxy on the same host the bypass only works when TrustProxies is set up
+    | for it; otherwise every proxied request looks local and the token is the
+    | only barrier. Anyone holding the token can act as any user (X-User-Id).
+    |
     */
     'internal_token' => env('API_INTERNAL_TOKEN'),
 
@@ -443,7 +683,39 @@ return [
     | browsers can access the frontend.
     |
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Recibos
+    |--------------------------------------------------------------------------
+    |
+    | Dados do emissor impressos no recibo de cada pagamento. O recibo é um
+    | comprovante de pagamento e não substitui a nota fiscal.
+    |
+    */
+    'receipt' => [
+        'issuer_name' => env('API_KEY_RECEIPT_ISSUER_NAME', env('APP_NAME')),
+        'issuer_document' => env('API_KEY_RECEIPT_ISSUER_DOCUMENT'),
+        'issuer_address' => env('API_KEY_RECEIPT_ISSUER_ADDRESS'),
+        'issuer_email' => env('API_KEY_RECEIPT_ISSUER_EMAIL', env('MAIL_FROM_ADDRESS')),
+    ],
+
     'spa' => [
         'enabled' => env('API_KEY_SPA_ENABLED', false),
+
+        // E-mail exibido na página de suporte. Sem valor, usa o remetente
+        // padrão do app (MAIL_FROM_ADDRESS).
+        'support_email' => env('API_KEY_SUPPORT_EMAIL', env('MAIL_FROM_ADDRESS')),
+
+        /*
+        | Identidade visual do painel. Vale também para o painel pré-compilado
+        | (dist/), sem recompilar: o shell Blade entrega estes valores ao
+        | frontend. A cor gera a paleta inteira (`brand-50` a `brand-950`).
+        | Editável em Admin → Aparência.
+        */
+        'brand' => [
+            'name' => env('API_KEY_SPA_BRAND_NAME'),
+            'color' => env('API_KEY_SPA_BRAND_COLOR', '#6366f1'),
+            'logo' => env('API_KEY_SPA_BRAND_LOGO'),
+        ],
     ],
 ];

@@ -12,6 +12,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 use RiseTechApps\Address\Traits\HasAddress\HasAddress;
 use RiseTechApps\ApiKey\Enums\BillingCycle;
@@ -23,6 +24,7 @@ use RiseTechApps\ApiKey\Models\RequestLog\RequestLog;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\ApiKey\Notifications\ResetPasswordNotification;
+use RiseTechApps\ApiKey\Services\AuthService;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\HasUuid\Traits\HasUuid;
 use RiseTechApps\Media\Contracts\MediaContract;
@@ -35,6 +37,14 @@ use RiseTechApps\ToUpper\Traits\HasToUpper;
  * @property string|null $code
  * @property string $name
  * @property string $email
+ * @property string $password
+ * @property string|null $pending_email
+ * @property Carbon|null $trial_used_at
+ * @property bool $overage_enabled
+ * @property string|null $overage_spend_cap
+ * @property string|null $two_factor_secret
+ * @property array<int, string>|null $two_factor_recovery_codes
+ * @property Carbon|null $two_factor_confirmed_at
  * @property string|null $rg
  * @property string|null $cpf
  * @property string|null $birth_date
@@ -84,6 +94,9 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
     protected $hidden = [
         'id',
         'code',
+        'password',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
     ];
 
     protected $casts = [
@@ -91,6 +104,12 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
         'status' => 'string',
         'role' => 'string',
         'password' => 'hashed',
+        'trial_used_at' => 'datetime',
+        'overage_enabled' => 'boolean',
+        'overage_spend_cap' => 'decimal:2',
+        'two_factor_secret' => 'encrypted',
+        'two_factor_recovery_codes' => 'encrypted:array',
+        'two_factor_confirmed_at' => 'datetime',
     ];
 
     // HasToUpper normaliza strings para maiúsculo, mas estes são identificadores /
@@ -98,7 +117,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
     // (AuthService::$ENABLE = 'enabled', $CLIENT = 'client') e com o e-mail de
     // login. Uppercase aqui violaria o enum de status/role (CHECK/enum no banco) e
     // quebraria o match — inclusive em produção quando o status é alterado.
-    protected array $no_upper = ['email', 'status', 'role', 'locale'];
+    protected array $no_upper = ['email', 'pending_email', 'status', 'role', 'locale', 'two_factor_secret', 'two_factor_recovery_codes'];
 
     #[\Override]
     protected static function booted(): void
@@ -113,6 +132,17 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
                 );
             }
         });
+    }
+
+    /**
+     * Se a conta pode entrar no painel e usar a API.
+     *
+     * Null conta como habilitada: é o default da coluna, e contas criadas antes
+     * de o status ser checado não têm valor gravado.
+     */
+    public function isEnabled(): bool
+    {
+        return $this->status === null || $this->status === AuthService::$ENABLE;
     }
 
     public function preferredLocale()
@@ -149,43 +179,132 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
         $this->notify(new $notification($token));
     }
 
+    /**
+     * Chave principal: a mais antiga da conta.
+     *
+     * Continua existindo depois das várias chaves por conta para que tudo que
+     * fala em "a chave do usuário" (perfil, regenerar, origens) siga
+     * funcionando. A requisição autenticada por API key troca esta relação pela
+     * chave usada de fato (AuthenticateApiKey).
+     *
+     * @return HasOne<ApiKey, $this>
+     */
     public function apiKey(): HasOne
     {
-        return $this->hasOne(ApiKey::class);
+        // Ordenação simples, e não oldestOfMany(): esse desempata com MAX(id),
+        // e o PostgreSQL não tem MAX para uuid. No eager load o HasOne fica com
+        // a primeira linha de cada dono, que pela ordem é a mais antiga.
+        return $this->hasOne(ApiKey::class)->orderBy('created_at')->orderBy('id');
     }
 
-    public function subscribeToPlan(Plan $plan)
+    /** @return HasMany<ApiKey, $this> */
+    public function apiKeys(): HasMany
     {
-        $previousPlan = $this->activePlan?->plan;
+        return $this->hasMany(ApiKey::class)->orderBy('created_at');
+    }
 
-        $this->activePlan()?->update(['active' => false]);
+    /**
+     * Inicia uma assinatura nova, encerrando a que estiver rodando.
+     *
+     * `$attributes` grava o rastro do pagamento (payment_id, payment_amount,
+     * credit_applied) no mesmo INSERT da assinatura. Gravar depois, num update
+     * separado, abria uma janela em que a assinatura existia sem payment_id — e
+     * o webhook do mesmo pagamento, que chega segundos depois, não a reconhecia
+     * e assinava de novo.
+     *
+     * Com payment_id informado a chamada é idempotente: checkout, webhook e
+     * reconciliação podem confirmar o mesmo pagamento em qualquer ordem, e só o
+     * primeiro assina. Os demais recebem a assinatura existente, com
+     * `wasRecentlyCreated` falso, e completam nela só os campos que faltarem.
+     *
+     * Tudo roda numa transação com a linha do usuário travada, o que serializa
+     * assinaturas concorrentes do mesmo usuário. O evento sai depois do commit.
+     */
+    public function subscribeToPlan(Plan $plan, array $attributes = []): UserPlan
+    {
+        $paymentId = isset($attributes['payment_id']) ? (string) $attributes['payment_id'] : null;
 
-        $userPlan = UserPlan::create([
-            'authentication_id' => $this->id,
-            'plan_id' => $plan->id,
-            'start_date' => now(),
-            'end_date' => now()->addDays(BillingCycle::convertInDays($plan->billing_cycle)),
-            'active' => true,
-        ]);
-
-        if ($this->apiKey) {
-            $this->apiKey->update(['active' => true]);
-        } else {
-            // Key will be automatically hashed by the model's boot method
-            $this->apiKey()->create([
-                'key' => bin2hex(random_bytes(64)),
-                'active' => true,
-            ]);
+        if ($paymentId !== null) {
+            $attributes['payment_id'] = $paymentId;
         }
 
-        $userPlan->load(['plan']);
+        [$userPlan, $previousPlan] = DB::transaction(function () use ($plan, $attributes, $paymentId): array {
+            static::withoutGlobalScopes()->whereKey($this->getKey())->lockForUpdate()->first();
 
-        // Fire PlanChanged event
-        PlanChanged::dispatch($this, $plan, $userPlan, $previousPlan);
+            if ($paymentId !== null) {
+                $existing = UserPlan::where('authentication_id', $this->getKey())
+                    ->where('payment_id', $paymentId)
+                    ->first();
+
+                if ($existing) {
+                    $missing = array_filter(
+                        $attributes,
+                        fn ($value, $key) => $existing->getAttribute($key) === null && $value !== null,
+                        ARRAY_FILTER_USE_BOTH
+                    );
+
+                    if ($missing) {
+                        $existing->update($missing);
+                    }
+
+                    return [$existing, null];
+                }
+            }
+
+            $previousPlan = $this->activePlan()->with('plan')->first()?->plan;
+
+            // Todas as ativas, e não só a do activePlan(): uma assinatura em
+            // carência (end_date já passou) também está ativa, e ficava ligada
+            // ao lado da nova — a renovação, que roda justamente perto do fim do
+            // período, deixava duas assinaturas ativas para o mesmo usuário.
+            $this->userPlan()->where('active', true)->update(['active' => false]);
+
+            // end_date pode vir de fora (período de teste); o resto é sempre
+            // decidido aqui.
+            $endDate = $attributes['end_date'] ?? now()->addDays(BillingCycle::convertInDays($plan->billing_cycle));
+            unset($attributes['end_date']);
+
+            $userPlan = UserPlan::create([
+                ...$attributes,
+                'authentication_id' => $this->id,
+                'plan_id' => $plan->id,
+                'start_date' => now(),
+                'end_date' => $endDate,
+                'active' => true,
+            ]);
+
+            $apiKey = $this->apiKey()->first();
+
+            if ($apiKey) {
+                // Todas as chaves voltam: o vencimento desativou todas. Uma a
+                // uma, e não num UPDATE só, para o ApiKeyStatusChanged sair.
+                $this->apiKeys()->where('active', false)->get()->each->update(['active' => true]);
+                $apiKey->refresh();
+            } else {
+                // Key will be automatically hashed by the model's boot method
+                $apiKey = $this->apiKey()->create([
+                    'name' => 'Principal',
+                    'key' => bin2hex(random_bytes(64)),
+                    'active' => true,
+                ]);
+            }
+
+            $this->setRelation('apiKey', $apiKey);
+
+            return [$userPlan, $previousPlan];
+        });
+
+        $userPlan->load(['plan']);
+        $this->unsetRelation('activePlan');
+
+        if ($userPlan->wasRecentlyCreated) {
+            PlanChanged::dispatch($this, $plan, $userPlan, $previousPlan);
+        }
 
         return $userPlan;
     }
 
+    /** @return HasMany<UserPlan, $this> */
     public function userPlan(): HasMany
     {
         return $this->hasMany(UserPlan::class);
@@ -195,6 +314,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
      * Get the currently active plan (within valid date range).
      * Note: This does not consider grace period. Use activePlanWithGracePeriod() for that.
      */
+    /** @return HasOne<UserPlan, $this> */
     public function activePlan(): HasOne
     {
         return $this->hasOne(UserPlan::class)
@@ -209,6 +329,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
      * - Currently active (within date range)
      * - Expired but within grace period
      */
+    /** @return HasOne<UserPlan, $this> */
     public function activePlanWithGracePeriod(): HasOne
     {
         $graceDays = Config::get('api-key.grace_period_days', 3);

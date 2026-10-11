@@ -21,7 +21,29 @@ class LoginRequest extends FormRequest
 
     public function rules(): array
     {
-        return $this->result['rules'];
+        $rules = $this->result['rules'];
+
+        // As regras podem vir da tabela form_requests, que tem precedência sobre
+        // AuthenticationRules. Uma instalação que gravou a regra antiga ainda
+        // teria o `exists`, que revela quais e-mails têm conta; ele é tirado
+        // aqui, venha de onde vier.
+        if (isset($rules['email'])) {
+            $rules['email'] = self::withoutExists($rules['email']);
+        }
+
+        return $rules;
+    }
+
+    private static function withoutExists(string|array $rule): string|array
+    {
+        $parts = is_array($rule) ? $rule : explode('|', $rule);
+
+        $parts = array_values(array_filter(
+            $parts,
+            fn ($part) => ! is_string($part) || ! str_starts_with($part, 'exists:')
+        ));
+
+        return is_array($rule) ? $parts : implode('|', $parts);
     }
 
     public function authorize(): bool
@@ -54,7 +76,6 @@ class LoginRequest extends FormRequest
         $translations = [
             'email.required' => 'O campo e-mail é obrigatório.',
             'email.email' => 'O e-mail deve ser um endereço válido.',
-            'email.exists' => 'O e-mail informado não está registrado.',
             'email.max' => 'O e-mail não pode ter mais que :max caracteres.',
             'password.required' => 'O campo senha é obrigatório.',
             'password.min' => 'A senha deve ter pelo menos :min caracteres.',

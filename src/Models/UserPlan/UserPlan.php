@@ -29,6 +29,17 @@ use RiseTechApps\HasUuid\Traits\HasUuid;
  * @property string|null $credit_applied
  * @property \Illuminate\Support\Carbon|null $refunded_at
  * @property string|null $refund_id
+ * @property int $renewal_attempts
+ * @property \Illuminate\Support\Carbon|null $next_renewal_attempt_at
+ * @property \Illuminate\Support\Carbon|null $renewal_failed_at
+ * @property string|null $renewal_requires_payment
+ * @property string|null $payment_method
+ * @property bool $is_trial
+ * @property int $overage_requests
+ * @property string|null $overage_amount
+ * @property string|null $overage_payment_id
+ * @property \Illuminate\Support\Carbon|null $overage_billed_at
+ * @property \Illuminate\Support\Carbon|null $overage_paid_at
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
  * @property-read Plan|null $plan
@@ -38,7 +49,7 @@ class UserPlan extends Model
 {
     use HasFactory, HasUuid;
 
-    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id', 'payment_amount', 'credit_applied', 'cancelled_at', 'refunded_at', 'refund_id'];
+    protected $fillable = ['authentication_id', 'plan_id', 'start_date', 'end_date', 'active', 'requests_used', 'payment_id', 'payment_amount', 'credit_applied', 'cancelled_at', 'refunded_at', 'refund_id', 'renewal_attempts', 'next_renewal_attempt_at', 'renewal_failed_at', 'renewal_requires_payment', 'payment_method', 'is_trial', 'overage_requests', 'overage_amount', 'overage_payment_id', 'overage_billed_at', 'overage_paid_at'];
 
     protected $casts = [
         'start_date' => 'datetime',
@@ -48,6 +59,14 @@ class UserPlan extends Model
         'active' => 'boolean',
         'payment_amount' => 'decimal:2',
         'credit_applied' => 'decimal:2',
+        'renewal_attempts' => 'integer',
+        'next_renewal_attempt_at' => 'datetime',
+        'renewal_failed_at' => 'datetime',
+        'is_trial' => 'boolean',
+        'overage_requests' => 'integer',
+        'overage_amount' => 'decimal:2',
+        'overage_billed_at' => 'datetime',
+        'overage_paid_at' => 'datetime',
     ];
 
     /** @return BelongsTo<Plan, $this> */
@@ -95,7 +114,7 @@ class UserPlan extends Model
      */
     public function unusedCredit(): float
     {
-        $price = (float) ($this->plan?->price ?? 0);
+        $price = $this->paidValue();
 
         if ($price <= 0 || ! $this->active || ! $this->start_date || ! $this->end_date) {
             return 0.0;
@@ -120,6 +139,30 @@ class UserPlan extends Model
         // A start_date in the future would put the ratio above 1 and credit more
         // than was ever paid.
         return round($price * min(1.0, $remaining / $total), 2);
+    }
+
+    /**
+     * Quanto este período valeu de fato: o que foi pago mais o crédito de troca
+     * usado, nunca acima do preço do plano. Sem isto o crédito saía do preço de
+     * tabela, e uma assinatura com cupom de 100% (ou concedida pelo admin)
+     * virava crédito cheio na troca de plano.
+     *
+     * Período de teste não vale nada. Assinatura sem o rastro do pagamento
+     * (anterior ao `payment_amount`) vale o preço do plano, como antes.
+     */
+    public function paidValue(): float
+    {
+        $price = (float) ($this->plan?->price ?? 0);
+
+        if ($this->is_trial) {
+            return 0.0;
+        }
+
+        if ($this->payment_amount === null && $this->credit_applied === null) {
+            return $price;
+        }
+
+        return min($price, (float) $this->payment_amount + (float) $this->credit_applied);
     }
 
     /**
@@ -193,7 +236,8 @@ class UserPlan extends Model
 
         $graceEnd = $this->getGracePeriodEndDate();
 
-        return now()->diffInDays($graceEnd, false);
+        // Carbon 3 devolve float: 1,99 dia restante é "2 dias", não 1.
+        return max(0, (int) ceil(now()->diffInDays($graceEnd, false)));
     }
 
     /**

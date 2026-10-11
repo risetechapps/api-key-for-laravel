@@ -1,56 +1,50 @@
 <template>
-    <Modal v-model="isOpen" title="Finalizar Assinatura">
-        <!-- Plan summary -->
-        <div class="mb-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="font-semibold text-slate-900 dark:text-white">{{ plan?.name }}</p>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ plan?.description }}</p>
+    <Modal v-model="isOpen" title="Finalizar assinatura" description="Pagamento seguro, processado pelo gateway." size="md">
+        <!-- Resumo do plano -->
+        <div class="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 p-5 text-white">
+            <div aria-hidden="true" class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+            <div class="relative flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                    <p class="text-xs font-medium uppercase tracking-wider text-white/70">Plano</p>
+                    <p class="mt-0.5 truncate text-lg font-bold">{{ plan?.name }}</p>
+                    <p class="text-sm text-white/75 line-clamp-2">{{ plan?.description }}</p>
                 </div>
-                <div class="text-right">
+                <div class="shrink-0 text-right">
                     <template v-if="appliedCoupon">
-                        <p class="text-sm text-slate-400 line-through">{{ plan?.price }}</p>
-                        <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{ formatPrice(appliedCoupon.final_price) }}</p>
+                        <p class="text-sm text-white/60 line-through">{{ plan?.price }}</p>
+                        <p class="text-2xl font-extrabold">{{ formatPrice(appliedCoupon.final_price) }}</p>
                     </template>
-                    <p v-else class="text-xl font-bold text-slate-900 dark:text-white">{{ plan?.price }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">/{{ billingLabel }}</p>
+                    <p v-else class="text-2xl font-extrabold">{{ plan?.price }}</p>
+                    <p class="text-xs text-white/70">por {{ billingLabel }}</p>
                 </div>
             </div>
-            <div v-if="appliedCoupon" class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                    <PhTag :size="16" weight="fill" />
-                    <span class="text-sm font-medium">Cupom {{ appliedCoupon.coupon }}</span>
-                </div>
-                <span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">- {{ formatPrice(appliedCoupon.discount) }}</span>
+            <div v-if="appliedCoupon" class="relative mt-4 flex items-center justify-between border-t border-white/20 pt-3 text-sm">
+                <span class="inline-flex items-center gap-2 font-medium"><PhTag :size="16" weight="fill" class="text-amber-300" /> Cupom {{ appliedCoupon.coupon }}</span>
+                <span class="font-semibold">− {{ formatPrice(appliedCoupon.discount) }}</span>
             </div>
         </div>
 
-        <!-- Coupon field -->
-        <div v-if="!isFree" class="mb-4">
-            <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">Cupom de desconto</label>
-            <div class="flex gap-2">
-                <input
+        <!-- Cupom -->
+        <div v-if="!isFree" class="mb-5">
+            <form class="flex items-end gap-2" @submit.prevent="appliedCoupon ? removeCoupon() : applyCoupon()">
+                <TextInput
                     v-model="couponCode"
-                    type="text"
-                    placeholder="Digite seu cupom"
+                    class="flex-1"
+                    label="Cupom de desconto"
+                    placeholder="Tem um cupom?"
+                    uppercase
+                    mono
+                    :icon="PhTag"
                     :disabled="couponState === 'loading' || !!appliedCoupon"
-                    class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed uppercase"
-                    @keydown.enter.prevent="appliedCoupon ? removeCoupon() : applyCoupon()"
+                    :error="couponState === 'invalid' ? 'Cupom inválido ou expirado.' : ''"
                 />
-                <Button v-if="!appliedCoupon" variant="outline" size="sm" :loading="couponState === 'loading'" :disabled="!couponCode.trim()" @click="applyCoupon">Aplicar</Button>
-                <button v-else @click="removeCoupon" class="px-3 py-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                    <PhX :size="18" />
-                </button>
-            </div>
-            <p v-if="couponState === 'invalid'" class="mt-1.5 text-xs text-red-500 flex items-center gap-1"><PhWarningCircle :size="14" /> Cupom inválido ou expirado.</p>
-            <p v-if="couponState === 'valid'" class="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><PhCheckCircle :size="14" weight="fill" /> Cupom aplicado!</p>
+                <Button v-if="!appliedCoupon" type="submit" variant="outline" :loading="couponState === 'loading'" :disabled="!couponCode.trim()">Aplicar</Button>
+                <Button v-else variant="ghost" square :icon="PhX" aria-label="Remover cupom" @click="removeCoupon" />
+            </form>
         </div>
 
-        <!-- Payment error -->
-        <div v-if="errorMessage" class="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3">
-            <PhWarningCircle :size="18" weight="fill" class="text-red-500 mt-0.5 shrink-0" />
-            <p class="text-sm text-red-700 dark:text-red-400">{{ errorMessage }}</p>
-        </div>
+        <!-- Erro do pagamento -->
+        <Alert v-if="errorMessage" tone="danger" class="mb-5">{{ errorMessage }}</Alert>
 
         <!-- Free plan -->
         <div v-if="isFree" class="text-center py-2">
@@ -58,86 +52,94 @@
             <Button variant="primary" class="w-full" :loading="confirming" @click="confirmFree">Ativar Gratuitamente</Button>
         </div>
 
+        <!-- PIX gerado: QR e espera pela confirmação -->
+        <div v-else-if="pix" class="space-y-4 text-center">
+            <p class="text-sm text-slate-600 dark:text-slate-400">Pague {{ formatPrice(pix.amount) }} com PIX. A confirmação chega sozinha em alguns segundos.</p>
+            <div class="mx-auto w-fit rounded-2xl bg-white p-3 shadow-inner ring-1 ring-slate-200 animate-pop">
+                <img v-if="pix.qr_code_base64" :src="`data:image/png;base64,${pix.qr_code_base64}`" alt="QR code PIX" class="h-52 w-52" />
+            </div>
+            <CopyField v-if="pix.qr_code" :value="pix.qr_code" :wrap="false" />
+            <p class="flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" /><span class="relative inline-flex h-2 w-2 rounded-full bg-amber-500" /></span>
+                Aguardando pagamento · expira às {{ pixExpiresAt }}
+            </p>
+            <a v-if="pix.ticket_url && (!isDriver || gateway === 'stripe')" :href="pix.ticket_url" target="_blank" rel="noopener" class="inline-block text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">{{ isDriver ? 'Ver instruções do PIX' : 'Abrir no Mercado Pago' }}</a>
+        </div>
+
         <!-- Paid plan -->
         <div v-else>
-            <!-- Tabs — only when user has saved cards -->
-            <div v-if="savedCards.length" class="flex mb-5 border-b border-slate-200 dark:border-slate-700">
-                <button
-                    @click="setTab('saved')"
-                    :class="[
-                        'flex-1 py-2.5 text-sm font-semibold border-b-2 transition-colors',
-                        paymentTab === 'saved'
-                            ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-white',
-                    ]"
-                >
-                    <span class="flex items-center justify-center gap-2"><PhCreditCard :size="15" /> Cartão Salvo</span>
-                </button>
-                <button
-                    @click="setTab('new')"
-                    :class="[
-                        'flex-1 py-2.5 text-sm font-semibold border-b-2 transition-colors',
-                        paymentTab === 'new'
-                            ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-white',
-                    ]"
-                >
-                    <span class="flex items-center justify-center gap-2"><PhPlus :size="15" /> Novo Cartão</span>
-                </button>
+            <!-- Período de teste: sem cobrança agora -->
+            <Alert v-if="trialEligible" tone="brand" :title="`${plan.trial_days} dias grátis`" class="mb-5">
+                Cobramos só no fim do teste, se você não cancelar antes.
+                <template #actions><Button size="sm" :loading="confirming" @click="startTrial">Começar teste</Button></template>
+            </Alert>
+
+            <!-- Forma de pagamento -->
+            <Tabs
+                v-if="paymentTabs.length > 1"
+                class="mb-5"
+                variant="pills"
+                :model-value="paymentTab"
+                :tabs="paymentTabs"
+                :animate="false"
+                label="Forma de pagamento"
+                @update:model-value="setTab"
+            />
+
+            <!-- ── PIX tab ── -->
+            <div v-if="paymentTab === 'pix'" class="space-y-4 text-center">
+                <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300"><PhQrCode :size="28" weight="duotone" /></span>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Geramos um QR code válido por 30 minutos. O plano é ativado assim que o pagamento cair.</p>
+                <Button block size="lg" :icon="PhQrCode" :loading="confirming" @click="generatePix">Gerar PIX</Button>
             </div>
 
             <!-- ── Saved card tab ── -->
-            <div v-if="paymentTab === 'saved'">
-                <div class="space-y-2 mb-4">
-                    <div
+            <div v-else-if="paymentTab === 'saved'">
+                <div class="mb-4 space-y-2" role="radiogroup" aria-label="Cartão salvo">
+                    <button
                         v-for="card in savedCards"
                         :key="card.id"
-                        @click="onSelectCard(card)"
+                        type="button"
+                        role="radio"
+                        :aria-checked="selectedCard?.id === card.id"
                         :class="[
-                            'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all',
+                            'flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-[border-color,background-color,box-shadow] duration-150',
                             selectedCard?.id === card.id
-                                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-500'
-                                : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700',
+                                ? 'border-brand-500 bg-brand-50/70 shadow-sm shadow-brand-500/10 dark:bg-brand-500/10'
+                                : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600',
                         ]"
+                        @click="onSelectCard(card)"
                     >
-                        <div class="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center shrink-0">
-                            <PhCreditCard :size="20" class="text-indigo-600 dark:text-indigo-400" />
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium text-slate-900 dark:text-white capitalize">{{ card.brand }} •••• {{ card.last_four }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ card.holder_name }} · {{ card.expiry_month }}/{{ card.expiry_year }}</p>
-                        </div>
-                        <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
-                             :class="selectedCard?.id === card.id ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300 dark:border-slate-600'">
+                        <span class="flex h-10 w-14 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 text-[10px] font-bold uppercase italic text-white">{{ card.brand }}</span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block text-sm font-semibold text-slate-900 dark:text-white">•••• {{ card.last_four }}</span>
+                            <span class="block truncate text-xs text-slate-500 dark:text-slate-400">{{ card.holder_name }} · {{ card.expiry_month }}/{{ String(card.expiry_year).slice(-2) }}</span>
+                        </span>
+                        <span :class="['flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors', selectedCard?.id === card.id ? 'border-brand-600 bg-brand-600' : 'border-slate-300 dark:border-slate-600']">
                             <PhCheck v-if="selectedCard?.id === card.id" :size="11" class="text-white" weight="bold" />
-                        </div>
-                    </div>
+                        </span>
+                    </button>
                 </div>
 
                 <div v-if="selectedCard" class="space-y-3">
+                    <!-- Outros gateways: o cartão salvo é cobrado pelo servidor, sem CVV -->
+                    <template v-if="selectedIsDriver">
+                        <Button block size="lg" :icon="PhLockSimple" :loading="processingCard" @click="submitDriverSaved">
+                            Pagar {{ formatPrice(numericPrice) }}
+                        </Button>
+                    </template>
+
                     <!-- Cartão já vinculado ao MP — CVV apenas -->
-                    <template v-if="selectedCard.mp_card_id">
-                        <div>
-                            <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">CVV</label>
-                            <input
-                                v-model="savedCardForm.cvv"
-                                type="tel"
-                                inputmode="numeric"
-                                maxlength="4"
-                                placeholder="•••"
-                                class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                        </div>
-                        <Button variant="primary" class="w-full" :loading="processingCard" :disabled="(savedCardForm.cvv?.length ?? 0) < 3" @click="submitSavedCard">
+                    <template v-else-if="selectedCard.mp_card_id">
+                        <TextInput v-model="savedCardForm.cvv" type="password" label="CVV" inputmode="numeric" maxlength="4" placeholder="•••" autocomplete="cc-csc" class="max-w-40" hint="Os 3 ou 4 dígitos no verso do cartão." />
+                        <Button block size="lg" :icon="PhLockSimple" :loading="processingCard" :disabled="(savedCardForm.cvv?.length ?? 0) < 3" @click="submitSavedCard">
                             Pagar {{ formatPrice(numericPrice) }}
                         </Button>
                     </template>
 
                     <!-- Cartão ainda não vinculado — confirmação única via Brick -->
                     <template v-else>
-                        <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
-                            Confirme os dados do cartão <strong>****{{ selectedCard.last_four }}</strong> uma única vez. Nas próximas compras será apenas 1 clique.
-                        </div>
+                        <Alert tone="info">Confirme os dados do cartão final {{ selectedCard.last_four }} uma única vez. Nas próximas compras é só o CVV.</Alert>
                         <div v-if="brickLoading" class="space-y-3 py-1">
                             <div class="h-12 bg-slate-200 dark:bg-slate-700 rounded-xl animate-pulse"></div>
                             <div class="grid grid-cols-2 gap-3">
@@ -148,7 +150,15 @@
                         <div id="mp-brick-verify-container" :class="{ hidden: brickLoading }"></div>
                     </template>
                 </div>
-                <p v-else class="text-center text-sm text-slate-400 dark:text-slate-500 py-4">Selecione um cartão acima para continuar.</p>
+                <p v-else class="py-4 text-center text-sm text-slate-400 dark:text-slate-500">Selecione um cartão para continuar.</p>
+            </div>
+
+            <!-- ── New card tab: outros gateways ── -->
+            <div v-else-if="isDriver" class="space-y-4">
+                <GatewayCardFields ref="driverFields" />
+                <Button variant="primary" class="w-full" :loading="processingCard" @click="submitDriverNew">
+                    Pagar {{ formatPrice(numericPrice) }}
+                </Button>
             </div>
 
             <!-- ── New card tab: MP Brick ── -->
@@ -161,7 +171,7 @@
                         <div class="h-12 bg-slate-200 dark:bg-slate-700 rounded-xl animate-pulse"></div>
                     </div>
                     <div class="h-12 bg-slate-200 dark:bg-slate-700 rounded-xl animate-pulse"></div>
-                    <div class="h-12 bg-indigo-200 dark:bg-indigo-900/40 rounded-xl animate-pulse mt-2"></div>
+                    <div class="h-12 bg-brand-200 dark:bg-brand-900/40 rounded-xl animate-pulse mt-2"></div>
                 </div>
                 <div id="mp-brick-container" :class="{ hidden: brickLoading }"></div>
             </div>
@@ -171,13 +181,15 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
-import { PhCheckCircle, PhTag, PhX, PhWarningCircle, PhCreditCard, PhPlus, PhCheck } from '@phosphor-icons/vue';
-import Swal from 'sweetalert2';
+import { PhTag, PhX, PhCreditCard, PhPlus, PhCheck, PhQrCode, PhLockSimple } from '@phosphor-icons/vue';
+import axios from 'axios';
+import { enableAutomaticBilling } from '@/utils/automaticBilling';
+import GatewayCardFields from '@/views/dashboard/GatewayCardFields.vue';
+import { getStripe, isDriverGateway } from '@/utils/gateways';
 import { useAuthStore } from '@/stores/auth';
 import { useDashboardStore } from '@/stores/dashboard';
 import { primeDeviceSession } from '@/mercadopago-device';
-import Modal from '@/views/componentes/Modal.vue';
-import Button from '@/views/componentes/Button.vue';
+import { Alert, Button, CopyField, Modal, Tabs, TextInput, toast } from '@/ui';
 
 const props = defineProps({
     modelValue: { type: Boolean, default: false },
@@ -209,10 +221,119 @@ const isOpen = computed({
     set: (val) => emit('update:modelValue', val),
 });
 
-const savedCards   = computed(() => dashboardStore.savedCards);
+// Gateway ativo: cada um tem o próprio formulário de cartão, e um cartão só
+// pode ser cobrado pelo gateway que o guardou.
+const gateway      = computed(() => authStore.user?.payment_gateway ?? 'mercadopago');
+const isDriver     = computed(() => isDriverGateway(gateway.value));
+// Só o gateway ativo cobra: cartões salvos em outro gateway ficam de fora.
+const savedCards   = computed(() => (dashboardStore.savedCards ?? []).filter(
+    (c) => (c.gateway ?? 'mercadopago') === gateway.value
+));
+const selectedIsDriver = computed(() => isDriverGateway(selectedCard.value?.gateway ?? 'mercadopago'));
+const driverFields = ref(null);
 const rawPrice     = computed(() => props.plan?.raw_price ?? 0);
 const numericPrice = computed(() => appliedCoupon.value ? appliedCoupon.value.final_price : rawPrice.value);
 const isFree       = computed(() => numericPrice.value <= 0);
+const pixEnabled   = computed(() => !!authStore.user?.pix_enabled);
+
+const paymentTabs = computed(() => [
+    ...(savedCards.value.length ? [{ key: 'saved', label: 'Cartão salvo', icon: PhCreditCard }] : []),
+    { key: 'new', label: 'Novo cartão', icon: PhPlus },
+    ...(pixEnabled.value ? [{ key: 'pix', label: 'PIX', icon: PhQrCode }] : []),
+]);
+
+// Mesmas condições do servidor (CheckoutController::trialFor): plano com teste,
+// conta que ainda não usou, e um jeito de cobrar no fim — cartão salvo ou PIX.
+const trialEligible = computed(() =>
+    (props.plan?.trial_days ?? 0) > 0
+    && !!authStore.user?.trial_available
+    && rawPrice.value > 0
+    && (savedCards.value.some((c) => c.mp_card_id || c.automatic_billing) || pixEnabled.value)
+);
+
+const pix        = ref(null);
+const pixCopied  = ref(false);
+let pixTimer     = null;
+const pixExpiresAt = computed(() => pix.value?.expires_at
+    ? new Date(pix.value.expires_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : '');
+
+async function startTrial() {
+    confirming.value = true;
+    errorMessage.value = '';
+    try {
+        const result = await dashboardStore.processCheckout(props.plan.id, {}, null);
+        await handlePaymentResult(result);
+    } catch (err) {
+        errorMessage.value = err?.response?.data?.message || errorMessage.value || 'Não foi possível iniciar o teste.';
+    } finally {
+        confirming.value = false;
+    }
+}
+
+async function generatePix() {
+    confirming.value = true;
+    errorMessage.value = '';
+    try {
+        const result = await dashboardStore.processCheckout(
+            props.plan.id,
+            { payment_method: 'pix', payer: { email: authStore.user?.email?.toLowerCase() ?? '' } },
+            appliedCoupon.value?.coupon ?? null,
+        );
+        await handlePaymentResult(result);
+    } catch (err) {
+        errorMessage.value = err?.response?.data?.message || errorMessage.value || 'Não foi possível gerar o PIX.';
+    } finally {
+        confirming.value = false;
+    }
+}
+
+function stopPixPolling() {
+    if (pixTimer) clearInterval(pixTimer);
+    pixTimer = null;
+}
+
+// Consulta o pagamento enquanto o QR está na tela. Para sozinho no desfecho,
+// na expiração ou ao fechar o modal.
+function startPixPolling() {
+    stopPixPolling();
+    pixTimer = setInterval(async () => {
+        if (!pix.value) return stopPixPolling();
+
+        if (pix.value.expires_at && new Date(pix.value.expires_at) < new Date()) {
+            stopPixPolling();
+            pix.value = null;
+            errorMessage.value = 'O PIX expirou. Gere um novo para continuar.';
+            return;
+        }
+
+        try {
+            const r = await axios.get(`/dashboard/checkout/payments/${pix.value.payment_id}`);
+            const status = r.data?.data?.status;
+            if (status === 'approved') {
+                stopPixPolling();
+                pix.value = null;
+                await handlePaymentResult({ status: 'approved' });
+            } else if (status === 'rejected') {
+                stopPixPolling();
+                pix.value = null;
+                errorMessage.value = 'O PIX não foi concluído. Gere um novo para tentar de novo.';
+            }
+        } catch {
+            // Falha momentânea de rede: a próxima volta tenta de novo.
+        }
+    }, 5000);
+}
+
+async function copyPix() {
+    try {
+        await navigator.clipboard.writeText(pix.value.qr_code);
+        pixCopied.value = true;
+        setTimeout(() => (pixCopied.value = false), 2000);
+    } catch {
+        pixCopied.value = false;
+    }
+}
 
 const billingLabel = computed(() => {
     const c = props.plan?.billing_cycle;
@@ -230,12 +351,13 @@ watch(() => props.modelValue, async (open) => {
         appliedCoupon.value = null;
         selectedCard.value  = null;
         savedCardForm.value = { number: '', cvv: '' };
+        pix.value           = null;
 
         await dashboardStore.fetchSavedCards();
 
         if (!isFree.value) {
             paymentTab.value = savedCards.value.length ? 'saved' : 'new';
-            if (paymentTab.value === 'new') {
+            if (paymentTab.value === 'new' && !isDriver.value) {
                 brickLoading.value = true;
                 await loadMpSdk();
                 setTimeout(() => mountBrick('mp-brick-container'), 350);
@@ -244,6 +366,9 @@ watch(() => props.modelValue, async (open) => {
     } else {
         destroyBrick();
         destroyVerifyBrick();
+        // Fechar o modal não cancela o PIX: se ele for pago depois, o webhook
+        // ativa o plano do mesmo jeito. Só para de consultar.
+        stopPixPolling();
     }
 });
 
@@ -252,6 +377,13 @@ async function setTab(tab) {
     paymentTab.value = tab;
     selectedCard.value = null;
     destroyVerifyBrick();
+    if (tab === 'pix') {
+        destroyBrick();
+        return;
+    }
+    if (tab === 'new' && isDriver.value) {
+        return;
+    }
     if (tab === 'new') {
         brickLoading.value = true;
         await loadMpSdk();
@@ -265,7 +397,7 @@ async function onSelectCard(card) {
     selectedCard.value      = card;
     savedCardForm.value.cvv = '';
     destroyVerifyBrick();
-    if (!card.mp_card_id) {
+    if (!card.mp_card_id && !isDriverGateway(card.gateway ?? 'mercadopago')) {
         brickLoading.value = true;
         await loadMpSdk();
         await nextTick();
@@ -377,7 +509,7 @@ async function confirmFree() {
         await authStore.fetchProfile();
         isOpen.value = false;
         emit('success');
-        await Swal.fire({ icon: 'success', title: 'Plano ativado!', html: `Seu plano <strong>${props.plan?.name}</strong> foi ativado com sucesso.`, confirmButtonText: 'Continuar', confirmButtonColor: '#6366f1' });
+        toast.success('Plano ativado', { description: `Seu plano ${props.plan?.name ?? ''} já está valendo.` });
     } catch (err) {
         errorMessage.value = err?.response?.data?.message || 'Erro ao ativar plano.';
     } finally {
@@ -442,6 +574,22 @@ async function submitSavedCard() {
             });
         }
 
+        // Cartão salvo que ainda não cobra sozinho: um segundo token, gerado
+        // com o mesmo CVV, cria o perfil de Pagamentos Automáticos depois da
+        // compra. Cada token serve uma vez só. Melhor esforço: sem ele a compra
+        // segue igual, e a renovação pede o pagamento pelo painel.
+        let profileToken = null;
+        if (selectedCard.value.mp_card_id && !selectedCard.value.automatic_billing) {
+            try {
+                profileToken = await mp.createCardToken({
+                    cardId:       selectedCard.value.mp_card_id,
+                    securityCode: savedCardForm.value.cvv,
+                });
+            } catch (_) {
+                profileToken = null;
+            }
+        }
+
         const result = await dashboardStore.processCheckout(
             props.plan.id,
             {
@@ -449,6 +597,7 @@ async function submitSavedCard() {
                 installments:      1,
                 payment_method_id: selectedCard.value.brand || detectBrand(savedCardForm.value.number),
                 saved_card_id:     selectedCard.value.id,
+                profile_token:     profileToken?.id ?? undefined,
                 payer,
             },
             appliedCoupon.value?.coupon ?? null
@@ -461,7 +610,90 @@ async function submitSavedCard() {
     }
 }
 
+// Outros gateways, cartão salvo: o servidor cobra pelo cartão guardado lá.
+async function submitDriverSaved() {
+    if (!selectedCard.value) return;
+    processingCard.value = true;
+    errorMessage.value   = '';
+    try {
+        const result = await dashboardStore.processCheckout(
+            props.plan.id,
+            { saved_card_id: selectedCard.value.id },
+            appliedCoupon.value?.coupon ?? null
+        );
+        await handlePaymentResult(result);
+    } catch (err) {
+        errorMessage.value = err?.response?.data?.message || err?.message || 'Pagamento recusado.';
+    } finally {
+        processingCard.value = false;
+    }
+}
+
+// Outros gateways, cartão novo: tokeniza no navegador; o servidor salva e cobra.
+async function submitDriverNew() {
+    processingCard.value = true;
+    errorMessage.value   = '';
+    try {
+        const { token, holder, cpf, extra } = await driverFields.value.tokenize({ forPayment: true });
+        const result = await dashboardStore.processCheckout(
+            props.plan.id,
+            { card_token: token, holder_name: holder, cpf: cpf || undefined, extra },
+            appliedCoupon.value?.coupon ?? null
+        );
+        await handlePaymentResult(result);
+    } catch (err) {
+        errorMessage.value = err?.response?.data?.message || err?.message || 'Pagamento recusado.';
+    } finally {
+        processingCard.value = false;
+    }
+}
+
+/**
+ * O banco pediu autenticação (3DS no Stripe): abre o desafio e, concluído,
+ * pergunta ao servidor como ficou o pagamento.
+ */
+async function completeClientAction(result) {
+    const action = result.client_action;
+    if (action?.type !== 'stripe_next_action') return result;
+
+    const stripe = await getStripe(authStore.user?.payment_gateway_config?.publishable_key);
+    const { error } = await stripe.handleNextAction({ clientSecret: action.client_secret });
+    if (error) return { status: 'rejected', message: error.message || 'A autenticação do cartão não foi concluída.' };
+
+    // O webhook pode chegar antes ou depois: a consulta pergunta ao Stripe.
+    for (let i = 0; i < 5; i++) {
+        try {
+            const r = await axios.get(`/dashboard/checkout/payments/${result.payment_id}`);
+            const status = r.data?.data?.status;
+            if (status === 'approved') return { status: 'approved' };
+            if (status === 'rejected') return { status: 'rejected', message: 'Pagamento recusado.' };
+        } catch {
+            // tenta de novo
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    return { status: 'pending' };
+}
+
 async function handlePaymentResult(result) {
+    if (result?.client_action) {
+        result = await completeClientAction(result);
+    }
+
+    if (result?.status === 'pix') {
+        pix.value = result;
+        startPixPolling();
+        return;
+    }
+
+    if (result?.status === 'trial') {
+        await authStore.fetchProfile();
+        isOpen.value = false;
+        emit('success');
+        toast.success('Teste iniciado', { description: result.message });
+        return;
+    }
+
     if (result?.status === 'approved') {
         // A compra concluiu: a próxima é uma cobrança nova e precisa de chave de
         // idempotência própria, senão o gateway devolveria este mesmo pagamento.
@@ -470,10 +702,23 @@ async function handlePaymentResult(result) {
         await dashboardStore.fetchSavedCards();
         isOpen.value = false;
         emit('success');
-        await Swal.fire({ icon: 'success', title: 'Pagamento aprovado!', html: `Seu plano <strong>${props.plan?.name}</strong> foi ativado com sucesso.`, confirmButtonText: 'Continuar', confirmButtonColor: '#6366f1' });
+        toast.success('Pagamento aprovado', { description: `Seu plano ${props.plan?.name ?? ''} já está valendo.` });
+
+        // Cartão salvo nesta compra sem renovação automática: o Brick gera um
+        // token só, gasto no pagamento. Pede o CVV mais uma vez para ativar.
+        const offer = result?.automatic_billing_offer;
+        if (offer && authStore.user?.mp_automatic_payments) {
+            const publicKey = authStore.user?.mp_public_key
+                || document.querySelector('meta[name="mp-public-key"]')?.getAttribute('content')
+                || '';
+
+            if (await enableAutomaticBilling({ id: offer.card_id, mp_card_id: offer.mp_card_id, last_four: offer.last_four }, publicKey)) {
+                await dashboardStore.fetchSavedCards();
+            }
+        }
     } else if (['pending', 'in_process'].includes(result?.status)) {
         isOpen.value = false;
-        await Swal.fire({ icon: 'warning', title: 'Pagamento em análise', text: 'Seu pagamento está sendo processado. Você será notificado assim que aprovado.', confirmButtonText: 'Ok', confirmButtonColor: '#6366f1' });
+        toast.info('Pagamento em análise', { description: 'Avisamos por e-mail assim que for aprovado.', duration: 7000 });
     } else {
         errorMessage.value = result?.message || 'Pagamento recusado.';
         throw new Error(errorMessage.value);
@@ -484,5 +729,5 @@ function formatPrice(value) {
     return 'R$ ' + Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 }
 
-onBeforeUnmount(() => { destroyBrick(); destroyVerifyBrick(); });
+onBeforeUnmount(() => { destroyBrick(); destroyVerifyBrick(); stopPixPolling(); });
 </script>

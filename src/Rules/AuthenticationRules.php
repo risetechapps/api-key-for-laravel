@@ -16,8 +16,11 @@ class AuthenticationRules implements RulesContract
                 'password_confirmation' => 'bail|required|min:8|same:password',
             ],
 
+            // Sem `exists` no e-mail: a mensagem "não está registrado" dizia a
+            // qualquer um quais e-mails têm conta. O login responde igual para
+            // e-mail inexistente e senha errada.
             'login' => [
-                'email' => 'bail|required|email|max:255|exists:authentications,email',
+                'email' => 'bail|required|email|max:255',
                 'password' => 'bail|required|min:8',
             ],
 

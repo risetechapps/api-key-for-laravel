@@ -53,6 +53,7 @@ class UserRegistrationService
         $plainApiKey = bin2hex(random_bytes(64));
 
         $user->apiKey()->create([
+            'name' => 'Principal',
             'key' => $plainApiKey,
             'active' => false,
         ]);

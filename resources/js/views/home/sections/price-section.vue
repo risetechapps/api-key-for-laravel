@@ -11,16 +11,16 @@
                 <div
                     v-for="plan in pricingPlans"
                     :key="plan.name"
-                    class="relative p-8 rounded-2xl border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10"
+                    class="relative p-8 rounded-2xl border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10"
                     :class="[
                             plan.highlighted
-                                ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20 shadow-xl ' +
-                                 'shadow-indigo-500/10'
-                                : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 ' +
-                                 'dark:hover:border-indigo-700',]">
+                                ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-900/20 shadow-xl ' +
+                                 'shadow-brand-500/10'
+                                : 'border-slate-200 dark:border-slate-700 hover:border-brand-300 ' +
+                                 'dark:hover:border-brand-700',]">
                     <div v-if="plan.highlighted" class="absolute -top-4 left-1/2 -translate-x-1/2">
                             <span
-                                class="bg-indigo-600 text-white text-sm font-semibold px-4 py-1 rounded-full">
+                                class="bg-brand-600 text-white text-sm font-semibold px-4 py-1 rounded-full">
                                 Popular
                             </span>
                     </div>
@@ -52,7 +52,7 @@
                         :to="'/register'"
                         class="block w-full text-center py-3 rounded-xl font-semibold transition-all"
                         :class="plan.highlighted
-                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                ? 'bg-brand-600 hover:bg-brand-700 text-white'
                                 : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 ' +
                                  'text-slate-900 dark:text-white'">
                         Começar

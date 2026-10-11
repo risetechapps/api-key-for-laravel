@@ -17,8 +17,8 @@
                     v-for="feature in features"
                     :key="feature.name"
                     class="group p-6 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200
-                           dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700
-                           transition-all hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1"
+                           dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700
+                           transition-all hover:shadow-xl hover:shadow-brand-500/10 hover:-translate-y-1"
                 >
                     <div
                         class="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
@@ -32,7 +32,7 @@
             </div>
 
             <!-- How it works -->
-            <div class="rounded-3xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800/30 p-8 sm:p-12">
+            <div class="rounded-3xl bg-gradient-to-br from-brand-50 to-brand-50 dark:from-brand-900/20 dark:to-brand-900/20 border border-brand-100 dark:border-brand-800/30 p-8 sm:p-12">
                 <div class="text-center mb-12">
                     <h3 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-3">
                         Como funciona
@@ -42,11 +42,11 @@
 
                 <div class="grid sm:grid-cols-3 gap-8 relative">
                     <!-- Connector line (desktop) -->
-                    <div class="hidden sm:block absolute top-6 left-1/3 right-1/3 h-px bg-gradient-to-r from-indigo-300 to-purple-300 dark:from-indigo-700 dark:to-purple-700"></div>
+                    <div class="hidden sm:block absolute top-6 left-1/3 right-1/3 h-px bg-gradient-to-r from-brand-300 to-brand-300 dark:from-brand-700 dark:to-brand-700"></div>
 
                     <div v-for="step in steps" :key="step.number" class="text-center relative">
-                        <div class="w-12 h-12 rounded-full bg-white dark:bg-slate-800 border-2 border-indigo-300 dark:border-indigo-700 flex items-center justify-center mx-auto mb-4 shadow-md relative z-10">
-                            <span class="text-sm font-bold text-indigo-600 dark:text-indigo-400">{{ step.number }}</span>
+                        <div class="w-12 h-12 rounded-full bg-white dark:bg-slate-800 border-2 border-brand-300 dark:border-brand-700 flex items-center justify-center mx-auto mb-4 shadow-md relative z-10">
+                            <span class="text-sm font-bold text-brand-600 dark:text-brand-400">{{ step.number }}</span>
                         </div>
                         <h4 class="font-semibold text-slate-900 dark:text-white mb-2">{{ step.title }}</h4>
                         <p class="text-sm text-slate-600 dark:text-slate-400">{{ step.description }}</p>
@@ -76,15 +76,15 @@ const features = [
         name: 'API Keys com Hashing',
         description: 'Chaves geradas com 128 caracteres aleatórios e armazenadas com bcrypt. Nunca expostas em texto plano no banco.',
         icon: PhKey,
-        bgClass: 'bg-indigo-100 dark:bg-indigo-900/30',
-        iconClass: 'text-indigo-600 dark:text-indigo-400',
+        bgClass: 'bg-brand-100 dark:bg-brand-900/30',
+        iconClass: 'text-brand-600 dark:text-brand-400',
     },
     {
         name: 'Planos de Assinatura',
         description: 'Crie planos com ciclos mensais, anuais ou customizados. Cada plano define limites de requisições e features habilitadas.',
         icon: PhCreditCard,
-        bgClass: 'bg-purple-100 dark:bg-purple-900/30',
-        iconClass: 'text-purple-600 dark:text-purple-400',
+        bgClass: 'bg-brand-100 dark:bg-brand-900/30',
+        iconClass: 'text-brand-600 dark:text-brand-400',
     },
     {
         name: 'Validação de Origem',
@@ -132,8 +132,8 @@ const features = [
         name: 'Autenticação Sanctum',
         description: 'Tokens pessoais via Laravel Sanctum. Logout revoga todos os tokens ativos. Verificação de e-mail integrada.',
         icon: PhLock,
-        bgClass: 'bg-violet-100 dark:bg-violet-900/30',
-        iconClass: 'text-violet-600 dark:text-violet-400',
+        bgClass: 'bg-brand-100 dark:bg-brand-900/30',
+        iconClass: 'text-brand-600 dark:text-brand-400',
     },
 ];
 

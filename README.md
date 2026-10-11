@@ -31,7 +31,17 @@ Gerenciamento de API keys, planos de assinatura e um painel SPA Vue 3 pronto par
 - **Painel SPA Vue 3** — assets pré-compilados, sem necessidade de Node.js no servidor host
 - **Internacionalização** — inglês e português (pt-BR), detectado automaticamente via `Accept-Language`
 - **Camada de Cache** — suporte a Redis/Memcached para validação de API keys
-- **Suite de Testes** — 351 testes Pest, análise estática com Larastan e estilo com Pint no CI
+- **Várias API keys por conta** — nome, permissões por feature, origens, validade e limite por minuto em cada chave
+- **Limite por minuto** — por chave ou por plano, além da cota do período
+- **PIX e cartão** — PIX no checkout com QR code e confirmação automática; renovação e excedente sem cobrança automática são pagos pelo painel, nunca por e-mail
+- **Novas tentativas de renovação** — cartão recusado na renovação é cobrado de novo em dias configuráveis, com aviso por e-mail
+- **Período de teste** — dias grátis por plano, um teste por conta
+- **Cobrança por excedente** — plano pode seguir atendendo além do limite e cobrar o excedente no fim do período
+- **Recibos** — comprovante de cada pagamento, pronto para imprimir ou salvar em PDF
+- **Webhooks de saída** — eventos da conta assinados com HMAC e enviados ao sistema do cliente, com novas tentativas e histórico
+- **Segurança da conta** — troca de senha e de e-mail, sessões abertas, verificação em duas etapas (TOTP, obrigatória para admin)
+- **Auditoria e métricas** — trilha de quem fez o quê e painel com MRR, cancelamentos, conversão de teste e receita
+- **Suite de Testes** — 538 testes Pest, análise estática com Larastan e estilo com Pint no CI
 
 ## Requisitos
 
@@ -139,14 +149,44 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 | `POST` | `api/v1/logout` | Revogar token atual |
 | `GET` | `api/v1/auth/me` | Obter usuário autenticado |
 | `GET` | `api/v1/email/verify/{id}/{hash}` | Verificar e-mail |
+| `POST` | `api/v1/email/resend` | Reenviar o e-mail de verificação |
+| `POST` | `api/v1/login/two-factor` | Segundo passo do login com 2FA (`challenge` + `code` ou `recovery_code`) |
+| `GET` | `api/v1/email/change/{id}/{hash}` | Link de confirmação da troca de e-mail |
 | `POST` | `api/v1/forgot-password` | Enviar e-mail de redefinição de senha |
 | `POST` | `api/v1/reset-password` | Redefinir senha com token |
 | `GET` | `api/v1/dashboard/plans` | Listar planos disponíveis |
 | `POST` | `api/v1/dashboard/checkout/process` | Processar pagamento |
 | `POST` | `api/v1/dashboard/checkout/coupon` | Validar cupom |
 | `POST` | `api/v1/dashboard/checkout/webhook` | Webhook do MercadoPago |
+| `POST` | `api/v1/dashboard/checkout/webhook/{gateway}` | Webhook de `stripe`, `efi`, `pagbank` e `pagarme` |
+| `POST` | `api/v1/dashboard/cards/setup-intent` | Stripe: abre o SetupIntent que o navegador confirma com o cartão |
 | `GET` | `api/v1/dashboard/profile` | Obter perfil |
 | `PUT` | `api/v1/dashboard/profile` | Atualizar perfil |
+| `GET` | `api/v1/dashboard/profile/export` | Baixar todos os dados da conta em JSON (LGPD) |
+| `DELETE` | `api/v1/dashboard/profile` | Excluir a própria conta; pede `password` (LGPD) |
+| `PUT` | `api/v1/dashboard/profile/password` | Trocar a senha (`current_password`, `password`, `password_confirmation`) |
+| `POST` | `api/v1/dashboard/profile/email` | Pedir troca de e-mail (`email`, `password`); vale após confirmar pelo link |
+| `GET/DELETE` | `api/v1/dashboard/sessions` | Listar sessões / encerrar todas as outras |
+| `DELETE` | `api/v1/dashboard/sessions/{id}` | Encerrar uma sessão |
+| `POST/DELETE` | `api/v1/dashboard/two-factor` | Iniciar ativação (devolve segredo e `otpauth://`) / desativar; pedem `password` |
+| `POST` | `api/v1/dashboard/two-factor/confirm` | Confirmar com o código e receber os códigos de recuperação |
+| `POST` | `api/v1/dashboard/two-factor/recovery-codes` | Gerar novos códigos de recuperação |
+| `GET/POST` | `api/v1/dashboard/api-keys` | Listar / criar chave (o texto da chave só vem na criação) |
+| `PUT/DELETE` | `api/v1/dashboard/api-keys/{id}` | Editar (nome, `scopes`, origens, validade, limite por minuto) / revogar |
+| `POST` | `api/v1/dashboard/api-keys/{id}/regenerate` | Trocar o segredo da chave |
+| `GET/POST` | `api/v1/dashboard/webhooks` | Listar / cadastrar webhook (o segredo só vem na criação) |
+| `PUT/DELETE` | `api/v1/dashboard/webhooks/{id}` | Editar / excluir |
+| `POST` | `api/v1/dashboard/webhooks/{id}/rotate-secret` | Novo segredo de assinatura |
+| `POST` | `api/v1/dashboard/webhooks/{id}/test` | Enviar evento de teste |
+| `GET` | `api/v1/dashboard/webhooks/{id}/deliveries` | Últimas 50 entregas |
+| `POST` | `api/v1/dashboard/webhooks/{id}/deliveries/{deliveryId}/redeliver` | Reenviar uma entrega |
+| `GET` | `api/v1/dashboard/checkout/payments/{paymentId}` | Situação de um pagamento pendente (PIX) |
+| `GET/PUT` | `api/v1/dashboard/billing/overage` | Ver / alterar a escolha de excedente (`enabled`, `spend_cap` em reais); inclui os excedentes em aberto (`unpaid`) |
+| `POST` | `api/v1/dashboard/billing/overage/{id}/pix` | Gerar o PIX de um excedente em aberto |
+| `POST` | `api/v1/dashboard/billing/overage/{id}/card` | Pagar um excedente em aberto com um cartão salvo (`card_id`; `token` com o CVV no Mercado Pago) |
+| `GET` | `api/v1/dashboard/billing/renewal` | Renovação esperando o assinante (inclusive em carência), com o plano para o checkout |
+| `GET` | `api/v1/dashboard/receipts` | Recibos da conta |
+| `GET` | `api/v1/dashboard/receipts/{id}` | Recibo em HTML (`?kind=overage` para o de excedente) |
 | `POST` | `api/v1/dashboard/profile/regenerate-key` | Regenerar API key |
 | `GET` | `api/v1/dashboard/cards` | Listar cartões salvos |
 | `POST` | `api/v1/dashboard/cards` | Adicionar cartão |
@@ -159,19 +199,83 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 | `GET` | `api/v1/dashboard/log` | Log de requisições (ordenado do mais recente) |
 | `GET` | `api/v1/dashboard/stats` | Estatísticas agregadas do dashboard (uso, restantes, hoje) |
 
-Rotas exclusivas de admin (requerem middleware `admin`):
+Rotas da equipe do painel. O middleware `admin:<permissão>` exige o papel certo (tabela abaixo); `admin` sem parâmetro vale `manage`, que só o papel `admin` tem. Toda a equipe precisa de 2FA quando `API_KEY_2FA_REQUIRED_FOR_ADMINS=true`.
+
+| Papel (`role`) | `view` | `accounts` | `billing` | `manage` |
+|---|---|---|---|---|
+| `admin` | ✓ | ✓ | ✓ | ✓ |
+| `finance` | ✓ | | ✓ | |
+| `support` | ✓ | ✓ | | |
+
+- `view`: usuários e ficha, cobranças, inadimplência, estornos (lista), métricas, auditoria, logs e saúde.
+- `accounts`: reenviar verificação, encerrar sessões e desativar API keys de um usuário.
+- `billing`: estornar, cancelar ou estender assinatura, ajustar consumo, tentar a renovação de novo, perdoar excedente e exportar CSV.
+- `manage`: planos, cupons, gateways, papéis, suspender conta, conceder plano e desligar a 2FA de alguém. Desligar 2FA fica só com o admin porque é o pedido que um golpe de engenharia social faria ao suporte.
+
+O papel é trocado em Admin → Usuários → ficha → **Alterar papel**, ou pelo `admin:make` para o primeiro admin. Ninguém muda o próprio papel, e quem perde permissões tem as sessões encerradas.
 
 | Método | URI | Descrição |
 |--------|-----|-----------|
+| `GET` | `api/v1/dashboard/admin/users/{id}` | Ficha: assinaturas, pagamentos, cartões, API keys, sessões, excedente em aberto e auditoria |
+| `GET` | `api/v1/dashboard/admin/payments` | Cobranças de todos os gateways, com filtros (`status`, `gateway`, `from`, `to`, `search`) e totais |
+| `GET` | `api/v1/dashboard/admin/delinquency` | Renovações em nova tentativa, esperando o assinante, e excedente não pago |
+| `GET` | `api/v1/dashboard/admin/export/{payments\|refunds\|users}` | CSV (separador `;`, com BOM) |
+| `GET` | `api/v1/dashboard/admin/health` | Saúde: gateway, último webhook, rotinas agendadas, fila e pagamentos parados |
+| `POST` | `api/v1/dashboard/admin/users/{id}/subscriptions/{planId}/{cancel\|extend\|retry-renewal\|waive-overage}` | Ações sobre a assinatura (`extend` recebe `days`) |
+| `PUT` | `api/v1/dashboard/admin/users/{id}/subscriptions/{planId}/usage` | Ajustar `requests_used` do período |
+| `POST` | `api/v1/dashboard/admin/users/{id}/{verification\|sessions/revoke\|api-keys/revoke\|two-factor/reset}` | Ações sobre a conta |
+| `PUT` | `api/v1/dashboard/admin/users/{id}/role` | Papel: `admin`, `finance`, `support` ou `client` |
+| `GET/PUT` | `api/v1/dashboard/admin/payment-settings` | Gateway ativo e credenciais |
+| `POST` | `api/v1/dashboard/admin/payment-settings/test/{gateway}` | Testar a conexão com o gateway |
 | `POST/PUT/DELETE` | `api/v1/dashboard/plans/{plan}` | Criar / atualizar / excluir planos |
 | `POST/PUT/DELETE` | `api/v1/dashboard/coupons/{coupon}` | Criar / atualizar / excluir cupons |
 | `GET` | `api/v1/dashboard/admin/plans` | Listar todos os planos (visão admin) |
 | `GET` | `api/v1/dashboard/admin/users` | Listar usuários com assinaturas |
+| `PUT` | `api/v1/dashboard/admin/users/{id}/status` | Suspender ou reativar (`status`: `enabled`, `disabled`, `blocked`) |
+| `POST` | `api/v1/dashboard/admin/users/{id}/plan` | Conceder plano sem cobrança (`plan_id`) |
 | `GET` | `api/v1/dashboard/admin/refunds` | Listar pagamentos com opção de estorno |
 | `POST` | `api/v1/dashboard/admin/refunds/{id}` | Processar estorno via MercadoPago |
 | `GET` | `api/v1/dashboard/admin/features` | Listar features registradas (`FeatureRegistry`) |
 | `GET` | `api/v1/dashboard/admin/logs` | Listar logs e exceções, com filtros |
 | `GET` | `api/v1/dashboard/admin/logs/{id}` | Detalhe de um registro |
+| `GET` | `api/v1/dashboard/admin/metrics` | MRR, assinantes, cancelamento, receita, conversão de teste |
+| `GET` | `api/v1/dashboard/admin/audit` | Trilha de auditoria (`action`, `actor_id`, `subject_id`) |
+
+Com `two_factor.required_for_admins` ligado (padrão), as rotas de admin respondem 403 com `code: two_factor_required` até o admin ativar a verificação em duas etapas no perfil.
+
+### Proteções das rotas embutidas
+
+- **Sem enumeração de contas.** Login, esqueci a senha e reenvio de verificação respondem igual para e-mail cadastrado ou não. O login confere a senha antes de dizer que a conta está sem verificação ou suspensa.
+- **Limite de tentativas.** As rotas públicas de autenticação (`register`, `login`, `forgot-password`, `reset-password`, `email/resend`) dividem o limite `auth_throttle`, por IP. Checkout, validação de cupom e cadastro de cartão dividem o `payment_throttle`, por usuário: sem ele, o cadastro de cartão, que faz uma cobrança de validação, serve para testar cartões roubados em massa. A exclusão de conta tem contador próprio.
+- **Contas suspensas.** Com `status` diferente de `enabled`, a conta não entra no painel (middleware `active.user`, aplicado às rotas `auth:sanctum` do pacote) nem usa a API key. Suspender revoga os tokens; a chave continua a mesma e volta a funcionar ao reativar.
+
+### Exclusão de conta e exportação de dados
+
+`DELETE api/v1/dashboard/profile` anonimiza a conta em vez de apagar a linha: nome, e-mail, documentos, telefones, endereço, foto, cartões salvos, log de requisições, API key e tokens saem; a assinatura em curso é encerrada na hora, sem estorno. As assinaturas pagas ficam, ligadas à conta anonimizada, porque são registro de pagamento que a lei manda guardar e o que sustenta uma contestação. O e-mail original fica livre para um cadastro novo. Contas de admin não podem se excluir pelo painel.
+
+`GET api/v1/dashboard/profile/export` devolve, em JSON, perfil, endereço, configuração da API key (sem a chave), assinaturas, cartões (só bandeira e últimos dígitos) e o log de requisições, escrito por cursor para não montar tudo na memória.
+
+### Segurança da conta
+
+- **Troca de senha** pede a senha atual e encerra as outras sessões; a atual continua.
+- **Troca de e-mail** grava o endereço novo em `pending_email` e só troca quando o dono dele clica no link (60 minutos). O endereço antigo é avisado.
+- **Sessões**: cada login grava IP e navegador no token (`personal_access_tokens.device`), e o painel lista e encerra sessões.
+- **Verificação em duas etapas (TOTP)**: compatível com Google Authenticator, Authy e afins, sem dependência extra. Com 2FA, `POST login` devolve `{ two_factor: true, challenge }` em vez do token; o token vem de `POST login/two-factor`. O desafio vale 5 minutos, o mesmo código não passa duas vezes, e cada um dos 8 códigos de recuperação vale uma vez. Segredo e códigos ficam cifrados com a `APP_KEY`.
+- Toda alteração de segurança manda e-mail ao dono e entra na auditoria.
+
+### Várias API keys
+
+Cada conta pode ter até `api_keys.max_per_user` chaves (padrão 5), cada uma com nome, `scopes` (features que ela pode chamar; vazio = todas as do plano), origens permitidas, validade e limite por minuto próprio. `apiKey()` continua sendo a chave principal (a mais antiga) e `apiKeys()` traz todas. O campo `active` acompanha o plano: vencer desativa todas, assinar reativa todas. Revogar apaga a chave, e a última não pode ser revogada.
+
+### Limite por minuto
+
+O middleware `api.key.rate`, no grupo `plan` logo depois do `api.key`, limita requisições por minuto por chave: o limite da chave, ou o do plano (`rate_limit_per_minute`), ou `rate_limit.per_minute`. Sem nenhum, não limita. A resposta traz `X-RateLimit-Limit` e `X-RateLimit-Remaining`; acima do limite, 429 com `Retry-After`, sem gastar a cota. Se você define `middleware_group.plan` na config, inclua `api.key.rate` na lista.
+
+### Webhooks de saída
+
+O cliente cadastra URLs HTTPS que recebem eventos da conta: `subscription.activated`, `subscription.changed`, `subscription.cancelled`, `subscription.expired`, `subscription.grace_period_started`, `subscription.refunded`, `subscription.renewal_failed`, `subscription.payment_required`, `payment.rejected`, `billing.overage_charged`, `usage.threshold_reached`, `usage.limit_reached` e `usage.overage_started`. Os de uso saem uma vez por período.
+
+Cada entrega é um `POST` JSON `{id, event, created_at, data}` com `X-Webhook-Signature: sha256=HMAC(segredo, timestamp + "." + corpo)` e `X-Webhook-Timestamp`. Qualquer 2xx conta como entregue; falhas voltam para a fila em 1 min, 5 min, 15 min, 1 h e 6 h. Depois de `webhooks.disable_after_failures` entregas perdidas seguidas, o endpoint é desligado. Endereços privados, de loopback e reservados são recusados no cadastro e de novo a cada entrega (proteção contra SSRF), e redirecionamentos não são seguidos.
 
 ### Registro manual de rotas com `RoutesApiKey`
 
@@ -304,13 +408,29 @@ Upgrade para o Plano B (R$99,00):
 
 A ordem de aplicação é **preço → cupom → crédito**, então um cupom percentual incide sobre o preço cheio do plano, não sobre o valor já creditado. Se o crédito cobrir o total, a assinatura é ativada sem cobrança.
 
-O crédito é proporcional à duração real da assinatura corrente (`start_date` → `end_date`), não ao ciclo nominal do plano — um período que já tinha sido encurtado por uma troca anterior é medido corretamente. Vale zero para plano gratuito, assinatura inativa ou período já vencido (inclusive dentro da carência).
+O crédito é proporcional à duração real da assinatura corrente (`start_date` → `end_date`), não ao ciclo nominal do plano — um período que já tinha sido encurtado por uma troca anterior é medido corretamente. A base é o que o período **custou de fato** (`payment_amount` + `credit_applied`, até o preço do plano), não o preço de tabela: quem pagou com cupom de 60% leva crédito sobre os 40% pagos. Vale zero para plano gratuito, período de teste, plano concedido pelo admin, assinatura inativa ou período já vencido (inclusive dentro da carência). Assinaturas antigas, sem `payment_amount`, valem o preço do plano.
 
-O valor creditado fica registrado em `user_plans.credit_applied`. Sem essa coluna, um `payment_amount` abaixo do preço do plano seria indistinguível entre desconto de cupom e crédito de troca.
+O crédito que a compra usou fica registrado em `user_plans.credit_applied`; o que sobra, quando o crédito passa do preço do plano novo, não vira saldo. Sem essa coluna, um `payment_amount` abaixo do preço do plano seria indistinguível entre desconto de cupom e crédito de troca.
 
 ```php
 $credito = $user->activePlan()->with('plan')->first()?->unusedCredit();
 ```
+
+### Período de teste
+
+Com `trial_days` no plano, a primeira assinatura de uma conta começa em teste: sem cobrança, com `is_trial = true` e vencimento em `trial_days`. No fim, a renovação normal cobra o cartão salvo (ou manda o PIX). Vale uma vez por conta (`trial_used_at`) e não vale para quem já pagou alguma assinatura. Sem cartão salvo, o teste só é oferecido com o PIX ligado.
+
+### Cobrança por excedente
+
+Com `overage_price` no plano, o assinante **pode** ligar o excedente em Painel → Faturamento. Ele vem **desligado por padrão**: sem a escolha do cliente, o limite do plano bloqueia como sempre. Ligado, a cota não bloqueia no limite e continua atendendo até o menor entre `overage_max_requests` do plano e o teto de gasto que o próprio assinante definir (`overage_spend_cap`, em reais), ou sem teto se nenhum dos dois existir. Ao passar do limite, o assinante recebe um aviso (e-mail e webhook `usage.overage_started`) uma vez por período, enquanto ainda pode desligar. O excedente é cobrado depois que o período termina, pelo `billing:charge-overage`: no cartão salvo, pelo perfil de Pagamentos Automáticos ou quando a conta permite cobrar sem CVV. Senão (sem cartão, ou conta que exige CVV), o assinante é avisado e paga pelo painel em Faturamento → "Excedente a pagar", escolhendo um cartão salvo ou PIX. No cartão do Mercado Pago sem renovação automática, o painel pede o CVV (que vira token no navegador); nos outros gateways o cartão salvo é cobrado direto. Valores abaixo de `billing.overage_minimum_charge` são perdoados. Sem `overage_price`, o limite bloqueia como antes.
+
+### Novas tentativas de renovação
+
+Quando o cartão é recusado na renovação, o pacote tenta de novo em `billing.retry_days` (padrão `1,3,5` dias depois do vencimento) e avisa o assinante a cada falha. Enquanto houver tentativa marcada, o `check-expired-plans` não encerra a assinatura; o acesso segue o período de carência. Cadastrar um cartão novo nesse meio-tempo dispara a cobrança na hora. Depois da última tentativa, a assinatura expira normalmente.
+
+### Recibos
+
+`GET dashboard/receipts/{id}` devolve o recibo de um pagamento em HTML, pronto para imprimir ou salvar em PDF pelo navegador. Os dados do emissor vêm de `receipt.*`. O recibo comprova o pagamento e não substitui a nota fiscal.
 
 ### Como a cota é contada
 
@@ -409,6 +529,97 @@ FeatureRegistry::sync();        // upsert de todas as features no banco
 
 ---
 
+## Gateways de pagamento
+
+O pacote fala com **Mercado Pago**, **Stripe**, **Efí** e **PagBank** (e **Pagar.me**, que fica fora do seletor: o Pagar.me não aceita mais cadastro novo). Um gateway fica ativo por vez e atende tudo: checkout, cadastro de cartão e PIX. A escolha e as credenciais ficam em **Painel → Admin → Gateways**:
+
+- O que for salvo lá vale por cima do `.env`, criptografado no banco (`api_key_settings`) com a `APP_KEY`. Uma chave sem valor salvo continua vindo do `.env`, então instalações configuradas só por `.env` não mudam nada.
+- Credenciais nunca voltam para a tela, que mostra só se há valor e os últimos caracteres. Deixar um segredo em branco ao salvar mantém o atual.
+- Cada gateway tem **Testar conexão**. No Mercado Pago, o teste também diz se a conta tem os Pagamentos Automáticos liberados.
+- Toda alteração entra na auditoria (`admin.payment_settings_updated`), só com o nome das chaves.
+- Os workers da fila reaplicam as configurações antes de cada job, sem precisar reiniciar.
+
+**Trocar de gateway** muda tudo de uma vez: só o gateway ativo cobra, no checkout, na renovação e no excedente. Cartões salvos em outro gateway ficam **fora de uso** (`usable: false` em `/dashboard/cards`, marcados assim no painel) até o assinante cadastrar um cartão no gateway atual. Nesse intervalo a renovação pede o pagamento pelo painel com o motivo `card_out_of_use`, e o e-mail pede um cartão novo. A cobrança automática usa o cartão padrão quando ele é do gateway ativo, ou o mais recente do gateway ativo. Pagamentos já feitos continuam ligados ao gateway de origem para estorno e reconciliação, pelo prefixo do id.
+
+O id do pagamento diz de onde ele veio, e é por ele que o estorno, a reconciliação e o webhook escolhem o gateway:
+
+| Prefixo | Gateway |
+|---|---|
+| numérico | Mercado Pago (pagamento) |
+| `ORD…` | Mercado Pago (order dos Pagamentos Automáticos) |
+| `pi_…` | Stripe |
+| `efi_…` / `efipix_…` | Efí (cartão / PIX) |
+| `ORDE_…` | PagBank |
+| `or_…` | Pagar.me |
+
+Nos gateways além do Mercado Pago, todo cartão salvo já sai com **renovação automática sem CVV**. Webhook nunca decide nada sozinho: o corpo diz só qual pagamento mudou, e o pacote consulta o pagamento na API do gateway antes de agir.
+
+### Stripe
+
+- **Cartão:** Stripe Elements no navegador confirma um SetupIntent (`usage: off_session`), aberto por `POST dashboard/cards/setup-intent`. O servidor recebe só o id do SetupIntent e confere que ele foi aberto para o mesmo usuário. O cartão fica no cliente do Stripe como PaymentMethod.
+- **Cobrança:** PaymentIntent. Na compra vai `on_session`: se o banco pedir 3DS, o checkout responde `pending` com `client_action` e o painel abre o desafio (`stripe.handleNextAction`). Renovação e excedente vão `off_session`, sem CVV; pedido de autenticação ali vira recusa, e o assinante paga pelo painel.
+- **PIX:** só em conta Stripe brasileira, de R$ 0,50 a R$ 3.000,00 por pagamento. Ative o PIX em *Settings → Payment methods*.
+- **Webhook:** cadastre `api/v1/dashboard/checkout/webhook/stripe` com `payment_intent.succeeded`, `payment_intent.payment_failed` e `payment_intent.canceled`, e copie o signing secret (`whsec_…`). Com ele configurado, a assinatura `Stripe-Signature` é conferida (janela de 5 minutos).
+
+```env
+API_KEY_PAYMENT_GATEWAY=stripe
+STRIPE_PUBLISHABLE_KEY=pk_...
+STRIPE_SECRET_KEY=sk_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PIX_ENABLED=true
+```
+
+### Efí
+
+- **Cartão:** a biblioteca da Efí (`payment-token-efi`) gera no navegador um `payment_token` reutilizável (`reuse: true`), com o identificador de conta. O token fica salvo e cobra as próximas vezes sem CVV pela API de Cobranças (`/v1/charge/one-step`).
+- **Perfil completo:** a Efí exige na cobrança de cartão **CPF, celular, data de nascimento e endereço** do titular. O cadastro do cartão já confere isso e pede para completar o perfil, para a renovação não falhar depois. A Efí não valida o cartão sem cobrar: ele é conferido na primeira cobrança.
+- **PIX:** pela API Pix, que exige o **certificado da aplicação** (`.p12`) em toda chamada. Envie o certificado pelo painel (fica criptografado no banco) ou ponha o conteúdo em base64 em `EFI_PIX_CERTIFICATE`. O pacote grava o certificado num arquivo temporário (0600) só durante a chamada. O QR leva o CPF do cliente.
+- **Notificações:** a do cartão vai em cada cobrança (`notification_url`), para `api/v1/dashboard/checkout/webhook/efi`, sem cadastro; só funciona com a aplicação em HTTPS. O webhook do PIX da Efí exige mTLS no seu servidor, e o pacote não depende dele: o painel consulta a cobrança enquanto mostra o QR, e o `api-key:reconcile-payments` cobre o resto.
+- `EFI_SANDBOX=true` usa as APIs de homologação, com credenciais e certificado de homologação.
+- **Cuidados na configuração** (todos apareceram em teste real; o **Testar conexão** do painel acusa os dois primeiros):
+  - O **identificador de conta** é o código de 32 caracteres de *API → Introdução → Identificador de conta*, não o número da conta (`123456-7`). Com o número, a Efí recusa o token do cartão.
+  - A **chave PIX** precisa estar cadastrada na **mesma conta** das credenciais. Chave aleatória é conferida no teste de conexão; CPF, e-mail ou telefone, só na primeira cobrança.
+  - A aplicação precisa dos escopos da **API de Cobranças** e da **API Pix**, e a conta precisa do **ramo de atividade** cadastrado para cobrar cartão.
+
+```env
+API_KEY_PAYMENT_GATEWAY=efi
+EFI_CLIENT_ID=Client_Id_...
+EFI_CLIENT_SECRET=Client_Secret_...
+EFI_ACCOUNT_ID=...
+EFI_PIX_ENABLED=true
+EFI_PIX_KEY=sua-chave-pix
+```
+
+### PagBank
+
+- **Cartão:** criptografado no navegador com a chave pública da conta (`PagSeguro.encryptCard`) e trocado por um cartão salvo (`CARD_…`). Sem `PAGBANK_PUBLIC_KEY`, o pacote cria a chave pública na primeira vez e guarda em cache.
+- **Cobrança sem CVV:** a compra com cartão novo abre a recorrência (`recurring: INITIAL`) com o CVV digitado, que só passa pelo servidor e nunca é gravado nem registrado. Renovação e excedente vão como `SUBSEQUENT`, pelo id do cartão.
+- **Referência:** o PagBank aceita até 64 caracteres em `reference_id`. Renovação e excedente vão na forma curta (`rn-<assinatura>`, `ov-<assinatura>`); a compra é achada pelo registro de espera.
+- **Notificação:** vai em cada pedido (`notification_urls`), para `api/v1/dashboard/checkout/webhook/pagbank`, e é conferida pelo `x-authenticity-token` (sha256 do token da conta com o corpo). Só funciona com a aplicação em HTTPS.
+
+```env
+API_KEY_PAYMENT_GATEWAY=pagbank
+PAGBANK_TOKEN=...
+PAGBANK_PIX_ENABLED=true
+```
+
+### Pagar.me
+
+Fica no pacote para quem já tem conta, mas fora do seletor do painel (`payment.hidden_gateways`): o cadastro novo no Pagar.me vai para a Stone. Para usar, ative pelo `.env` (`API_KEY_PAYMENT_GATEWAY=pagarme`), e ele volta a aparecer no painel.
+
+- **Cartão:** tokenizado no navegador, direto na API do Pagar.me (`POST /core/v5/tokens?appId=<chave pública>`), e salvo com validação de valor zero (`verify_card`). Cadastre o domínio do painel no Pagar.me, senão a tokenização é recusada.
+- **Cobrança sem CVV:** a compra vai como `recurrence_cycle: first`; renovação e excedente como `subsequent`, com `payment_origin.charge_id` da primeira cobrança.
+- **PIX:** exige **CPF e celular** do cliente.
+- **Webhook:** `api/v1/dashboard/checkout/webhook/pagarme`, com os eventos de pedido. O Pagar.me não assina a notificação; com usuário e senha configurados, a URL exige Basic Auth.
+
+### Outro gateway
+
+Cada gateway é um driver que implementa `RiseTechApps\ApiKey\Contracts\CardGateway` (salvar e remover cartão, cobrar, PIX, consultar, estornar e ler o webhook), registrado em `GatewayRegistry::DRIVERS`. Os drivers devolvem os pagamentos num formato único (`id`, `status`, `status_detail`, `external_reference`, `transaction_amount`, `payment_method_id`), e é isso que mantém renovação, excedente, webhook, reconciliação e estorno iguais para todos.
+
+**Mensagens de erro:** só o texto de `RiseTechApps\ApiKey\Exceptions\PaymentMessageException` chega à tela. Use-a para o que o cliente precisa ler ("cartão recusado na validação", "complete o CPF no perfil"). Qualquer outra exceção (HTTP 500 do gateway, resposta inesperada) aparece como "Erro ao processar pagamento", com o detalhe só no log.
+
+**No front-end:** `/auth/me` traz `payment_gateway` (o gateway ativo), `payment_gateway_config` (o que o navegador precisa para tokenizar o cartão: chave pública, identificador de conta, ambiente; nunca segredos) e `pix_enabled`. Os cartões de `/dashboard/cards` trazem `gateway`, `usable` e `automatic_billing`. A tokenização de cada gateway está em `resources/js/utils/gateways.ts`, e o formulário em `GatewayCardFields.vue`.
+
 ## MercadoPago
 
 ### Configuração
@@ -450,6 +661,8 @@ O MercadoPago entrega em **dois formatos**, e o endpoint aceita os dois:
 | Assinatura | `x-signature` + `x-request-id` | nenhuma, por definição |
 
 O caminho é escolhido pela presença do header `x-signature`. Assinado segue com validação HMAC, e segredo ausente fecha a porta: um endpoint que aceita qualquer assinatura é o mesmo que não ter assinatura. Assinatura presente e inválida continua sendo recusa.
+
+Além de `payment`, o webhook trata `order` (cobranças dos Pagamentos Automáticos, consultadas na Orders API e aplicadas pelo mesmo serviço dos pagamentos comuns) e `payment_profile` (atualiza o status do perfil do cartão). Outros tópicos respondem 200 e são ignorados.
 
 O IPN chega justamente porque o pagamento carrega `notification_url`, e **não tem HMAC a conferir**. Quem verifica é o pacote, indo buscar o pagamento na API com o seu access token — só pagamentos da sua própria conta produzem efeito. Como é verificação mais fraca, dá para recusar o formato com `MP_ACCEPT_IPN=false`; nesse caso remova também o `notification_url`, senão o gateway reentrega indefinidamente contra um 400.
 
@@ -493,6 +706,35 @@ await axios.post('/dashboard/checkout/process', { plan_id, token, idempotency_ke
 O caso perigoso não é o usuário desatento, é a rede: a cobrança é aceita, a resposta se perde num timeout, e ninguém consegue distinguir "não aconteceu" de "aconteceu e a resposta sumiu". O comprador olhando o spinner clica de novo e paga duas vezes.
 
 Sem o campo, o pacote deriva uma chave de quem paga, o quê, quanto e com qual token de cartão. Como o token do MercadoPago é de uso único, um retry que reaproveita o mesmo token é reconhecido como a mesma tentativa — mas uma re-tokenização vira cobrança nova. Por isso o cliente deve mandar a sua.
+
+### PIX
+
+Com `MP_PIX_ENABLED=true` (e uma chave PIX cadastrada na conta do Mercado Pago), o checkout aceita `payment_method: "pix"`: a resposta traz `qr_code`, `qr_code_base64`, `ticket_url` e `payment_id`, e o QR vale `MP_PIX_EXPIRATION_MINUTES` (mínimo 30). O plano é ativado pelo webhook quando o pagamento cai; o painel consulta `dashboard/checkout/payments/{paymentId}` enquanto mostra o QR. Cupom e crédito de troca de plano funcionam como no cartão.
+
+O QR do PIX é **sempre gerado no painel**, a pedido do assinante, e nunca vai por e-mail: cobrança dentro de e-mail é o formato que filtros de spam e golpes exploram, e uma entrega falha derrubaria a cobrança junto.
+
+### Renovação que o assinante conclui pelo painel
+
+A renovação só é automática quando o cartão salvo pode ser cobrado sem o cliente presente. Quando não pode, o pacote não tenta de novo nem envia cobrança: marca a assinatura (`renewal_requires_payment`), avisa por e-mail e pelo webhook `subscription.payment_required`, e o painel mostra **"Renovar agora"**, que abre o checkout do mesmo plano (PIX ou cartão com CVV). O acesso segue até o fim da carência. Os motivos são:
+
+- `no_card`: não há cartão salvo;
+- `pix`: o assinante paga com PIX;
+- `cvv_required`: a conta do Mercado Pago exige o CVV em toda cobrança com cartão salvo (`security_code_id can't be null`).
+
+### Cobrança sem CVV (Pagamentos Automáticos)
+
+O fluxo comum de cartão salvo (`/v1/payments`) exige um token novo a cada cobrança, e a conta do Mercado Pago pode exigir o CVV para gerá-lo, o que é impossível numa renovação sem o titular presente. Para isso o pacote integra os **Pagamentos Automáticos** do Mercado Pago:
+
+1. **Perfil de pagamento.** Quando o titular digita o CVV (ao cadastrar o cartão, ou ao pagar com um cartão salvo que ainda não tem perfil), o painel gera um segundo token do mesmo cartão, e o pacote cria o perfil em `POST /v1/customers/{id}/payment-profiles`. O gateway valida o cartão sozinho, com uma autorização de R$ 0,00. O cartão passa a mostrar "Renovação automática ativa" em Faturamento (`automatic_billing` na listagem de cartões).
+2. **Cobrança.** A renovação e o excedente de um cartão com perfil vão pela Orders API (`POST /v1/orders`) com o perfil e `stored_credential` iniciado pelo vendedor, sem token e sem CVV. A cobrança fica registrada pelo id da order (`ORD…`) em `payment_id`, e é por ele que o webhook, a reconciliação e o estorno a encontram.
+
+A solução **precisa de autorização da equipe Comercial do Mercado Pago**. Enquanto a conta não for autorizada, o gateway responde 403 e o pacote segue pelo caminho antigo (cartão tokenizado sem CVV e, se a conta recusar, `cvv_required` e pagamento pelo painel). Por isso fica ligado por padrão: a cobrança sem CVV começa sozinha no dia em que a conta for liberada, sem deploy. Para desligar, use `MP_AUTOMATIC_PAYMENTS_ENABLED=false`.
+
+Cartões sem perfil (salvos antes desta versão, ou cadastrados direto no checkout, já que o Card Payment Brick gera um único token por pagamento) mostram **"Ativar renovação automática"** em Faturamento, que pede só o CVV (`POST dashboard/cards/{id}/automatic-billing` com `profile_token`). Depois de uma compra que salvou um cartão novo, a resposta do checkout traz `automatic_billing_offer` e o painel oferece a ativação na hora. Ativar destrava também uma renovação parada em `cvv_required`.
+
+Remover um cartão, ou excluir a conta, apaga também o cartão e o perfil no Mercado Pago (melhor esforço: falha no gateway fica no log e não impede a remoção local).
+
+> No Mercado Pago, habilite também as notificações de **Order** e de **Perfis de pagamento** para a URL do webhook. A cobrança pela Orders API é confirmada por elas, e não pela notificação `payment`.
 
 ### Cartões salvos
 
@@ -632,6 +874,23 @@ Assinaturas de construtor de cada chave:
 | `plan_cancelled` | `($plan, $userPlan)` |
 | `plan_refunded` | `($plan, $userPlan, $amount)` |
 | `payment_rejected` | `($plan, $amount, $reason = null, $isRenewal = false)` |
+| `renewal_failed` | `($plan, $amount, $attempt, $nextAttemptAt, $reason = null)` — `$nextAttemptAt` null na última tentativa |
+| `renewal_payment_required` | `($plan, $amount, $accessUntil, $reason)` — `$reason`: `no_card`, `pix` ou `cvv_required` |
+| `overage_charge` | `($plan, $state, $amount, $requests)` — `$state`: `paid`, `payment_required` ou `rejected` |
+| `overage_started` | `($plan, $userPlan, $extraAllowed)` — `$extraAllowed` null quando não há teto |
+| `account_security` | `($event, $context = [])` — `$event`: `password_changed`, `email_changed` (vai ao e-mail antigo, com `new_email` no contexto), `two_factor_enabled`, `two_factor_disabled` |
+| `email_change` | `($user, $newEmail)` — vai ao endereço novo; use `$this->confirmationUrl()` para o link |
+
+#### Só o visual
+
+Para manter os textos e mudar apenas a aparência (logo, cores, rodapé) de **todos** os e-mails, inclusive os do pacote, publique os templates de e-mail do próprio Laravel e edite-os no app:
+
+```bash
+php artisan vendor:publish --tag=laravel-mail
+# resources/views/vendor/mail/html/ (layout, header, footer, button, themes/default.css)
+```
+
+O nome exibido e o remetente vêm de `APP_NAME` e `MAIL_FROM_ADDRESS`/`MAIL_FROM_NAME`.
 
 ### Ouvindo eventos você mesmo
 
@@ -659,14 +918,22 @@ protected $listen = [
 
 | Alias | Classe | Descrição |
 |-------|--------|-----------|
-| `api.key` | `AuthenticateApiKey` | Valida a API key do header `X-API-KEY` |
+| `api.key` | `AuthenticateApiKey` | Valida a API key do header `X-API-KEY`; recusa (403) conta suspensa |
+| `api.key.rate` | `ApiKeyRateLimitMiddleware` | Limite de requisições por minuto da chave/plano |
 | `check.active.plan` | `CheckActivePlanMiddleware` | Exige assinatura ativa ou em período de carência |
 | `check.limit.plan` | `CheckRequestLimitMiddleware` | Rejeita requisições acima do limite do plano |
-| `api.key.origin` | `ApiKeyOriginValidatorMiddleware` | Valida o header `Origin` contra as origens permitidas |
-| `language` | `LanguageMiddleware` | Define o locale a partir do `Accept-Language` (`pt-BR` → `pt`) |
+| `api.key.origin` | `ApiKeyOriginValidatorMiddleware` | Valida o header `Origin` contra as origens permitidas (ver nota abaixo) |
+| `language` | `LanguageMiddleware` | Define o locale pelo primeiro idioma suportado do `Accept-Language` (`pt-BR` → `pt`); sem nenhum, usa `default_language` |
 | `admin` | `AdminMiddleware` | Exige `role = admin` |
+| `active.user` | `EnsureUserIsEnabled` | Recusa (403, `code: account_disabled`) usuário autenticado com conta suspensa |
 | `feature` | `CheckPlanFeatureMiddleware` | Exige feature específica no plano atual; aplica automaticamente `check.limit.plan` (log + contagem) |
-| `plan` | *(grupo)* | Combina `api.key + check.active.plan + check.limit.plan + api.key.origin + language` |
+| `plan` | *(grupo)* | Combina `api.key + api.key.rate + check.active.plan + check.limit.plan + api.key.origin + language` |
+
+> **Origens permitidas não são autenticação.** O header `Origin` é preenchido pelo navegador, mas qualquer cliente fora dele (curl, servidor, script) envia o valor que quiser. A lista de origens impede que outro *site* use a chave a partir do navegador de um visitante; quem tem a chave em mãos passa por ela. Quem protege é a API key.
+>
+> Sem header `Origin`, vale o IP do cliente, lido de `$request->ip()`. Atrás de proxy ou Cloudflare, configure o `TrustProxies` para o IP real chegar; headers como `X-Forwarded-For` vindos de um cliente não confiável são ignorados.
+>
+> Curingas aceitos: `*.example.com` (qualquer subdomínio e o próprio domínio) e `app.example.*` (o `*` vale por **um** rótulo: casa `app.example.com`, não `app.example.evil.com`). Em prefixos de IP, como `192.168.*`, o curinga cobre o restante do endereço.
 
 ---
 
@@ -682,6 +949,10 @@ php artisan apikey:check-expired --grace-only
 # Processar renovações agendadas (roda automaticamente todo dia às 08:00)
 # Cada assinatura vira um ProcessPlanRenewalJob; use --dry-run para listar sem cobrar
 php artisan billing:process-renewals
+
+# Cobrar o excedente dos períodos encerrados (roda automaticamente às 09:00)
+php artisan billing:charge-overage
+php artisan billing:charge-overage --dry-run
 
 # Apagar logs de requisição além da janela de retenção (roda automaticamente às 03:30)
 php artisan api-key:prune-logs
@@ -754,6 +1025,7 @@ php artisan api-key:rotate-keys --legacy --dry-run           # apenas conta quan
 | Comando | Frequência | Desligável por |
 |---------|------------|----------------|
 | `billing:process-renewals` | diária, 08:00 | — |
+| `billing:charge-overage` | diária, 09:00 | — |
 | `api-key:prune-logs` | diária, 03:30 | `request_log.prune_enabled` |
 | `api-key:reconcile-payments` | a cada 15 min | `reconciliation.payments_enabled` |
 | `api-key:retry-validation-refunds` | de hora em hora | `reconciliation.validation_refunds_enabled` |
@@ -891,6 +1163,12 @@ return [
         'decay_minutes' => 1,
     ],
 
+    'payment_throttle' => [
+        'enabled'       => true,
+        'attempts'      => 10,
+        'decay_minutes' => 10,
+    ],
+
     'header_name'      => 'X-API-KEY',
     'default_language' => 'pt',     // 'pt' ou 'en'
 
@@ -921,6 +1199,9 @@ return [
         // Aceitar o formato IPN, que chega sem assinatura. Desligue apenas se
         // você também remover o notification_url.
         'accept_ipn' => env('MP_ACCEPT_IPN', true),
+
+        // Idade máxima do `ts` de um webhook assinado (anti-replay). 0 desliga.
+        'webhook_tolerance_seconds' => env('MP_WEBHOOK_TOLERANCE_SECONDS', 0),
     ],
 
     'demo_user_id'   => env('API_KEY_DEMO_USER_ID'),
@@ -972,24 +1253,72 @@ return [
 | `API_KEY_BILLING_QUEUE` | Fila do comando `billing:process-renewals` | — |
 | `API_KEY_DISABLE_WEB_MIDDLEWARE` | Anexar `DisableRouteWebMiddleware` ao grupo `web` | `true` |
 | `API_KEY_AUTH_THROTTLE_ENABLED` | Habilitar throttle nos endpoints de autenticação | `true` |
-| `API_KEY_AUTH_THROTTLE_ATTEMPTS` | Máximo de tentativas de login/registro | `5` |
+| `API_KEY_AUTH_THROTTLE_ATTEMPTS` | Máximo de tentativas nas rotas públicas de autenticação | `5` |
 | `API_KEY_AUTH_THROTTLE_DECAY` | Janela de decaimento do throttle (minutos) | `1` |
+| `API_KEY_PAYMENT_THROTTLE_ENABLED` | Limitar checkout, cupom e cadastro de cartão | `true` |
+| `API_KEY_PAYMENT_THROTTLE_ATTEMPTS` | Tentativas por usuário na janela | `10` |
+| `API_KEY_PAYMENT_THROTTLE_DECAY` | Janela do limite de pagamento (minutos) | `10` |
+| `API_KEY_SUPPORT_EMAIL` | E-mail exibido na página de suporte da SPA | `MAIL_FROM_ADDRESS` |
 | `API_KEY_HEADER_NAME` | Header HTTP que carrega a API key | `X-API-KEY` |
 | `API_KEY_DEFAULT_LANGUAGE` | Locale padrão | `pt` |
 | `API_KEY_ROUTES_ENABLED` | Registrar rotas do pacote automaticamente | `true` |
 | `API_KEY_ROUTES_PREFIX` | Prefixo das rotas | `''` |
 | `API_KEY_SPA_ENABLED` | Servir o painel SPA Vue | `false` |
 | `API_KEY_DEMO_USER_ID` | `authentication.id` para o endpoint de demonstração pública | — |
-| `API_INTERNAL_TOKEN` | Token secreto para chamadas servidor-a-servidor | — |
+| `API_INTERNAL_TOKEN` | Token secreto para chamadas servidor-a-servidor. Aceito só de loopback (`REMOTE_ADDR` e `$request->ip()`); atrás de proxy local, configure o TrustProxies ou o token passa a ser a única barreira | — |
 | `MP_PUBLIC_KEY` | Chave pública do MercadoPago | — |
 | `MP_ACCESS_TOKEN` | Access token do MercadoPago | — |
 | `MP_WEBHOOK_SECRET` | Secret HMAC do webhook do MercadoPago | — |
 | `MP_NOTIFICATION_URL` | URL enviada em `notification_url` a cada pagamento. Vazia em desenvolvimento | — |
 | `MP_ACCEPT_IPN` | Aceitar notificações IPN, que chegam sem assinatura | `true` |
+| `MP_WEBHOOK_TOLERANCE_SECONDS` | Idade máxima do `ts` de um webhook assinado; 0 desliga | `0` |
 | `API_KEY_REFUND_WINDOW_DAYS` | Dias de janela para estorno no cancelamento (`0` = desliga) | `0` |
 | `API_KEY_REFUND_MAX_USAGE_PERCENT` | Teto de consumo do ciclo que ainda dá direito a estorno | `50` |
 | `API_KEY_RECONCILE_PAYMENTS_ENABLED` | Agendar a reconciliação de pagamentos em análise | `true` |
 | `API_KEY_RETRY_VALIDATION_REFUNDS_ENABLED` | Agendar o reprocessamento de estornos de validação | `true` |
+| `MP_PIX_ENABLED` | Aceitar PIX no checkout e na renovação | `false` |
+| `MP_PIX_EXPIRATION_MINUTES` | Validade do QR PIX do checkout (mínimo 30) | `30` |
+| `API_KEY_PAYMENT_GATEWAY` | Gateway ativo: `mercadopago`, `stripe`, `efi`, `pagbank` ou `pagarme` (o painel admin vale por cima) | `mercadopago` |
+| `STRIPE_PUBLISHABLE_KEY` / `STRIPE_SECRET_KEY` | Credenciais do Stripe | — |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret do webhook do Stripe (`whsec_…`) | — |
+| `STRIPE_STATEMENT_DESCRIPTOR` | Complemento na fatura do cartão (até 22 caracteres) | — |
+| `STRIPE_PIX_ENABLED` / `STRIPE_PIX_EXPIRATION_MINUTES` | PIX pelo Stripe e validade do QR | `false` / `30` |
+| `EFI_CLIENT_ID` / `EFI_CLIENT_SECRET` | Credenciais da aplicação Efí | — |
+| `EFI_ACCOUNT_ID` | Identificador de conta (payee code), para o token do cartão | — |
+| `EFI_SANDBOX` | Usar as APIs de homologação da Efí | `false` |
+| `EFI_PIX_ENABLED` / `EFI_PIX_KEY` | PIX pela Efí e a chave PIX da conta | `false` / — |
+| `EFI_PIX_CERTIFICATE` / `EFI_PIX_CERTIFICATE_PASSWORD` | Certificado `.p12` da aplicação em base64, e a senha dele | — |
+| `EFI_PIX_EXPIRATION_MINUTES` | Validade do QR PIX da Efí (mínimo 30) | `30` |
+| `PAGBANK_TOKEN` | Token da conta PagBank | — |
+| `PAGBANK_PUBLIC_KEY` | Chave pública para criptografar o cartão (vazia: criada pelo pacote) | — |
+| `PAGBANK_SANDBOX` | Usar o sandbox do PagBank | `false` |
+| `PAGBANK_STATEMENT_DESCRIPTOR` | Nome na fatura do cartão (até 17 caracteres) | `APP_NAME` |
+| `PAGBANK_PIX_ENABLED` / `PAGBANK_PIX_EXPIRATION_MINUTES` | PIX pelo PagBank e validade do QR | `false` / `30` |
+| `PAGARME_PUBLIC_KEY` / `PAGARME_SECRET_KEY` | Credenciais do Pagar.me | — |
+| `PAGARME_WEBHOOK_USER` / `PAGARME_WEBHOOK_PASSWORD` | Basic Auth exigido no webhook do Pagar.me | — |
+| `PAGARME_STATEMENT_DESCRIPTOR` | Nome na fatura do cartão (até 13 caracteres) | `APP_NAME` |
+| `PAGARME_PIX_ENABLED` | Aceitar PIX pelo Pagar.me | `false` |
+| `PAGARME_PIX_EXPIRATION_MINUTES` | Validade do QR PIX do Pagar.me (mínimo 30) | `30` |
+| `API_KEY_SPA_BRAND_NAME` | Nome do painel (padrão: `APP_NAME`) | — |
+| `API_KEY_SPA_BRAND_COLOR` | Cor da marca em hexadecimal; gera a paleta `brand-*` | `#6366f1` |
+| `API_KEY_SPA_BRAND_LOGO` | URL HTTPS do logo | — |
+| `MP_AUTOMATIC_PAYMENTS_ENABLED` | Cobrar renovação e excedente pelo perfil de Pagamentos Automáticos, sem CVV | `true` |
+| `API_KEY_RENEWAL_RETRY_DAYS` | Dias após o vencimento para novas tentativas da renovação recusada | `1,3,5` |
+| `API_KEY_OVERAGE_MINIMUM_CHARGE` | Excedente abaixo deste valor é perdoado | `1.00` |
+| `API_KEY_RATE_LIMIT_PER_MINUTE` | Limite por minuto padrão, quando chave e plano não definem | — |
+| `API_KEY_MAX_KEYS_PER_USER` | Máximo de API keys por conta | `5` |
+| `API_KEY_2FA_REQUIRED_FOR_ADMINS` | Exigir 2FA para as rotas de admin | `true` |
+| `API_KEY_WEBHOOKS_ENABLED` | Enviar webhooks de saída | `true` |
+| `API_KEY_WEBHOOKS_QUEUE` | Fila das entregas de webhook | — |
+| `API_KEY_WEBHOOKS_TIMEOUT` | Timeout de cada entrega (segundos) | `10` |
+| `API_KEY_WEBHOOKS_MAX_PER_USER` | Máximo de webhooks por conta | `5` |
+| `API_KEY_WEBHOOKS_DISABLE_AFTER` | Entregas perdidas seguidas que desligam o endpoint | `20` |
+| `API_KEY_WEBHOOKS_ALLOW_HTTP` | Aceitar URL `http://` (só desenvolvimento) | `false` |
+| `API_KEY_WEBHOOKS_BLOCK_PRIVATE` | Recusar IPs privados/loopback (proteção SSRF) | `true` |
+| `API_KEY_RECEIPT_ISSUER_NAME` | Nome do emissor no recibo | `APP_NAME` |
+| `API_KEY_RECEIPT_ISSUER_DOCUMENT` | CNPJ/CPF do emissor | — |
+| `API_KEY_RECEIPT_ISSUER_ADDRESS` | Endereço do emissor | — |
+| `API_KEY_RECEIPT_ISSUER_EMAIL` | E-mail do emissor | `MAIL_FROM_ADDRESS` |
 
 ---
 
@@ -1019,6 +1348,7 @@ Tudo que pode ser alterado sem tocar no código Vue ou Blade:
 - **Grupo de middlewares** — reordene ou substitua middlewares em `middleware_group.plan`
 - **Notificações** — substitua qualquer notificação pela sua no mapa `notifications` da config (mantendo a assinatura de construtor)
 - **Eventos** — registre seus próprios listeners para `PlanChanged`, `UserStatusChanged`, etc.
+- **Marca do painel** — nome, cor e logo em **Admin → Aparência**, ou no `.env` (`API_KEY_SPA_BRAND_NAME`, `API_KEY_SPA_BRAND_COLOR`, `API_KEY_SPA_BRAND_LOGO`). Vale também para o painel pré-compilado: o shell Blade entrega a cor como a variável CSS `--brand`, e a paleta inteira (`brand-50` a `brand-950`) sai dela
 
 ### Nível 2 — Customização completa do frontend (Node.js necessário)
 
@@ -1043,6 +1373,68 @@ npm run build
 
 Após executar `npm run build`, rode `php artisan view:clear` se o painel não refletir as mudanças imediatamente.
 
+### Tema e componentes (`@/ui`)
+
+O painel é montado com a biblioteca em `resources/js/ui`, que os seus módulos podem usar para ficar com o mesmo visual. Todos os componentes seguem a cor da marca, funcionam nos temas claro e escuro, são acessíveis por teclado e respeitam "reduzir movimento" do sistema operacional.
+
+```ts
+import { PageHeader, Card, Button, DataTable, Badge, Tabs, Modal, Drawer, TextInput, toast, confirm, prompt } from '@/ui';
+```
+
+| Grupo | Componentes |
+|---|---|
+| Layout | `PageHeader`, `Card`, `Tabs`, `Modal`, `Drawer`, `EmptyState`, `Alert` |
+| Dados | `DataTable` (ordenação, carregamento, estado vazio e cartões no celular), `Pagination`, `StatCard`, `AnimatedNumber`, `Badge`, `Progress`, `Avatar`, `CopyField` |
+| Formulário | `TextInput`, `Select`, `Textarea`, `Switch`, `Checkbox`, `Field` (rótulo, dica e erro para um campo próprio) |
+| Ações | `Button` (vira link com `to` ou `href`), `Dropdown`, `Tooltip` |
+| Retorno | `toast.success/error/info/warning(título, { description })`, `confirm({ title, tone: 'danger', onConfirm })`, `prompt({ title, input: { type: 'number' } })` |
+| Utilitários | `format.money`, `format.date`, `format.relative`, `chartOptions()` (ApexCharts no tema), `inputClasses()` |
+
+`confirm` e `prompt` devolvem uma promessa. Com `onConfirm`, a ação roda dentro do diálogo: se ela lançar um erro, a mensagem aparece na própria janela e o diálogo continua aberto.
+
+```ts
+const ok = await confirm({
+    title: 'Excluir relatório?',
+    tone: 'danger',
+    confirmText: 'Excluir',
+    onConfirm: () => axios.delete(`/relatorios/${id}`),
+});
+if (ok) toast.success('Relatório excluído');
+```
+
+Use as cores `brand-*` (e não `indigo-*`) para o seu módulo acompanhar a marca configurada. Os componentes antigos em `views/componentes/` continuam funcionando, como adaptadores dos novos.
+
+### Encaixando seus módulos
+
+Tudo é declarado em `resources/js/api-key.config.ts`:
+
+```ts
+import { PhChartBar } from '@phosphor-icons/vue';
+
+export default {
+    app: { logoText: 'Minha Empresa', logoHref: '/' },
+    menu: {
+        // `section` cria um cabeçalho próprio no menu; `badge` mostra um selo.
+        extraItems: [{ name: 'Relatórios', to: '/dashboard/relatorios', icon: PhChartBar, section: 'Análises', badge: 'Novo' }],
+        // `ability` restringe pela permissão da equipe: view, accounts, billing ou manage.
+        extraAdminItems: [{ name: 'Faturas fiscais', to: '/dashboard/admin/fiscal', icon: PhChartBar, ability: 'billing' }],
+    },
+    routes: {
+        extraDashboardRoutes: [
+            { path: 'relatorios', name: 'relatorios', component: () => import('@/views/relatorios.vue') },
+            { path: 'admin/fiscal', name: 'admin.fiscal', component: () => import('@/views/fiscal.vue'), meta: { requiresAdmin: true, ability: 'billing' } },
+        ],
+        extraPublicRoutes: [],
+    },
+    // Aparecem na busca rápida (Ctrl+K), junto das páginas do menu.
+    commands: [{ id: 'relatorios.novo', label: 'Novo relatório', group: 'Relatórios', to: '/dashboard/relatorios/novo' }],
+    // Texto do painel da marca nas telas de login e cadastro.
+    auth: { headline: 'Os dados da sua empresa, num lugar só.', bullets: ['…'] },
+};
+```
+
+As páginas novas entram dentro do layout do painel, com transição, menu lateral recolhível e busca rápida. Comandos também podem ser registrados em tempo de execução com `registerCommands([...])`, que devolve uma função para removê-los.
+
 ---
 
 ## Testes
@@ -1056,6 +1448,15 @@ vendor/bin/pest --filter="UserPlan"
 
 # Relatório de cobertura
 vendor/bin/pest --coverage
+
+# Análise estática e estilo
+composer analyse
+composer lint-test
+
+# Frontend: checagem de tipos e build do dist/ (o CI confere se o dist/
+# commitado bate com o build)
+npm run typecheck
+npm run build
 ```
 
 Habilite o SQLite no `php.ini` para o banco de testes:

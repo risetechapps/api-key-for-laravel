@@ -3,19 +3,29 @@
 namespace RiseTechApps\ApiKey\Http\Controllers\Dashboard\Checkout;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
+use RiseTechApps\ApiKey\Contracts\CardGateway;
+use RiseTechApps\ApiKey\Exceptions\PaymentMessageException;
+use RiseTechApps\ApiKey\Gateways\GatewayRegistry;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\ApiKey\Models\PendingPayment\PendingPayment;
+use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
+use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Repositories\Coupon\CouponRepository;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
+use RiseTechApps\ApiKey\Services\AuditLogger;
+use RiseTechApps\ApiKey\Services\AutomaticPaymentService;
 use RiseTechApps\ApiKey\Services\MpCustomerService;
 use RiseTechApps\ApiKey\Services\PaymentOutcomeService;
+use RiseTechApps\ApiKey\Services\PixService;
+use RiseTechApps\ApiKey\Services\SystemHealthService;
 use RiseTechApps\ApiKey\Traits\BuildsPaymentPayer;
 use RiseTechApps\ApiKey\Traits\SendsIdempotentPayments;
 
@@ -28,6 +38,7 @@ class CheckoutController extends Controller
         protected readonly MpCustomerService $mpCustomerService,
         protected readonly CouponRepository $couponRepository,
         protected readonly PaymentOutcomeService $paymentOutcome,
+        protected readonly PixService $pixService,
     ) {}
 
     public function validateCoupon(Request $request): JsonResponse
@@ -57,7 +68,7 @@ class CheckoutController extends Controller
         // The preview has to apply the proration credit for the same reason
         // process() does, and in the same order — otherwise the screen quotes one
         // amount and the card is charged another.
-        $credit = $this->prorationCredit();
+        $credit = min($this->prorationCredit(), max(0, round($originalPrice - $discount, 2)));
         $finalPrice = max(0, round($originalPrice - $discount - $credit, 2));
 
         return response()->jsonSuccess([
@@ -94,6 +105,20 @@ class CheckoutController extends Controller
             // um cliente que nao o envie continua conseguindo pagar, apenas com
             // analise de risco mais pobre.
             'device_id' => ['nullable', 'string', 'max:255'],
+            'payment_method' => ['nullable', 'in:card,pix'],
+            // Segundo token do mesmo cartão, gerado com o CVV junto do token do
+            // pagamento. Cada token serve uma vez só, e este vai para o perfil
+            // de Pagamentos Automáticos, que cobra a renovação sem CVV.
+            'profile_token' => ['nullable', 'string', 'max:64'],
+            // Outros gateways: o cartão novo como o navegador gerou (token com
+            // o CVV, cartão criptografado do PagBank, SetupIntent do Stripe).
+            'card_token' => ['nullable', 'string', 'max:4096'],
+            // O que o gateway pede além do token (bandeira na Efí, CVV da
+            // primeira cobrança no PagBank). Nunca é gravado nem registrado.
+            'extra' => ['nullable', 'array'],
+            'holder_name' => ['nullable', 'string', 'max:255'],
+            'cpf' => ['nullable', 'string', 'max:20'],
+            'payment_type_id' => ['nullable', 'in:credit_card,debit_card,prepaid_card'],
         ]);
 
         $plan = $this->planRepository->findActiveById($validated['plan_id']);
@@ -130,15 +155,26 @@ class CheckoutController extends Controller
         // upgrading on day 3 of 30 used to throw away 27 paid days. Applied after
         // the coupon so a percentage discount is computed on the plan's real
         // price, not on an already-credited amount.
-        $credit = $this->prorationCredit();
+        // Só o que cabe na compra: o resto do crédito não vira saldo, e gravar o
+        // crédito inteiro em credit_applied faria o período valer mais do que
+        // custou na próxima troca.
+        $credit = min($this->prorationCredit(), $transactionAmount);
 
         if ($credit > 0) {
             $transactionAmount = max(0, round($transactionAmount - $credit, 2));
         }
 
+        // Período de teste: só na primeira assinatura paga da conta, e só em
+        // plano que ofereça. Não passa pelo gateway; quem não cancelar paga na
+        // renovação, no fim do teste, como qualquer assinante.
+        if ($trial = $this->trialFor($plan, $validated)) {
+            $this->releaseCoupon($appliedCoupon);
+
+            return $trial;
+        }
+
         if ($transactionAmount <= 0) {
-            $userPlan = auth()->user()->subscribeToPlan($plan);
-            $userPlan->update(['credit_applied' => $credit ?: null]);
+            auth()->user()->subscribeToPlan($plan, ['payment_amount' => 0, 'credit_applied' => $credit ?: null]);
 
             return response()->jsonSuccess([
                 'status' => 'approved',
@@ -146,6 +182,16 @@ class CheckoutController extends Controller
                     ? __('api-key::messages.subscription_activated_with_credit')
                     : __('api-key::messages.subscription_activated_full_discount'),
             ]);
+        }
+
+        if (($validated['payment_method'] ?? 'card') === 'pix') {
+            return $this->processPix($plan, $transactionAmount, $credit, $appliedCoupon, $validated);
+        }
+
+        // Só o gateway ativo cobra. Cartão salvo em outro gateway não é aceito
+        // aqui: o assinante cadastra um cartão no gateway atual.
+        if ($driver = GatewayRegistry::active()) {
+            return $this->processDriverCard($driver, $plan, $transactionAmount, $credit, $appliedCoupon, $validated);
         }
 
         if (empty($validated['token'])) {
@@ -166,6 +212,7 @@ class CheckoutController extends Controller
 
         if (! empty($validated['saved_card_id'])) {
             $savedCard = UserCard::where('authentication_id', auth()->user()->getKey())
+                ->where('gateway', 'mercadopago')
                 ->find($validated['saved_card_id']);
         }
 
@@ -239,26 +286,48 @@ class CheckoutController extends Controller
             ])->log('MP payment response');
 
             if ($payment->status === 'approved') {
-                $userPlan = auth()->user()->subscribeToPlan($plan);
-                $userPlan->update([
-                    'payment_id' => $payment->id,
+                // O webhook deste mesmo pagamento chega em segundos e pode
+                // vencer esta linha; subscribeToPlan() é idempotente por
+                // payment_id, então quem chegar depois só completa os campos.
+                auth()->user()->subscribeToPlan($plan, [
+                    'payment_id' => (string) $payment->id,
                     'payment_amount' => $transactionAmount,
                     'credit_applied' => $credit ?: null,
+                    'payment_method' => 'card',
                 ]);
                 $couponSettled = true;
 
                 if ($savedCard) {
-                    UserCard::where('authentication_id', auth()->user()->getKey())->update(['is_default' => false]);
-                    $savedCard->update(['is_default' => true]);
+                    $savedCard->makeDefault();
                 } else {
                     try {
-                        $this->syncCardAfterPayment(auth()->user(), $payment, $validated);
+                        $savedCard = $this->syncCardAfterPayment(auth()->user(), $payment, $validated);
                     } catch (\Exception $e) {
                         logglyWarning()->withContext(['error' => $e->getMessage()])->log('Card sync after payment failed');
                     }
                 }
 
-                return response()->jsonSuccess(['status' => 'approved', 'message' => __('api-key::messages.payment_approved')]);
+                // Melhor esforço, como o próprio registro do cartão: a compra já
+                // foi aprovada, e sem perfil a renovação só pede o pagamento pelo
+                // painel.
+                $automaticBilling = $savedCard && app(AutomaticPaymentService::class)->registerProfile(
+                    $savedCard,
+                    $validated['profile_token'] ?? null,
+                    $validated['payment_type_id'] ?? null,
+                );
+
+                return response()->jsonSuccess([
+                    'status' => 'approved',
+                    'message' => __('api-key::messages.payment_approved'),
+                    // Cartão salvo nesta compra sem perfil (o Card Payment Brick
+                    // gera um token só): o painel oferece ativar a renovação
+                    // automática pedindo só o CVV. Se o painel já mandou o token
+                    // do perfil e ele não vingou, pedir de novo não muda nada.
+                    'automatic_billing_offer' => ! $automaticBilling && empty($validated['profile_token'])
+                        && $savedCard?->mp_card_id && AutomaticPaymentService::enabled()
+                        ? ['card_id' => $savedCard->getKey(), 'mp_card_id' => $savedCard->mp_card_id, 'last_four' => $savedCard->last_four]
+                        : null,
+                ]);
             }
 
             if (in_array($payment->status ?? '', ['pending', 'in_process'])) {
@@ -285,8 +354,12 @@ class CheckoutController extends Controller
 
             return response()->json(['success' => false, 'message' => $this->translateStatusDetail($payment->status_detail ?? '')], 422);
 
-        } catch (\RuntimeException $e) {
+        } catch (PaymentMessageException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } catch (\RuntimeException $e) {
+            logglyError()->withContext(['error' => $e->getMessage()])->log('MP card checkout failed');
+
+            return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 422);
         } catch (MPApiException $e) {
             $body = $e->getApiResponse()?->getContent();
             $detail = $body['status_detail'] ?? $body['message'] ?? '';
@@ -309,6 +382,257 @@ class CheckoutController extends Controller
                 $this->releaseCoupon($appliedCoupon);
             }
         }
+    }
+
+    /**
+     * Compra com cartão nos outros gateways: cartão salvo (cobrado sem CVV) ou
+     * cartão novo (salvo e validado no gateway antes da cobrança).
+     *
+     * Cupom e crédito seguem a mesma regra do Mercado Pago: a reserva do cupom
+     * só fica quando a compra pode ainda virar assinatura.
+     */
+    private function processDriverCard(CardGateway $gateway, Plan $plan, float $amount, float $credit, ?Coupon $coupon, array $validated): JsonResponse
+    {
+        if (! $gateway->configured()) {
+            $this->releaseCoupon($coupon);
+
+            return response()->json(['success' => false, 'message' => __('api-key::messages.gateway_not_configured')], 422);
+        }
+
+        $user = $this->payerUser();
+
+        try {
+            $card = empty($validated['saved_card_id']) ? null : UserCard::where('authentication_id', $user->getKey())
+                ->where('gateway', $gateway->name())
+                ->whereNotNull('gateway_card_id')
+                ->find($validated['saved_card_id']);
+
+            if (! $card) {
+                if (empty($validated['card_token'])) {
+                    $this->releaseCoupon($coupon);
+
+                    return response()->json(['success' => false, 'message' => __('api-key::messages.invalid_payment_data')], 422);
+                }
+
+                $card = $gateway->saveCard($user, [
+                    'card_token' => $validated['card_token'],
+                    'cpf' => $validated['cpf'] ?? ($validated['payer']['identification']['number'] ?? null),
+                    'holder_name' => $validated['holder_name'] ?? null,
+                    'extra' => $validated['extra'] ?? [],
+                ]);
+            }
+
+            $payment = $gateway->chargeCard(
+                $card,
+                $amount,
+                $user->getKey().'|'.$plan->getKey(),
+                __('api-key::messages.plan_subscription_description', ['plan' => $plan->name]),
+                $this->idempotencyKey($validated['idempotency_key'] ?? null, ['checkout-'.$gateway->name(), $user->getKey(), $plan->getKey(), $amount, $card->gateway_card_id]),
+                customerInitiated: true,
+                input: $validated['extra'] ?? [],
+            );
+        } catch (PaymentMessageException $e) {
+            $this->releaseCoupon($coupon);
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } catch (\RuntimeException $e) {
+            // Falha técnica do gateway (HTTP 500, resposta inesperada): o
+            // detalhe fica no log, a tela recebe a mensagem genérica.
+            $this->releaseCoupon($coupon);
+            logglyError()->withContext(['gateway' => $gateway->name(), 'error' => $e->getMessage()])->log('Card checkout failed');
+
+            return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 422);
+        }
+
+        logglyInfo()->withContext(['gateway' => $gateway->name(), 'status' => $payment->status, 'id' => $payment->id])->log('Card payment response');
+
+        if ($payment->status === 'approved') {
+            $user->subscribeToPlan($plan, [
+                'payment_id' => (string) $payment->id,
+                'payment_amount' => $amount,
+                'credit_applied' => $credit ?: null,
+                'payment_method' => 'card',
+            ]);
+
+            $card->makeDefault();
+
+            return response()->jsonSuccess(['status' => 'approved', 'message' => __('api-key::messages.payment_approved')]);
+        }
+
+        if (in_array($payment->status, ['pending', 'in_process'], true)) {
+            PendingPayment::create([
+                'authentication_id' => $user->getKey(),
+                'plan_id' => $plan->getKey(),
+                'payment_id' => (string) $payment->id,
+                'amount' => $amount,
+                'coupon_id' => $coupon?->getKey(),
+                'credit_applied' => $credit ?: null,
+                'status' => (string) $payment->status,
+            ]);
+
+            return response()->jsonSuccess([
+                'status' => 'pending',
+                'message' => __('api-key::messages.payment_pending'),
+                'payment_id' => (string) $payment->id,
+                // O banco pediu autenticação (3DS no Stripe): o painel conclui
+                // no navegador e acompanha pelo status do pagamento.
+                ...(isset($payment->client_action) ? ['client_action' => $payment->client_action] : []),
+            ]);
+        }
+
+        $this->releaseCoupon($coupon);
+
+        return response()->json(['success' => false, 'message' => __('api-key::messages.payment_declined')], 422);
+    }
+
+    /**
+     * Compra com PIX: gera o QR e devolve para o painel exibir.
+     *
+     * A assinatura não sai aqui: PIX nasce pendente, e quem assina é o webhook
+     * da confirmação (ou a reconciliação). Cupom e crédito ficam guardados no
+     * registro de espera, como num cartão em análise.
+     */
+    private function processPix(Plan $plan, float $amount, float $credit, ?Coupon $coupon, array $validated): JsonResponse
+    {
+        if (! $this->pixService->enabled()) {
+            $this->releaseCoupon($coupon);
+
+            return response()->json(['success' => false, 'message' => __('api-key::messages.pix_disabled')], 422);
+        }
+
+        $user = $this->payerUser();
+        $expiresAt = PixService::expiresAt();
+
+        try {
+            $payment = $this->pixService->createCharge(
+                $user,
+                $plan,
+                $amount,
+                $user->getKey().'|'.$plan->getKey(),
+                $expiresAt,
+                // A hora entra na chave: um clique duplo devolve o mesmo QR, mas
+                // quem volta depois de o QR expirar recebe um novo.
+                ['checkout-pix', $user->getKey(), $plan->getKey(), $amount, now()->format('YmdH')],
+                $validated['idempotency_key'] ?? null,
+                $validated['payer']['identification'] ?? null,
+            );
+        } catch (MPApiException $e) {
+            $this->releaseCoupon($coupon);
+            logglyError()->withContext(['body' => $e->getApiResponse()->getContent()])->log('MP PIX creation failed');
+
+            return response()->json(['success' => false, 'message' => __('api-key::messages.pix_failed')], 422);
+        } catch (PaymentMessageException $e) {
+            // Falta CPF ou telefone no perfil, valor fora do limite do PIX:
+            // mensagem para o cliente.
+            $this->releaseCoupon($coupon);
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } catch (\RuntimeException $e) {
+            logglyError()->withContext(['error' => $e->getMessage()])->log('PIX checkout failed');
+            $this->releaseCoupon($coupon);
+
+            return response()->json(['success' => false, 'message' => __('api-key::messages.pix_failed')], 422);
+        } catch (\Throwable $e) {
+            $this->releaseCoupon($coupon);
+            logglyError()->exception($e)->log('PIX checkout error');
+
+            return response()->json(['success' => false, 'message' => __('api-key::messages.error_processing_payment')], 500);
+        }
+
+        PendingPayment::firstOrCreate(
+            ['payment_id' => (string) $payment->id],
+            [
+                'authentication_id' => $user->getKey(),
+                'plan_id' => $plan->getKey(),
+                'amount' => $amount,
+                'coupon_id' => $coupon?->getKey(),
+                'credit_applied' => $credit ?: null,
+                'status' => (string) ($payment->status ?? 'pending'),
+            ],
+        );
+
+        return response()->jsonSuccess([
+            'status' => 'pix',
+            'payment_id' => (string) $payment->id,
+            'amount' => $amount,
+            'expires_at' => $expiresAt->toIso8601String(),
+            ...PixService::qrData($payment),
+        ]);
+    }
+
+    /**
+     * Situação de um pagamento pendente do próprio usuário. O painel consulta
+     * enquanto mostra o QR do PIX, para avançar sozinho quando o pagamento cair.
+     */
+    public function paymentStatus(string $paymentId): JsonResponse
+    {
+        $pending = PendingPayment::where('authentication_id', auth()->id())
+            ->where('payment_id', $paymentId)
+            ->firstOrFail();
+
+        // Gateway sem webhook de PIX (Efí, que exige mTLS na entrega) ou com
+        // a notificação atrasada: enquanto o painel mostra o QR, cada consulta
+        // pergunta ao gateway. Melhor esforço; a reconciliação cobre o resto.
+        if ($pending->outcome === null && ($driver = GatewayRegistry::forPaymentId($paymentId)) && $driver->configured()) {
+            try {
+                if ($payment = $driver->findPayment($paymentId)) {
+                    $this->paymentOutcome->apply($payment);
+                    $pending->refresh();
+                }
+            } catch (\RuntimeException) {
+                // Fica pendente; a próxima consulta tenta de novo.
+            }
+        }
+
+        $status = match (true) {
+            $pending->outcome === PendingPayment::OUTCOME_APPROVED => 'approved',
+            $pending->outcome === PendingPayment::OUTCOME_REJECTED => 'rejected',
+            default => 'pending',
+        };
+
+        return response()->jsonSuccess(['status' => $status]);
+    }
+
+    /**
+     * Ativa o período de teste quando ele se aplica, ou devolve null.
+     */
+    private function trialFor(Plan $plan, array $validated): ?JsonResponse
+    {
+        $user = $this->payerUser();
+
+        if ($plan->trial_days <= 0 || $user->trial_used_at !== null || (float) $plan->price <= 0) {
+            return null;
+        }
+
+        // Quem já pagou alguma assinatura não é cliente novo, mesmo que a conta
+        // seja anterior ao controle de teste (trial_used_at vazio).
+        if (UserPlan::where('authentication_id', $user->getKey())->whereNotNull('payment_id')->exists()) {
+            return null;
+        }
+
+        // Teste com cartão: sem cartão salvo a renovação no fim do teste não
+        // teria como cobrar. Com o PIX ligado, quem não tem cartão recebe o PIX
+        // da renovação por e-mail, então o cartão deixa de ser exigido.
+        $hasCard = UserCard::where('authentication_id', $user->getKey())->chargeable()->exists();
+
+        if (! $hasCard && ! $this->pixService->enabled()) {
+            return null;
+        }
+
+        $userPlan = $user->subscribeToPlan($plan, [
+            'is_trial' => true,
+            'end_date' => now()->addDays($plan->trial_days),
+        ]);
+
+        $user->forceFill(['trial_used_at' => now()])->save();
+
+        AuditLogger::record('billing.trial_started', $user, ['plan' => $plan->name, 'days' => $plan->trial_days]);
+
+        return response()->jsonSuccess([
+            'status' => 'trial',
+            'message' => __('api-key::messages.trial_started', ['days' => $plan->trial_days]),
+            'trial_ends_at' => $userPlan->end_date?->toIso8601String(),
+        ]);
     }
 
     /**
@@ -337,16 +661,16 @@ class CheckoutController extends Controller
         }
     }
 
-    private function syncCardAfterPayment(Authentication $user, object $payment, array $formData): void
+    private function syncCardAfterPayment(Authentication $user, object $payment, array $formData): ?UserCard
     {
         $mpCustomerId = (string) ($payment->payer?->id ?? '');
         if (! $mpCustomerId) {
-            return;
+            return null;
         }
 
         $mpCardId = $this->mpCustomerService->attachCard($mpCustomerId, $formData['token']);
         if (! $mpCardId) {
-            return;
+            return null;
         }
 
         $lastFour = (string) ($payment->card?->last_four_digits ?? '');
@@ -371,6 +695,8 @@ class CheckoutController extends Controller
         );
 
         logglyInfo()->withContext(['card_id' => $card->id, 'mp_card_id' => $mpCardId])->log('Card synced after payment');
+
+        return $card;
     }
 
     /**
@@ -408,7 +734,29 @@ class CheckoutController extends Controller
             return response()->json(['message' => __('api-key::messages.invalid_webhook_signature')], 400);
         }
 
+        SystemHealthService::recordWebhook('mercadopago');
+
         $type = $request->input('type') ?? $request->input('topic');
+
+        // Pagamentos Automáticos: a cobrança é uma order, e o perfil do cartão
+        // muda de status por notificação própria.
+        if ($type === 'order') {
+            return $this->orderNotification($request);
+        }
+
+        if (is_string($type) && str_starts_with($type, 'payment_profile')) {
+            $profileId = $request->input('data.id');
+
+            if (is_string($profileId) && $profileId !== '') {
+                try {
+                    app(AutomaticPaymentService::class)->refreshProfile($profileId);
+                } catch (\Exception $e) {
+                    logglyWarning()->withContext(['error' => $e->getMessage()])->log('MP payment profile notification failed');
+                }
+            }
+
+            return response()->json(['message' => 'ok']);
+        }
 
         if ($type !== 'payment') {
             return response()->json(['message' => 'ok']);
@@ -421,9 +769,42 @@ class CheckoutController extends Controller
             ?? $request->input('resource')
             ?? $request->query('id');
 
+        // Notificação sem id utilizável nunca vai virar pagamento, por mais que
+        // seja reentregue. Antes ia para `get(0)`, a exceção do SDK virava 500 e
+        // o gateway reentregava para sempre.
+        if (! is_scalar($paymentId) || ! ctype_digit((string) $paymentId)) {
+            logglyWarning()->withContext([
+                'payment_id' => is_scalar($paymentId) ? $paymentId : gettype($paymentId),
+            ])->log('MP notification ignored: missing or malformed payment id');
+
+            return response()->json(['message' => 'ok']);
+        }
+
         MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
         $client = new PaymentClient;
-        $payment = $client->get((int) $paymentId);
+
+        try {
+            $payment = $client->get((int) $paymentId);
+        } catch (MPApiException $e) {
+            $statusCode = $e->getApiResponse()->getStatusCode();
+
+            // 404: o pagamento não existe nesta conta. Reentregar não muda isso.
+            // Qualquer outra falha (gateway fora, timeout, token inválido) pode
+            // passar, então devolve erro e deixa o Mercado Pago tentar de novo.
+            if ($statusCode === 404) {
+                logglyWarning()->withContext(['payment_id' => $paymentId])
+                    ->log('MP notification ignored: payment not found on this account');
+
+                return response()->json(['message' => 'ok']);
+            }
+
+            logglyError()->withContext([
+                'payment_id' => $paymentId,
+                'status' => $statusCode,
+            ])->log('MP notification: payment lookup failed, asking for redelivery');
+
+            return response()->json(['message' => 'retry'], 503);
+        }
 
         // O que fazer com cada desfecho vive no serviço, e não aqui: o comando
         // de reconciliação precisa decidir exatamente a mesma coisa quando o
@@ -431,6 +812,107 @@ class CheckoutController extends Controller
         // enquanto não receber 200, e um pagamento que não nos diz respeito não
         // é motivo para pedir reentrega.
         $this->paymentOutcome->apply($payment);
+
+        return response()->json(['message' => 'ok']);
+    }
+
+    /**
+     * Webhook dos outros gateways (`/checkout/webhook/{gateway}`).
+     *
+     * O driver confere a assinatura (ou a credencial da URL) e diz quais
+     * pagamentos a notificação aponta. Cada um é consultado na API do gateway
+     * e o pacote aplica o que a API diz: o corpo da notificação nunca aprova
+     * nada sozinho.
+     */
+    public function gatewayWebhook(Request $request, string $gateway): JsonResponse
+    {
+        $driver = GatewayRegistry::get($gateway);
+
+        if (! $driver) {
+            return response()->json(['message' => 'not found'], 404);
+        }
+
+        try {
+            $ids = $driver->webhookPaymentIds($request);
+        } catch (AuthenticationException) {
+            logglyWarning()->withContext(['gateway' => $gateway])->log('Gateway notification refused: invalid signature or credentials');
+
+            return response()->json(['message' => 'unauthorized'], 401);
+        } catch (\RuntimeException $e) {
+            // Gateway que precisa consultar a notificação (Efí) e não respondeu.
+            logglyError()->withContext(['gateway' => $gateway, 'error' => $e->getMessage()])
+                ->log('Gateway notification: lookup failed, asking for redelivery');
+
+            return response()->json(['message' => 'retry'], 503);
+        }
+
+        SystemHealthService::recordWebhook($gateway);
+
+        if (! $driver->configured()) {
+            if ($ids !== []) {
+                logglyWarning()->withContext(['gateway' => $gateway, 'ids' => $ids])->log('Gateway notification ignored: gateway not configured');
+            }
+
+            return response()->json(['message' => 'ok']);
+        }
+
+        foreach (array_unique($ids) as $id) {
+            if (! $driver->ownsPaymentId($id)) {
+                continue;
+            }
+
+            try {
+                $payment = $driver->findPayment($id);
+            } catch (\RuntimeException $e) {
+                logglyError()->withContext(['gateway' => $gateway, 'payment_id' => $id, 'error' => $e->getMessage()])
+                    ->log('Gateway notification: lookup failed, asking for redelivery');
+
+                return response()->json(['message' => 'retry'], 503);
+            }
+
+            if ($payment === null) {
+                logglyWarning()->withContext(['gateway' => $gateway, 'payment_id' => $id])->log('Gateway notification ignored: payment not found on this account');
+
+                continue;
+            }
+
+            $this->paymentOutcome->apply($payment);
+        }
+
+        return response()->json(['message' => 'ok']);
+    }
+
+    /**
+     * Notificação de order (Pagamentos Automáticos): consulta a order e aplica
+     * o desfecho pelo mesmo serviço dos pagamentos comuns.
+     */
+    private function orderNotification(Request $request): JsonResponse
+    {
+        $orderId = $request->input('data.id') ?? $request->query('data_id');
+
+        if (! is_string($orderId) || ! preg_match('/^[A-Za-z0-9]+$/', $orderId)) {
+            logglyWarning()->log('MP order notification ignored: missing or malformed order id');
+
+            return response()->json(['message' => 'ok']);
+        }
+
+        try {
+            $order = app(AutomaticPaymentService::class)->findOrder($orderId);
+        } catch (\RuntimeException $e) {
+            logglyError()->withContext(['order_id' => $orderId, 'error' => $e->getMessage()])
+                ->log('MP order notification: lookup failed, asking for redelivery');
+
+            return response()->json(['message' => 'retry'], 503);
+        }
+
+        if ($order === null) {
+            logglyWarning()->withContext(['order_id' => $orderId])
+                ->log('MP order notification ignored: order not found on this account');
+
+            return response()->json(['message' => 'ok']);
+        }
+
+        $this->paymentOutcome->apply($order);
 
         return response()->json(['message' => 'ok']);
     }
@@ -453,13 +935,54 @@ class CheckoutController extends Controller
         }
 
         $xRequestId = (string) $request->header('x-request-id', '');
-        $dataId = $request->query('data_id', $request->input('data.id', ''));
+        // O Mercado Pago assina o id em minúsculas quando ele é alfanumérico.
+        // Ids de pagamento são numéricos, mas outros tópicos não são.
+        $dataId = strtolower((string) $request->query('data_id', $request->input('data.id', '')));
 
         $ts = $this->extractSignaturePart($signature, 'ts');
         $v1 = $this->extractSignaturePart($signature, 'v1');
         $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$xRequestId};ts:{$ts};", (string) $secret);
 
-        return hash_equals($hash, $v1);
+        if (! hash_equals($hash, $v1)) {
+            return false;
+        }
+
+        return $this->timestampIsFresh($ts);
+    }
+
+    /**
+     * Se o `ts` assinado está dentro da tolerância configurada.
+     *
+     * O HMAC prova que a notificação veio do Mercado Pago, não que é recente:
+     * sem isto, uma notificação capturada poderia ser reenviada a qualquer
+     * momento. Aceita `ts` em segundos ou em milissegundos.
+     */
+    private function timestampIsFresh(string $ts): bool
+    {
+        $tolerance = (int) config('api-key.mercadopago.webhook_tolerance_seconds', 0);
+
+        if ($tolerance <= 0) {
+            return true;
+        }
+
+        if (! ctype_digit($ts)) {
+            return false;
+        }
+
+        $seconds = (int) $ts;
+
+        if ($seconds > 99_999_999_999) {
+            $seconds = intdiv($seconds, 1000);
+        }
+
+        if (abs(time() - $seconds) > $tolerance) {
+            logglyWarning()->withContext(['ts' => $ts, 'tolerance' => $tolerance])
+                ->log('MP webhook rejected: signature timestamp outside tolerance');
+
+            return false;
+        }
+
+        return true;
     }
 
     /**

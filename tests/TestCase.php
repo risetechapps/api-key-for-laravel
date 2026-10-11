@@ -101,6 +101,14 @@ abstract class TestCase extends BaseTestCase
         $app['config']->set('auth.providers.users', ['driver' => 'eloquent', 'model' => Authentication::class]);
 
         $app['config']->set('api-key.grace_period_days', 3);
+
+        // 2FA obrigatória para admin é o padrão em produção; os testes de admin
+        // existentes não passam pelo fluxo de 2FA, que tem testes próprios.
+        $app['config']->set('api-key.two_factor.required_for_admins', false);
+
+        // Chave estável: cast `encrypted` (segredo de 2FA e de webhook), URLs
+        // assinadas e desafio de 2FA dependem dela.
+        $app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('k', 32)));
         $app['config']->set('api-key.token_expiration', 60);
         $app['config']->set('api-key.token_refresh', 1440);
         $app['config']->set('api-key.bcrypt_algorithm', PASSWORD_BCRYPT);

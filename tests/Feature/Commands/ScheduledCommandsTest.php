@@ -13,8 +13,9 @@ function scheduledCommands(): array
     foreach (app(Schedule::class)->events() as $event) {
         // A linha agendada e '<php>' 'artisan' <comando> [opcoes]; interessa so
         // o nome, que e a parte que o operador reconhece. Ele NAO vem entre
-        // aspas, ao contrario do binario e do artisan.
-        if (preg_match('/"artisan"\s+(\S+)/', $event->command ?? '', $matches)) {
+        // aspas, ao contrario do binario e do artisan — que vem com aspas
+        // duplas no Windows e simples no Linux.
+        if (preg_match('/["\']artisan["\']\s+(\S+)/', $event->command ?? '', $matches)) {
             $map[$matches[1]] = $event->expression;
         }
     }

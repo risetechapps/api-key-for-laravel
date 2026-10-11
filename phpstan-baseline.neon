@@ -199,12 +199,6 @@ parameters:
 			path: src/Http/Middlewares/ApiKeyOriginValidatorMiddleware.php
 
 		-
-			message: '#^Parameter \#1 \$user of method Illuminate\\Contracts\\Auth\\Guard\:\:setUser\(\) expects Illuminate\\Contracts\\Auth\\Authenticatable, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Http/Middlewares/AuthenticateApiKey.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$apiKey\.$#'
 			identifier: property.notFound
 			count: 1
@@ -229,12 +223,6 @@ parameters:
 			path: src/Http/Middlewares/CheckActivePlanMiddleware.php
 
 		-
-			message: '#^Method RiseTechApps\\ApiKey\\Http\\Middlewares\\CheckRequestLimitMiddleware\:\:resolveActivePlan\(\) should return RiseTechApps\\ApiKey\\Models\\UserPlan\\UserPlan\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Http/Middlewares/CheckRequestLimitMiddleware.php
-
-		-
 			message: '#^Right side of && is always true\.$#'
 			identifier: booleanAnd.rightAlwaysTrue
 			count: 2
@@ -253,33 +241,9 @@ parameters:
 			path: src/Http/Middlewares/CheckRequestLimitMiddleware.php
 
 		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$active\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Resources/ApiKeyResource.php
-
-		-
 			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$code\.$#'
 			identifier: property.notFound
 			count: 2
-			path: src/Http/Resources/ApiKeyResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Resources/ApiKeyResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$expires_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Resources/ApiKeyResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\ApiKeyResource\:\:\$updated_at\.$#'
-			identifier: property.notFound
-			count: 1
 			path: src/Http/Resources/ApiKeyResource.php
 
 		-
@@ -379,57 +343,9 @@ parameters:
 			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
 
 		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:\$endpoint\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:\$method\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:\$requested_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\Dashboard\\Signature\\LogHistoryResource\:\:\$response_code\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Http/Resources/Dashboard/Signature/LogHistoryResource.php
-
-		-
 			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$created_at\.$#'
 			identifier: property.notFound
 			count: 1
-			path: src/Http/Resources/RequestLogResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$endpoint\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Resources/RequestLogResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$method\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Resources/RequestLogResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$requested_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Resources/RequestLogResource.php
-
-		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Http\\Resources\\RequestLogResource\:\:\$response_code\.$#'
-			identifier: property.notFound
-			count: 2
 			path: src/Http/Resources/RequestLogResource.php
 
 		-
@@ -445,38 +361,8 @@ parameters:
 			path: src/Http/Resources/UserResource.php
 
 		-
-			message: '#^Access to an undefined property RiseTechApps\\ApiKey\\Models\\ApiKey\\ApiKey\:\:\$allowed_origins\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Models/ApiKey/ApiKey.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Models/Authentication/Authentication.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$requests_used\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Models/Authentication/Authentication.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:isInGracePeriod\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: src/Models/Authentication/Authentication.php
-
-		-
 			message: '#^Method RiseTechApps\\ApiKey\\Models\\Authentication\\Authentication\:\:getPhotoProfile\(\) should return RiseTechApps\\Media\\Models\\Media\|null but returns Illuminate\\Database\\Eloquent\\Model\.$#'
 			identifier: return.type
-			count: 1
-			path: src/Models/Authentication/Authentication.php
-
-		-
-			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Database\\Eloquent\\Relations\\HasOne\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: src/Models/Authentication/Authentication.php
 
@@ -505,12 +391,6 @@ parameters:
 			path: src/Models/UserPlan/UserPlan.php
 
 		-
-			message: '#^Parameter \#1 \$array \(array\{\}\|array\{non\-falsy\-string\}\) to function array_filter does not contain falsy values, the array will always stay the same\.$#'
-			identifier: arrayFilter.same
-			count: 1
-			path: src/RoutesApiKey.php
-
-		-
 			message: '#^Method RiseTechApps\\ApiKey\\Rules\\PlanRules\:\:messages\(\) should return array\<string, array\<string, string\>\> but returns array\<string, string\>\.$#'
 			identifier: return.type
 			count: 1
@@ -521,18 +401,6 @@ parameters:
 			identifier: property.notFound
 			count: 1
 			path: src/Scope/ApiKeyScope.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Services/PlanService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$requests_used\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Services/PlanService.php
 
 		-
 			message: '#^Trait RiseTechApps\\ApiKey\\Traits\\ApiResponseTrait is used zero times and is not analysed\.$#'

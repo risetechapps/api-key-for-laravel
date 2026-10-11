@@ -1,15 +1,13 @@
 <template>
     <router-view />
+    <ToastHost />
+    <DialogHost />
+    <CommandPalette v-if="authStore.isAuthenticated" />
 </template>
 
-<script setup>
-</script>
+<script setup lang="ts">
+import { ToastHost, DialogHost, CommandPalette } from '@/ui';
+import { useAuthStore } from '@/stores/auth';
 
-<style>
-/* Smooth transitions for dark mode */
-* {
-    transition-property: background-color, border-color;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 150ms;
-}
-</style>
+const authStore = useAuthStore();
+</script>

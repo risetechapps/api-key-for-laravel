@@ -7,14 +7,11 @@
                 <div class="flex items-center justify-between h-16">
                     <!-- Logo -->
                     <router-link to="/" class="flex items-center gap-2">
-                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex
-                            items-center justify-center shadow-lg shadow-indigo-500/30">
+                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex
+                            items-center justify-center shadow-lg shadow-brand-500/30">
                             <PhHexagon :size="20" weight="fill" class="text-white" />
                         </div>
-                        <span class="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600
-                            bg-clip-text text-transparent">
-                            Api Key
-                        </span>
+                        <span class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">{{ brand.name }}</span>
                     </router-link>
 
                     <!-- Desktop Navigation -->
@@ -24,8 +21,8 @@
                             :key="item.name"
                             :href="item.href"
                             @click.prevent="navigateToSection(item.href)"
-                            class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600
-                                dark:hover:text-indigo-400 transition-colors cursor-pointer">
+                            class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-brand-600
+                                dark:hover:text-brand-400 transition-colors cursor-pointer">
                             {{ item.name }}
                         </a>
                     </div>
@@ -44,8 +41,8 @@
                             v-if="!authStore.isAuthenticated"
                             to="/login"
                             class="hidden sm:inline-flex items-center gap-2 px-4 py-2 text-sm font-medium
-                                text-slate-700 dark:text-slate-200 hover:text-indigo-600
-                                dark:hover:text-indigo-400 transition-colors">
+                                text-slate-700 dark:text-slate-200 hover:text-brand-600
+                                dark:hover:text-brand-400 transition-colors">
                             Entrar
                         </router-link>
 
@@ -53,8 +50,8 @@
                             v-if="!authStore.isAuthenticated"
                             to="/register"
                             class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white
-                                bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-lg
-                                shadow-indigo-500/30">
+                                bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-lg
+                                shadow-brand-500/30">
                             Começar Grátis
                         </router-link>
 
@@ -62,7 +59,7 @@
                             v-else
                             to="/dashboard"
                             class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white
-                            bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-lg shadow-indigo-500/30"
+                            bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-lg shadow-brand-500/30"
                         >
                             Dashboard
                         </router-link>
@@ -97,7 +94,7 @@
                             :href="item.href"
                             @click.prevent="navigateToSection(item.href)"
                             class="block text-base font-medium text-slate-600 dark:text-slate-300
-                                hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer">
+                                hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer">
                             {{ item.name }}
                         </a>
                         <hr class="border-slate-200 dark:border-slate-700" />
@@ -121,7 +118,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
+import { brand } from '@/brand';
+import { isDark, toggleTheme } from '@/theme';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { PhHexagon, PhSun, PhMoon, PhList, PhX } from '@phosphor-icons/vue';
@@ -130,7 +129,6 @@ const authStore = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 
-const isDark = ref(false);
 const mobileMenuOpen = ref(false);
 
 const navigation = [
@@ -156,28 +154,8 @@ function navigateToSection(href) {
     mobileMenuOpen.value = false;
 }
 
-onMounted(() => {
-    const savedDarkMode = localStorage.getItem('darkMode');
-    if (savedDarkMode === 'true') {
-        document.documentElement.classList.add('dark');
-        isDark.value = true;
-    } else if (savedDarkMode === 'false') {
-        document.documentElement.classList.remove('dark');
-        isDark.value = false;
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark');
-        isDark.value = true;
-    }
-});
-
+// Tema compartilhado com o painel (o shell Blade já aplicou antes do paint).
 function toggleDarkMode() {
-    isDark.value = !isDark.value;
-    if (isDark.value) {
-        document.documentElement.classList.add('dark');
-        localStorage.setItem('darkMode', 'true');
-    } else {
-        document.documentElement.classList.remove('dark');
-        localStorage.setItem('darkMode', 'false');
-    }
+    toggleTheme();
 }
 </script>

@@ -1,142 +1,88 @@
 <template>
-    <div
-        class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br
-        from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-900 dark:via-slate-900
-        dark:to-slate-900">
-        <div class="w-full max-w-md">
-            <!-- Logo -->
-            <div class="text-center mb-8">
-                <router-link to="/" class="inline-flex items-center gap-3 justify-center">
-                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex
-                     items-center justify-center shadow-lg shadow-indigo-500/30">
-                        <PhHexagon :size="28" weight="fill" class="text-white"/>
-                    </div>
-                    <span class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text
-                    text-transparent">
-                        Api Key
-                    </span>
-                </router-link>
-            </div>
-
-            <Card class="shadow-xl shadow-slate-200/50 dark:shadow-none">
-                <div class="text-center mb-8">
-                    <h1 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                        Bem-vindo de volta
-                    </h1>
-                    <p class="text-slate-600 dark:text-slate-400">
-                        Entre com sua conta para continuar
-                    </p>
-                </div>
-
-                <form @submit.prevent="handleLogin" class="space-y-5">
-                    <Input
-                        v-model="form.email"
-                        label="Email"
-                        type="email"
-                        placeholder=""
-                        required
-                        :icon="PhEnvelope"
-                        :error="errors.email"
-                    />
-
-                    <Input
-                        v-model="form.password"
-                        label="Senha"
-                        :type="showPassword ? 'text' : 'password'"
-                        placeholder=""
-                        required
-                        :icon="PhLockKey"
-                        :error="errors.password"
-                    >
-                        <template #suffix>
-                            <button
-                                type="button"
-                                @click="showPassword = !showPassword"
-                                class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300
-                                transition-colors">
-                                <PhEye v-if="!showPassword" :size="20"/>
-                                <PhEyeSlash v-else :size="20"/>
-                            </button>
-                        </template>
-                    </Input>
-
-                    <div class="flex items-center justify-between">
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input
-                                v-model="form.remember"
-                                type="checkbox"
-                                class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500
-                                dark:border-slate-600 dark:bg-slate-700"
-                            />
-                            <span class="text-sm text-slate-600 dark:text-slate-400">Lembrar de mim</span>
-                        </label>
-
-                        <router-link
-                            to="/forgot-password"
-                            class="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400
-                            dark:hover:text-indigo-300 transition-colors">
-                            Esqueceu a senha?
-                        </router-link>
-                    </div>
-
-                    <Button
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        class="w-full"
-                        :loading="authStore.loading">
-                        Entrar
-                    </Button>
-                </form>
-
-                <div v-if="verifiedMessage"
-                     class="mt-4 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-700
-                     dark:text-green-400 text-sm">
-                    {{ verifiedMessage }}
-                </div>
-
-                <div v-if="authStore.error || errorMessage"
-                     class="mt-4 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600
-                     dark:text-red-400 text-sm">
-                    {{ authStore.error || errorMessage }}
-                </div>
-
-                <div class="mt-8 text-center">
-                    <p class="text-slate-600 dark:text-slate-400">
-                        Ainda não tem conta?
-                        <router-link
-                            to="/register"
-                            class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400
-                            dark:hover:text-indigo-300 transition-colors ml-1">
-                            Criar conta
-                        </router-link>
-                    </p>
-                </div>
-            </Card>
+    <AuthShell :title="twoFactor.challenge ? 'Verificação em duas etapas' : 'Bem-vindo de volta'" :subtitle="twoFactor.challenge ? '' : 'Entre com sua conta para continuar'">
+        <div class="mb-5 space-y-3 empty:hidden">
+            <Alert v-if="verifiedMessage" tone="success">{{ verifiedMessage }}</Alert>
+            <Alert v-if="authStore.error || errorMessage" tone="danger">{{ authStore.error || errorMessage }}</Alert>
+            <Alert v-if="resendMessage" tone="info">{{ resendMessage }}</Alert>
         </div>
-    </div>
+
+        <Transition name="ui-slide" mode="out-in">
+            <!-- Segundo passo: código do aplicativo autenticador -->
+            <form v-if="twoFactor.challenge" key="2fa" class="space-y-5" @submit.prevent="handleTwoFactor">
+                <div class="flex items-center gap-3 rounded-2xl bg-brand-50 p-4 dark:bg-brand-500/10">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white"><PhShieldCheck :size="20" weight="fill" /></span>
+                    <p class="text-sm text-brand-900 dark:text-brand-100">{{ twoFactor.useRecovery ? 'Digite um dos seus códigos de recuperação.' : 'Digite o código de 6 dígitos do seu aplicativo autenticador.' }}</p>
+                </div>
+                <TextInput
+                    v-model="twoFactor.code"
+                    :label="twoFactor.useRecovery ? 'Código de recuperação' : 'Código'"
+                    :placeholder="twoFactor.useRecovery ? 'XXXXX-XXXXX' : '000 000'"
+                    :inputmode="twoFactor.useRecovery ? 'text' : 'numeric'"
+                    autocomplete="one-time-code"
+                    autofocus
+                    mono
+                    size="lg"
+                    required
+                    :error="twoFactor.error"
+                />
+                <Button type="submit" block size="lg" :loading="authStore.loading">Verificar</Button>
+                <div class="flex justify-between text-sm">
+                    <button type="button" class="font-medium text-brand-600 hover:underline dark:text-brand-400" @click="twoFactor.useRecovery = !twoFactor.useRecovery; twoFactor.code = ''">
+                        {{ twoFactor.useRecovery ? 'Usar o aplicativo' : 'Usar código de recuperação' }}
+                    </button>
+                    <button type="button" class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" @click="twoFactor.challenge = ''">Voltar</button>
+                </div>
+            </form>
+
+            <form v-else key="login" class="space-y-5" @submit.prevent="handleLogin">
+                <TextInput v-model="form.email" label="E-mail" type="email" autocomplete="email" required :icon="PhEnvelope" :error="errors.email" />
+                <TextInput v-model="form.password" label="Senha" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" required :icon="PhLockKey" :error="errors.password">
+                    <template #suffix>
+                        <button type="button" class="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" :aria-label="showPassword ? 'Ocultar senha' : 'Mostrar senha'" @click="showPassword = !showPassword">
+                            <PhEyeSlash v-if="showPassword" :size="18" />
+                            <PhEye v-else :size="18" />
+                        </button>
+                    </template>
+                </TextInput>
+
+                <div class="flex items-center justify-between">
+                    <Checkbox v-model="form.remember" label="Lembrar de mim" />
+                    <router-link to="/forgot-password" class="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">Esqueceu a senha?</router-link>
+                </div>
+
+                <Button type="submit" block size="lg" :icon-right="PhArrowRight" :loading="authStore.loading">Entrar</Button>
+
+                <p class="text-center text-xs text-slate-500 dark:text-slate-400">
+                    Não recebeu o e-mail de confirmação?
+                    <button type="button" class="font-semibold text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-400" :disabled="resending" @click="resendVerification">Reenviar</button>
+                </p>
+            </form>
+        </Transition>
+
+        <template #footer>
+            Ainda não tem conta?
+            <router-link to="/register" class="ml-1 font-semibold text-brand-600 hover:underline dark:text-brand-400">Criar conta</router-link>
+        </template>
+    </AuthShell>
 </template>
 
 <script setup>
 import {reactive, ref, onMounted} from 'vue';
 import {useRouter, useRoute} from 'vue-router';
 import {useAuthStore} from '@/stores/auth';
-import {
-    PhHexagon,
-    PhEnvelope,
-    PhLockKey,
-    PhEye,
-    PhEyeSlash,
-} from '@phosphor-icons/vue';
-import Card from "@/views/componentes/Card.vue";
-import Button from "@/views/componentes/Button.vue";
-import Input from "@/views/componentes/Input.vue";
+import axios from 'axios';
+import { PhEnvelope, PhLockKey, PhEye, PhEyeSlash, PhArrowRight, PhShieldCheck } from '@phosphor-icons/vue';
+import { Alert, Button, Checkbox, TextInput } from '@/ui';
+import AuthShell from '@/views/authentication/AuthShell.vue';
 
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 
 const showPassword = ref(false);
+const twoFactor = reactive({ challenge: '', code: '', useRecovery: false, error: '' });
+const resending = ref(false);
+const resendMessage = ref('');
 const verifiedMessage = ref('');
 const errorMessage = ref('');
 
@@ -145,12 +91,21 @@ onMounted(() => {
         verifiedMessage.value = 'E-mail confirmado com sucesso! Agora você pode fazer login.';
     }
     if (route.query.error === 'invalid_link') {
-        errorMessage.value = 'Link de verificação inválido ou expirado. Faça login para reenviar o e-mail.';
+        errorMessage.value = 'Link de verificação inválido ou expirado. Informe seu e-mail e clique em "Reenviar" abaixo.';
     }
     // Enviado pelo interceptor de 401 do axios: sem esta mensagem o usuário
     // apareceria na tela de login sem saber por que foi expulso.
     if (route.query.error === 'session_expired') {
         errorMessage.value = 'Sua sessão expirou. Entre novamente para continuar.';
+    }
+    if (route.query.email_changed === '1') {
+        verifiedMessage.value = 'E-mail alterado. Entre com o novo endereço.';
+    }
+    if (route.query.error === 'email_taken') {
+        errorMessage.value = 'O novo e-mail passou a ser usado por outra conta. A troca não foi feita.';
+    }
+    if (route.query.error === 'account_disabled') {
+        errorMessage.value = 'Esta conta está suspensa. Entre em contato com o suporte.';
     }
 });
 
@@ -180,10 +135,18 @@ async function handleLogin() {
     }
 
     try {
-        await authStore.login({
+        const result = await authStore.login({
             email: form.email,
             password: form.password,
         });
+
+        if (result?.two_factor) {
+            twoFactor.challenge = result.challenge;
+            twoFactor.code = '';
+            twoFactor.error = '';
+            return;
+        }
+
         router.push('/dashboard');
     } catch (err) {
         console.error('Login error:', err);
@@ -194,9 +157,7 @@ async function handleLogin() {
             return;
         }
 
-        // Traduzir mensagens conhecidas
         const message = err.response?.data?.message || '';
-        // const translatedMessage = translateErrorMessage(message);
 
         if (err.response?.data?.errors) {
             const apiErrors = err.response.data.errors;
@@ -209,13 +170,50 @@ async function handleLogin() {
         }
     }
 
-    function translateErrorMessage(msg) {
-        const translations = {
-            'Account not verified, please check your email inbox.': 'Conta não verificada, por favor verifique sua caixa de e-mail.',
-            'User not found': 'Usuário não encontrado',
-            'Incorrect username or password': 'Usuário ou senha incorretos',
-        };
-        return translations[msg] || msg;
+}
+
+async function handleTwoFactor() {
+    twoFactor.error = '';
+    try {
+        await authStore.verifyTwoFactor({
+            challenge: twoFactor.challenge,
+            ...(twoFactor.useRecovery ? { recovery_code: twoFactor.code } : { code: twoFactor.code }),
+        });
+        router.push('/dashboard');
+    } catch (err) {
+        // Desafio vencido (410): volta para a senha.
+        if (err.response?.status === 410) {
+            twoFactor.challenge = '';
+            errors.email = err.response?.data?.message || 'A verificação expirou. Entre novamente.';
+            return;
+        }
+        twoFactor.error = err.response?.status === 429
+            ? 'Muitas tentativas. Aguarde alguns minutos.'
+            : (err.response?.data?.message || 'Código inválido');
+        authStore.error = null;
+    }
+}
+
+// A API responde igual exista ou não a conta, então a mensagem também não diz.
+async function resendVerification() {
+    errors.email = '';
+    resendMessage.value = '';
+
+    if (!form.email) {
+        errors.email = 'Informe o e-mail da conta para reenviar a confirmação';
+        return;
+    }
+
+    resending.value = true;
+    try {
+        const response = await axios.post('/email/resend', { email: form.email });
+        resendMessage.value = response.data?.data?.message || 'Se houver uma conta pendente com este e-mail, enviaremos um novo link.';
+    } catch (err) {
+        errors.email = err.response?.status === 429
+            ? 'Muitas tentativas. Aguarde alguns minutos.'
+            : (err.response?.data?.errors?.email?.[0] || 'Não foi possível reenviar agora.');
+    } finally {
+        resending.value = false;
     }
 }
 </script>

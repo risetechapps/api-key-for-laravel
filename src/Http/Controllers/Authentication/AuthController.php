@@ -105,10 +105,28 @@ class AuthController extends Controller
 
         $user = $this->authService->findUserByEmail($credentials['email']);
 
-        if (! $user) {
-            logglyInfo()->withContext($context)->log('Login failed: user not found');
+        // E-mail inexistente e senha errada têm a mesma resposta. Antes o login
+        // dizia "usuário não encontrado", e quem quisesse saber se alguém tem
+        // conta aqui só precisava tentar o e-mail. O hash é conferido mesmo sem
+        // usuário para o tempo de resposta não denunciar a diferença.
+        if (! $this->authService->passwordMatches($user, $credentials['password'])) {
+            logglyInfo()->withContext($context)->log($user
+                ? 'Login failed: incorrect credentials'
+                : 'Login failed: user not found');
 
-            return response()->jsonGone(__('api-key::messages.user_not_found'));
+            return response()->jsonGone(__('api-key::messages.incorrect_credentials'));
+        }
+
+        // Daqui em diante a senha está certa: contar que a conta está suspensa
+        // ou sem verificação não revela nada a quem não é o dono.
+        if (! $user->isEnabled()) {
+            logglyWarning()->withContext(['user_id' => $user->getKey(), 'status' => $user->status, ...$context])
+                ->log('Login failed: account disabled');
+
+            return response()->json([
+                'success' => false,
+                'message' => __('api-key::messages.account_disabled'),
+            ], 403);
         }
 
         if (! $user->hasVerifiedEmail()) {
@@ -118,15 +136,20 @@ class AuthController extends Controller
             return response()->jsonGone(__('api-key::messages.account_not_verified'));
         }
 
-        $result = $this->authService->attemptLogin($credentials);
+        // Com 2FA a senha não basta: devolve um desafio, trocado por token em
+        // /login/two-factor junto com o código do aplicativo.
+        if ($user->two_factor_confirmed_at) {
+            logglyInfo()->withContext($context)->log('Login: two-factor challenge issued');
 
-        if (! $result) {
-            logglyInfo()->withContext($context)->log('Login failed: incorrect credentials');
-
-            return response()->jsonGone(__('api-key::messages.incorrect_credentials'));
+            return response()->jsonSuccess([
+                'two_factor' => true,
+                'challenge' => TwoFactorController::challengeFor($user),
+            ]);
         }
 
-        logglyInfo()->withContext(['user_id' => $result['user']->getKey(), ...$context])->log('User logged in');
+        $result = $this->authService->issueToken($user, $request);
+
+        logglyInfo()->withContext(['user_id' => $user->getKey(), ...$context])->log('User logged in');
 
         $data = AuthenticationMeResource::make($result['user'])->jsonSerialize();
         $data['token'] = $result['token'];
@@ -134,6 +157,13 @@ class AuthController extends Controller
         return response()->jsonSuccess($data);
     }
 
+    /**
+     * Envia o link de redefinição de senha.
+     *
+     * A resposta é sempre a mesma, exista ou não a conta, e mesmo quando o
+     * broker recusa por excesso de pedidos: responder diferente transformava
+     * esta rota num verificador de quais e-mails têm cadastro.
+     */
     public function forgotPassword(Request $request): JsonResponse
     {
         $request->validate(['email' => 'required|email']);
@@ -141,15 +171,15 @@ class AuthController extends Controller
 
         $status = Password::sendResetLink($request->only('email'));
 
-        if ($status === Password::RESET_LINK_SENT) {
-            logglyInfo()->withContext(['email' => $email, 'ip' => $request->ip()])->log('Password reset link sent');
+        $context = ['email' => $email, 'status' => $status, 'ip' => $request->ip()];
 
-            return response()->jsonSuccess(['message' => __('api-key::messages.password_reset_sent')]);
+        if ($status === Password::RESET_LINK_SENT) {
+            logglyInfo()->withContext($context)->log('Password reset link sent');
+        } else {
+            logglyWarning()->withContext($context)->log('Password reset link not sent');
         }
 
-        logglyWarning()->withContext(['email' => $email, 'status' => $status, 'ip' => $request->ip()])->log('Password reset link failed');
-
-        return response()->jsonGone(__('api-key::messages.password_reset_failed'));
+        return response()->jsonSuccess(['message' => __('api-key::messages.password_reset_sent')]);
     }
 
     public function resetPassword(Request $request): JsonResponse
@@ -179,7 +209,31 @@ class AuthController extends Controller
 
         logglyWarning()->withContext(['email' => $email, 'status' => $status, 'ip' => $request->ip()])->log('Password reset failed');
 
-        return response()->jsonGone(__('api-key::messages.password_reset_failed'));
+        return response()->jsonGone(__('api-key::messages.password_reset_invalid'));
+    }
+
+    /**
+     * Reenvia o e-mail de verificação para quem perdeu o primeiro.
+     *
+     * Antes o único jeito de receber outro era tentar o login, que reenviava
+     * — e reenviava antes de conferir a senha. Como no esqueci-a-senha, a
+     * resposta não diz se o e-mail tem conta nem se ela já foi verificada.
+     */
+    public function resendVerification(Request $request): JsonResponse
+    {
+        $request->validate(['email' => 'required|email']);
+
+        $user = $this->authService->findUserByEmail((string) $request->input('email'));
+        $context = ['email' => $request->input('email'), 'ip' => $request->ip()];
+
+        if ($user && $user->isEnabled() && ! $user->hasVerifiedEmail()) {
+            $user->sendEmailVerificationNotification();
+            logglyInfo()->withContext(['user_id' => $user->getKey(), ...$context])->log('Verification e-mail resent');
+        } else {
+            logglyInfo()->withContext($context)->log('Verification e-mail not resent: no pending account');
+        }
+
+        return response()->jsonSuccess(['message' => __('api-key::messages.verification_resent')]);
     }
 
     public function logout(Request $request): JsonResponse

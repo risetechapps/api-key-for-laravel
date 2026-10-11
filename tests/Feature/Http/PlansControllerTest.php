@@ -50,11 +50,22 @@ describe('Plan catalogue', function () {
 
         $this->getJson('/api/v1/dashboard/plans')->assertStatus(200);
 
-        // Um plano criado depois do primeiro GET não aparece até o cache cair —
-        // é o comportamento pretendido, e é o que store/update/delete invalidam.
+        // Alteração que não passa pelo model (UPDATE direto) não invalida: a
+        // lista continua vindo do cache.
+        Plan::query()->update(['description' => 'alterado por fora']);
+
+        expect($this->getJson('/api/v1/dashboard/plans')->json('data.0.description'))
+            ->not->toBe('alterado por fora');
+    });
+
+    it('drops the cache when a plan is saved by any path', function () {
+        Plan::factory()->create(['is_active' => true]);
+        $this->getJson('/api/v1/dashboard/plans')->assertStatus(200);
+
+        // Criado fora do controller (seeder, tinker, código do app).
         Plan::factory()->create(['is_active' => true]);
 
-        expect($this->getJson('/api/v1/dashboard/plans')->json('data'))->toHaveCount(1);
+        expect($this->getJson('/api/v1/dashboard/plans')->json('data'))->toHaveCount(2);
     });
 
     it('reports a plan that does not exist', function () {

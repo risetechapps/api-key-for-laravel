@@ -1,221 +1,102 @@
 <template>
-    <div class="space-y-6">
-        <!-- Stats Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card v-for="stat in stats" :key="stat.name" class="hover:shadow-lg transition-shadow">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ stat.name }}</p>
-                        <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">{{ stat.value }}</p>
-                    </div>
-                    <div
-                        class="w-12 h-12 rounded-xl flex items-center justify-center"
-                        :class="stat.bgClass"
-                    >
-                        <component :is="stat.icon" :size="24" :class="stat.iconClass"/>
-                    </div>
-                </div>
-                <div v-if="stat.change?.value" class="mt-4 flex items-center gap-1">
-                    <PhTrendUp v-if="stat.change.trend === 'up'" :size="16" class="text-emerald-500"/>
-                    <PhTrendDown v-else :size="16" class="text-red-500"/>
-                    <span :class="stat.change.trend === 'up' ? 'text-emerald-500' : 'text-red-500'"
-                          class="text-sm font-medium">
-                        {{ stat.change.value }}
-                    </span>
-                </div>
-            </Card>
-        </div>
-
-        <!-- Charts Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Usage Chart -->
-            <Card class="lg:col-span-2">
-                <template #header>
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Uso de Requisições</h3>
-                            <p class="text-sm text-slate-500 dark:text-slate-400">Últimos 30 dias</p>
-                        </div>
-                        <select
-                            v-model="chartPeriod"
-                            class="text-sm border-slate-200 dark:border-slate-700 rounded-lg dark:bg-slate-800"
-                        >
-                            <option value="7">7 dias</option>
-                            <option value="30">30 dias</option>
-                            <option value="90">90 dias</option>
-                        </select>
-                    </div>
-                </template>
-
-                <div class="h-80">
-                    <apexchart
-                        type="area"
-                        height="320"
-                        :options="chartOptions"
-                        :series="chartSeries"
-                    />
-                </div>
-            </Card>
-
-            <!-- Plan Status -->
-            <Card>
-                <template #header>
-                    <div class="flex items-center gap-2">
-                        <PhCrown :size="20" weight="fill" class="text-amber-500"/>
-                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Plano Atual</h3>
-                    </div>
-                </template>
-
-                <div class="space-y-6">
-                    <div class="text-center">
-                        <h4 class="text-xl font-bold text-slate-900 dark:text-white">
-                            {{ hasPlan ? currentPlan.name : 'Sem plano ativo' }}
-                        </h4>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                            {{ hasPlan ? currentPlan.description : 'Você ainda não possui um plano ativo. Escolha um plano para começar.' }}
-                        </p>
-                    </div>
-
-                    <template v-if="hasPlan">
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600 dark:text-slate-400">Requisições usadas</span>
-                                <span class="font-medium text-slate-900 dark:text-white">
-                                    {{ usedRequests }} / {{ totalRequests }}
-                                </span>
-                            </div>
-                            <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                <div
-                                    class="h-full rounded-full transition-all duration-500"
-                                    :class="usageBarColor"
-                                    :style="{ width: `${usagePercentage}%` }"
-                                />
-                            </div>
-                        </div>
-
-                        <div class="space-y-3">
-                            <div v-for="feature in planFeatures" :key="feature.key" class="flex items-center gap-3">
-                                <PhCheckCircle :size="20" weight="fill" class="text-emerald-500"/>
-                                <span class="text-sm text-slate-700 dark:text-slate-300">{{ feature.name }}</span>
-                            </div>
-                        </div>
-                    </template>
-
-                    <router-link
-                        to="/dashboard/plans"
-                        class="block w-full text-center py-3 rounded-xl font-medium transition-colors"
-                        :class="!hasPlan
-                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                            : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 ' +
-                             'text-slate-700 dark:text-slate-200'"
-                    >
-                        {{ !hasPlan ? 'Escolher Plano' : 'Gerenciar Plano' }}
-                    </router-link>
-                </div>
-            </Card>
-        </div>
-
-        <!-- Recent Requests -->
-        <Card>
-            <template #header>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Requisições Recentes</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Últimas chamadas à API</p>
-                    </div>
-                    <router-link
-                        to="/dashboard/requests"
-                        class="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                    >
-                        Ver todas →
-                    </router-link>
-                </div>
+    <div>
+        <PageHeader :subtitle="hasPlan ? `Seu plano ${currentPlan.name} renova ${renewsIn}.` : 'Escolha um plano para liberar sua API key.'">
+            <template #title>{{ greeting }}, <span class="bg-gradient-to-r from-brand-600 to-brand-400 bg-clip-text text-transparent">{{ firstName }}</span></template>
+            <template #actions>
+                <Button variant="outline" :icon="PhBookOpen" href="/#docs">Documentação</Button>
+                <Button :icon="PhKey" to="/dashboard/api-keys">API Keys</Button>
             </template>
+        </PageHeader>
 
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase
-                            tracking-wider py-3 px-4">Endpoint
-                        </th>
-                        <th class="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase
-                            tracking-wider py-3 px-4">Método
-                        </th>
-                        <th class="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase
-                            tracking-wider py-3 px-4">Status
-                        </th>
-                        <th class="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase
-                            tracking-wider py-3 px-4">Data
-                        </th>
-                    </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                    <tr v-if="loading" v-for="i in 5" :key="i">
-                        <td v-for="j in 4" :key="j" class="py-3 px-4">
-                            <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                        </td>
-                    </tr>
+        <!-- Métricas -->
+        <div class="ui-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard style="--i: 0" label="Requisições hoje" :value="stats.today" :icon="PhLightning" :loading="loading" hint="desde a meia-noite" />
+            <StatCard style="--i: 1" label="Neste período" :value="stats.used" :icon="PhChartLineUp" tone="success" :loading="loading" :hint="stats.limit ? `de ${stats.limit.toLocaleString('pt-BR')}` : 'sem limite'" />
+            <StatCard style="--i: 2" label="Restantes" :value="stats.limit ? stats.remaining : '∞'" :icon="PhGauge" :tone="usagePercentage >= 90 ? 'danger' : usagePercentage >= 75 ? 'warning' : 'info'" :loading="loading" :hint="stats.limit ? `${Math.round(100 - usagePercentage)}% do plano livre` : 'plano ilimitado'" />
+            <StatCard style="--i: 3" label="Limite do plano" :value="stats.limit || 'Ilimitado'" :icon="PhStack" tone="neutral" :loading="loading" :to="'/dashboard/plans'" hint="ver planos" />
+        </div>
 
-                    <tr
-                        v-for="request in recentRequests"
-                        :key="request.id"
-                        class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                    >
-                        <td class="py-3 px-4">
-                            <div class="flex items-center gap-2">
-                                <span class="font-mono text-sm text-slate-900 dark:text-white">
-                                    {{ request.endpoint }}
-                                </span>
-                            </div>
-                        </td>
-                        <td class="py-3 px-4">
-                                <span
-                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                                    :class="getMethodClass(request.method)">
-                                    {{ request.method }}
-                                </span>
-                        </td>
-                        <td class="py-3 px-4">
-                            <div class="flex items-center gap-2">
-                                    <span
-                                        class="w-2 h-2 rounded-full"
-                                        :class="getStatusColor(request.response_code)"
-                                    />
-                                <span class="text-sm text-slate-700 dark:text-slate-300">
-                                    {{ request.response_code }}
-                                </span>
-                            </div>
-                        </td>
-                        <td class="py-3 px-4">
-                                <span class="text-sm text-slate-500 dark:text-slate-400">
-                                    {{ formatDate(request.requested_at) }}
-                                </span>
-                        </td>
-                    </tr>
-                    </tbody>
-                </table>
-            </div>
+        <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <!-- Gráfico -->
+            <Card class="lg:col-span-2" title="Uso de requisições" :subtitle="`Últimos ${chartPeriod} dias`">
+                <template #actions>
+                    <Tabs v-model="chartPeriod" variant="pills" :animate="false" :tabs="[{ key: '7', label: '7d' }, { key: '30', label: '30d' }, { key: '90', label: '90d' }]" label="Período" />
+                </template>
+                <div class="-mx-2 h-72">
+                    <Skeleton v-if="loading" height="100%" rounded="rounded-xl" />
+                    <apexchart v-else type="area" height="288" :options="usageChart" :series="chartSeries" />
+                </div>
+            </Card>
+
+            <!-- Plano -->
+            <Card :padding="false" class="overflow-hidden">
+                <div class="relative bg-gradient-to-br from-brand-600 to-brand-800 p-6 text-white">
+                    <div aria-hidden="true" class="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+                    <p class="text-xs font-medium uppercase tracking-wider text-white/70">Plano atual</p>
+                    <h3 class="mt-1 flex items-center gap-2 text-xl font-bold">
+                        <PhCrown :size="20" weight="fill" class="text-amber-300" />
+                        {{ hasPlan ? currentPlan.name : 'Sem plano ativo' }}
+                    </h3>
+                    <p class="mt-1 text-sm text-white/80 line-clamp-2">{{ hasPlan ? (currentPlan.description || 'Seu plano está ativo.') : 'Assine um plano para começar a usar a API.' }}</p>
+
+                    <div v-if="hasPlan && stats.limit" class="mt-5">
+                        <div class="mb-1.5 flex justify-between text-xs text-white/80">
+                            <span>{{ stats.used.toLocaleString('pt-BR') }} usadas</span>
+                            <span class="tabular-nums">{{ Math.round(usagePercentage) }}%</span>
+                        </div>
+                        <div class="h-2 overflow-hidden rounded-full bg-white/20">
+                            <div class="h-full rounded-full bg-white transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]" :style="{ width: `${usagePercentage}%` }" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6">
+                    <ul v-if="planFeatures.length" class="space-y-2.5">
+                        <li v-for="feature in planFeatures" :key="feature.key" class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300">
+                            <span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/15"><PhCheck :size="11" weight="bold" class="text-emerald-600 dark:text-emerald-400" /></span>
+                            {{ feature.name }}
+                        </li>
+                    </ul>
+                    <p v-else-if="hasPlan" class="text-sm text-slate-500 dark:text-slate-400">Acesso à API com o limite do plano.</p>
+
+                    <Button class="mt-6" block :variant="hasPlan ? 'outline' : 'primary'" :icon-right="PhArrowRight" to="/dashboard/plans">
+                        {{ hasPlan ? 'Gerenciar plano' : 'Escolher plano' }}
+                    </Button>
+                </div>
+            </Card>
+        </div>
+
+        <!-- Requisições recentes -->
+        <Card class="mt-6" title="Requisições recentes" subtitle="Últimas chamadas à API">
+            <template #actions>
+                <Button variant="ghost" size="sm" :icon-right="PhArrowRight" to="/dashboard/requests">Ver todas</Button>
+            </template>
+            <DataTable
+                :columns="columns"
+                :rows="recentRequests"
+                :loading="loading"
+                empty-title="Nenhuma requisição ainda"
+                empty-text="Quando sua aplicação chamar a API, as chamadas aparecem aqui."
+                :empty-icon="PhPulse"
+            >
+                <template #cell-endpoint="{ row }"><span class="font-mono text-xs text-slate-900 dark:text-white">{{ row.endpoint }}</span></template>
+                <template #cell-method="{ row }"><Badge :tone="methodTone(row.method)">{{ row.method }}</Badge></template>
+                <template #cell-response_code="{ row }"><Badge :tone="statusTone(row.response_code)" dot>{{ row.response_code }}</Badge></template>
+                <template #cell-requested_at="{ row }"><span class="text-slate-500 dark:text-slate-400">{{ format.relative(row.requested_at) }}</span></template>
+            </DataTable>
         </Card>
     </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import {format} from 'date-fns';
-import {ptBR} from 'date-fns/locale';
-import {useAuthStore} from '@/stores/auth';
-import {useDashboardStore} from '@/stores/dashboard';
+import { useAuthStore } from '@/stores/auth';
+import { useDashboardStore } from '@/stores/dashboard';
 import {
-    PhArrowsClockwise,
-    PhTrendUp,
-    PhTrendDown,
-    PhGauge,
-    PhHardDrives,
-    PhCrown,
-    PhCheckCircle,
+    PhLightning, PhChartLineUp, PhGauge, PhStack, PhCrown, PhCheck, PhArrowRight, PhBookOpen, PhKey, PhPulse,
 } from '@phosphor-icons/vue';
-import Card from "@/views/componentes/Card.vue";
+import { Badge, Button, Card, DataTable, PageHeader, Skeleton, StatCard, Tabs, chartOptions, format } from '@/ui';
+import type { BadgeTone, Column } from '@/ui';
 
 const authStore = useAuthStore();
 const dashboardStore = useDashboardStore();
@@ -223,141 +104,76 @@ const dashboardStore = useDashboardStore();
 const loading = ref(true);
 const chartPeriod = ref('30');
 
-const user = computed(() => authStore.user);
-const currentPlan = computed(() => user.value?.active_plan?.plan);
+const user = computed<any>(() => authStore.user);
+const currentPlan = computed<any>(() => user.value?.active_plan?.plan);
 const hasPlan = computed(() => !!currentPlan.value);
-// Lê das stats do poll (atualizam a cada 5s), com fallback no perfil/plano.
-const usedRequests = computed(() => dashboardStore.stats.month_requests ?? user.value?.usage?.requests_used ?? 0);
-const totalRequests = computed(() => dashboardStore.stats.total_requests_limit || user.value?.usage?.requests_limit || currentPlan.value?.request_limit || 0);
-const usagePercentage = computed(() => dashboardStore.usagePercentage);
+const usagePercentage = computed(() => Number(dashboardStore.usagePercentage) || 0);
 
-const usageBarColor = computed(() => {
-    if (usagePercentage.value < 50) return 'bg-emerald-500';
-    if (usagePercentage.value < 80) return 'bg-amber-500';
-    return 'bg-red-500';
+const firstName = computed(() => {
+    const first = String(user.value?.personal?.name || user.value?.name || '').split(' ')[0] ?? '';
+    // Nome todo em maiúsculas vira "Mateus" na saudação.
+    return first === first.toUpperCase() ? first.charAt(0) + first.slice(1).toLowerCase() : first;
+});
+const greeting = computed(() => {
+    const h = new Date().getHours();
+    return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
 });
 
-// Calcula variação percentual (se houver dados anteriores)
-const calculateChange = (current, previous) => {
-    if (!previous || previous === 0) return null;
-    const change = ((current - previous) / previous) * 100;
-    return {
-        value: `${Math.abs(change).toFixed(1)}%`,
-        trend: change >= 0 ? 'up' : 'down',
-    };
-};
+const renewsIn = computed(() => {
+    const end = user.value?.active_plan?.dates?.end_date;
+    return end ? format.relative(end) : 'breve';
+});
 
 const stats = computed(() => {
-    const s = dashboardStore.stats || {};
-
-    const today = s.today_requests ?? 0;
-    const remaining = s.remaining_requests ?? 0;
-    const total = s.total_requests_limit ?? 0;
-    const used = total - remaining;
-
-    return [
-        {
-            name: 'Requisições Hoje',
-            value: today,
-            icon: PhArrowsClockwise,
-            bgClass: 'bg-indigo-100 dark:bg-indigo-900/30',
-            iconClass: 'text-indigo-600 dark:text-indigo-400',
-            // Só mostra variação se tiver dados reais
-            change: today > 0 ? {value: 'Hoje', trend: 'up'} : null,
-        },
-        {
-            name: 'Este Mês',
-            value: used,
-            icon: PhGauge,
-            bgClass: 'bg-emerald-100 dark:bg-emerald-900/30',
-            iconClass: 'text-emerald-600 dark:text-emerald-400',
-        },
-        {
-            // "Cache Hit Rate" saiu daqui: o valor era 85 fixo no store, não uma
-            // medição. O pacote não expõe métrica de cache; enquanto não existir,
-            // este espaço mostra o teto do plano, que é dado real.
-            name: 'Limite do Plano',
-            value: total > 0 ? total : 'Ilimitado',
-            icon: PhHardDrives,
-            bgClass: 'bg-amber-100 dark:bg-amber-900/30',
-            iconClass: 'text-amber-600 dark:text-amber-400',
-        },
-        {
-            name: 'Restantes',
-            value: remaining,
-            icon: PhArrowsClockwise,
-            bgClass: 'bg-purple-100 dark:bg-purple-900/30',
-            iconClass: 'text-purple-600 dark:text-purple-400',
-        },
-    ];
+    const s: any = dashboardStore.stats || {};
+    const limit = Number(s.total_requests_limit ?? 0);
+    const remaining = Number(s.remaining_requests ?? 0);
+    return {
+        today: Number(s.today_requests ?? 0),
+        limit,
+        remaining,
+        used: limit ? limit - remaining : Number(s.month_requests ?? 0),
+    };
 });
 
-// Features reais do plano ativo, resolvidas pelo backend ({ key, name, description, icon }).
-const planFeatures = computed(() => currentPlan.value?.features ?? []);
+const planFeatures = computed<any[]>(() => currentPlan.value?.features ?? []);
+const recentRequests = computed<any[]>(() => dashboardStore.requests.slice(0, 8));
 
-const recentRequests = computed(() => dashboardStore.requests.slice(0, 10));
+const columns: Column[] = [
+    { key: 'endpoint', label: 'Endpoint' },
+    { key: 'method', label: 'Método' },
+    { key: 'response_code', label: 'Status' },
+    { key: 'requested_at', label: 'Quando', align: 'right' },
+];
 
-const chartOptions = computed(() => ({
-    chart: {
-        type: 'area',
-        toolbar: {show: false},
-        font: {family: 'Inter, sans-serif'},
-    },
-    colors: ['#6366f1'],
-    fill: {
-        type: 'gradient',
-        gradient: {
-            shadeIntensity: 1,
-            opacityFrom: 0.7,
-            opacityTo: 0.2,
-            stops: [0, 90, 100],
-        },
-    },
-    dataLabels: {enabled: false},
-    stroke: {curve: 'smooth', width: 2},
-    xaxis: {
-        categories: chartCategories.value,
-        labels: {
-            style: {colors: '#94a3b8'},
-        },
-        axisBorder: {show: false},
-        axisTicks: {show: false},
-    },
-    yaxis: {
-        labels: {
-            style: {colors: '#94a3b8'},
-            formatter: (value) => Math.round(value),
-        },
-    },
-    grid: {
-        borderColor: '#e2e8f0',
-        strokeDashArray: 4,
-    },
-    theme: {
-        mode: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-    },
+const chartSeries = computed(() => dashboardStore.chartSeries);
+const usageChart = computed(() => chartOptions({
+    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0, stops: [0, 95, 100] } },
+    xaxis: { categories: dashboardStore.chartCategories, tickAmount: 8, labels: { rotate: 0, hideOverlappingLabels: true } },
+    yaxis: { labels: { formatter: (v: number) => Math.round(v).toLocaleString('pt-BR') } },
 }));
 
-// Substituir o const chartSeries = ref([...]) hardcoded por:
-const chartSeries = computed(() => dashboardStore.chartSeries);
-const chartCategories = computed(() => dashboardStore.chartCategories);
+function methodTone(method: string): BadgeTone {
+    return ({ GET: 'success', POST: 'info', PUT: 'warning', PATCH: 'warning', DELETE: 'danger' } as Record<string, BadgeTone>)[method] ?? 'neutral';
+}
 
-// --- Auto-refresh (polling) das stats em tempo real ---
-// 5s por aba aberta batia em /dashboard/stats com muito mais frequencia do que o
-// numero muda. O contador do plano e agregado no servidor com cache curto, entao
-// 30s dao a mesma leitura por uma fracao da carga.
+function statusTone(code: number): BadgeTone {
+    return code < 300 ? 'success' : code < 400 ? 'warning' : 'danger';
+}
+
+// Atualização em segundo plano. O contador do plano é agregado no servidor
+// com cache curto: 30s dão a mesma leitura por uma fração da carga.
 const POLL_MS = 30000;
-let pollTimer = null;
+let pollTimer: number | null = null;
 let polling = false;
 
 async function pollStats() {
-    // não sobrepõe chamadas e não roda com a aba oculta
     if (polling || document.hidden) return;
     polling = true;
     try {
         await dashboardStore.fetchLiveStats();
-    } catch (_) {
-        // silencioso — é atualização de fundo
+    } catch {
+        // atualização de fundo: silenciosa
     } finally {
         polling = false;
     }
@@ -376,22 +192,19 @@ function stopPolling() {
 }
 
 function handleVisibility() {
-    if (document.hidden) {
-        stopPolling();
-    } else {
-        pollStats();      // atualiza na hora ao voltar para a aba
+    if (document.hidden) stopPolling();
+    else {
+        pollStats();
         startPolling();
     }
 }
 
 onMounted(async () => {
-    await Promise.all([
-        authStore.fetchProfile(),
-        dashboardStore.fetchStats(),
-        // dashboardStore.fetchRequests(),
-    ]);
-    loading.value = false;
-
+    try {
+        await Promise.all([authStore.fetchProfile(), dashboardStore.fetchStats()]);
+    } finally {
+        loading.value = false;
+    }
     startPolling();
     document.addEventListener('visibilitychange', handleVisibility);
 });
@@ -401,27 +214,5 @@ onUnmounted(() => {
     document.removeEventListener('visibilitychange', handleVisibility);
 });
 
-const formatDate = (date) => {
-    return format(new Date(date), 'dd/MM/yyyy HH:mm', {locale: ptBR});
-}
-
-const getMethodClass = (method) => {
-    const classes = {
-        GET: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-        POST: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-        PUT: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-        DELETE: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-    };
-    return classes[method] || classes.GET;
-}
-
-const getStatusColor = (code) => {
-    if (code < 300) return 'bg-emerald-500';
-    if (code < 400) return 'bg-amber-500';
-    return 'bg-red-500';
-}
-
-watch(chartPeriod, (newPeriod) => {
-    dashboardStore.fetchStats(parseInt(newPeriod));
-});
+watch(chartPeriod, (p) => dashboardStore.fetchStats(parseInt(p)));
 </script>

@@ -5,7 +5,9 @@ namespace RiseTechApps\ApiKey\Console\Commands;
 use Illuminate\Console\Command;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\MercadoPagoConfig;
+use RiseTechApps\ApiKey\Gateways\GatewayRegistry;
 use RiseTechApps\ApiKey\Models\PendingPayment\PendingPayment;
+use RiseTechApps\ApiKey\Services\AutomaticPaymentService;
 use RiseTechApps\ApiKey\Services\PaymentOutcomeService;
 
 /**
@@ -29,7 +31,7 @@ class ReconcilePendingPaymentsCommand extends Command
 
     protected $description = 'Consulta o gateway sobre compras em análise cujo webhook não chegou';
 
-    public function handle(PaymentOutcomeService $outcome): int
+    public function handle(PaymentOutcomeService $outcome, AutomaticPaymentService $automatic): int
     {
         // Uma espera recém-criada ainda tem chance de receber o webhook. Consultar
         // imediatamente só duplicaria trabalho e correria contra ele.
@@ -58,7 +60,19 @@ class ReconcilePendingPaymentsCommand extends Command
 
         foreach ($pending as $payment) {
             try {
-                $remote = $client->get((int) $payment->payment_id);
+                // Cobrança dos Pagamentos Automáticos é uma order, consultada
+                // pela Orders API e trazida para o mesmo formato de pagamento.
+                $driver = GatewayRegistry::forPaymentId($payment->payment_id);
+                $remote = match (true) {
+                    $driver !== null => $driver->findPayment((string) $payment->payment_id),
+                    AutomaticPaymentService::isOrderId($payment->payment_id) => $automatic->findOrder((string) $payment->payment_id),
+                    default => $client->get((int) $payment->payment_id),
+                };
+
+                if ($remote === null) {
+                    throw new \RuntimeException("order {$payment->payment_id} not found on this account");
+                }
+
                 $status = (string) $remote->status;
 
                 if (! in_array($status, ['approved', 'rejected', 'cancelled'], true)) {

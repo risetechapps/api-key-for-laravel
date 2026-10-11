@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Testing\TestResponse;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
@@ -206,5 +208,55 @@ describe('Api Key Origin Validator Middleware', function () {
         ])->getJson('/api/v1/test-endpoint');
 
         $response->assertStatus(403);
+    });
+});
+
+describe('Internal token bypass', function () {
+    beforeEach(function () {
+        config(['api-key.internal_token' => 'internal-secret']);
+    });
+
+    afterEach(function () {
+        TrustProxies::flushState();
+    });
+
+    function internalCall(string $remoteAddr, array $headers = []): TestResponse
+    {
+        return test()->withServerVariables(['REMOTE_ADDR' => $remoteAddr])
+            ->withHeaders([
+                'X-Internal-Token' => 'internal-secret',
+                'X-User-Id' => test()->user->getKey(),
+                ...$headers,
+            ])
+            ->getJson('/api/v1/test-endpoint');
+    }
+
+    it('accepts the token from loopback', function () {
+        internalCall('127.0.0.1')->assertStatus(200);
+    });
+
+    it('rejects the token from a remote address', function () {
+        internalCall('203.0.113.9')->assertStatus(401);
+    });
+
+    it('rejects the token for a client forwarded by a local proxy', function () {
+        // nginx na mesma máquina: o socket é 127.0.0.1 para toda requisição da
+        // internet. Com o TrustProxies configurado, $request->ip() revela o
+        // cliente real e o atalho interno não vale para ele.
+        TrustProxies::at('127.0.0.1');
+
+        internalCall('127.0.0.1', ['X-Forwarded-For' => '203.0.113.9'])->assertStatus(401);
+    });
+
+    it('does not let a forged forwarded header open the bypass from outside', function () {
+        // Confiança em qualquer proxy (`*`) faria $request->ip() aceitar o
+        // X-Forwarded-For forjado; o socket remoto continua barrando.
+        TrustProxies::at('*');
+
+        internalCall('203.0.113.9', ['X-Forwarded-For' => '127.0.0.1'])->assertStatus(401);
+    });
+
+    it('rejects a wrong token even from loopback', function () {
+        internalCall('127.0.0.1', ['X-Internal-Token' => 'wrong'])->assertStatus(401);
     });
 });

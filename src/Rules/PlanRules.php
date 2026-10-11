@@ -19,6 +19,11 @@ class PlanRules implements RulesContract
                 'billing_cycle' => 'bail|required|in:'.implode(',', BillingCycle::values()),
                 'is_active' => 'bail|required|boolean',
                 'features' => 'bail|required|array',
+                'trial_days' => 'bail|nullable|integer|min:0|max:365',
+                // Preço por requisição além do limite. Vazio: bloqueia no limite.
+                'overage_price' => 'bail|nullable|numeric|min:0',
+                'overage_max_requests' => 'bail|nullable|integer|min:1',
+                'rate_limit_per_minute' => 'bail|nullable|integer|min:1',
             ],
         ];
     }

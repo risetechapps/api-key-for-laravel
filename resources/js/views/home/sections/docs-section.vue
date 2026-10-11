@@ -3,7 +3,7 @@
         <div class="max-w-7xl mx-auto">
 
             <div class="text-center mb-16">
-                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs font-semibold mb-4">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 text-xs font-semibold mb-4">
                     <PhBookOpen :size="16" weight="fill" />
                     Documentação
                 </div>
@@ -11,7 +11,7 @@
                     Comece em minutos
                 </h2>
                 <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-                    Autentique com o header <code class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 text-sm">X-API-KEY</code> e consuma a API. Todas as rotas usam o prefixo <code class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 text-sm">/api/v1</code>.
+                    Autentique com o header <code class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-brand-600 dark:text-brand-400 text-sm">X-API-KEY</code> e consuma a API. Todas as rotas usam o prefixo <code class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-brand-600 dark:text-brand-400 text-sm">/api/v1</code>.
                 </p>
             </div>
 
@@ -25,7 +25,7 @@
                         </div>
                         <button
                             @click="copyExample"
-                            class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                            class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
                             <component :is="copied ? PhCheck : PhCopy" :size="16" />
                             {{ copied ? 'Copiado' : 'Copiar' }}
                         </button>
@@ -116,7 +116,7 @@ function methodClass(method: string): string {
         case 'GET':
             return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
         case 'POST':
-            return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400';
+            return 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400';
         case 'PUT':
             return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
         case 'DELETE':
@@ -131,8 +131,8 @@ const notes = [
         title: 'Autenticação',
         description: 'Envie sua chave no header X-API-KEY. Chaves inválidas ou inativas retornam 401.',
         icon: PhKey,
-        bgClass: 'bg-indigo-100 dark:bg-indigo-900/30',
-        iconClass: 'text-indigo-600 dark:text-indigo-400',
+        bgClass: 'bg-brand-100 dark:bg-brand-900/30',
+        iconClass: 'text-brand-600 dark:text-brand-400',
     },
     {
         title: 'Limite de requisições',

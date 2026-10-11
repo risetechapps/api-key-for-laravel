@@ -5,7 +5,7 @@
             <div class="mb-12">
                 <router-link
                     to="/"
-                    class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors mb-6">
+                    class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors mb-6">
                     <PhArrowLeft :size="16" />
                     Voltar para o início
                 </router-link>
@@ -17,12 +17,12 @@
 
             <!-- Contact cards -->
             <div class="grid sm:grid-cols-2 gap-4 mb-10">
-                <div class="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                    <div class="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mb-3">
-                        <PhEnvelopeSimple :size="22" class="text-indigo-600 dark:text-indigo-400" />
+                <div v-if="supportEmail" class="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    <div class="w-11 h-11 rounded-xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center mb-3">
+                        <PhEnvelopeSimple :size="22" class="text-brand-600 dark:text-brand-400" />
                     </div>
                     <h3 class="font-semibold text-slate-900 dark:text-white mb-1">E-mail</h3>
-                    <a :href="`mailto:${supportEmail}`" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline break-all">
+                    <a :href="`mailto:${supportEmail}`" class="text-sm text-brand-600 dark:text-brand-400 hover:underline break-all">
                         {{ supportEmail }}
                     </a>
                 </div>
@@ -37,14 +37,15 @@
             </div>
 
             <!-- CTA -->
-            <div class="p-6 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800/30 mb-12 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="p-6 rounded-2xl bg-gradient-to-br from-brand-50 to-brand-50 dark:from-brand-900/20 dark:to-brand-900/20 border border-brand-100 dark:border-brand-800/30 mb-12 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
                     <h3 class="font-semibold text-slate-900 dark:text-white">Não encontrou o que precisava?</h3>
                     <p class="text-sm text-slate-600 dark:text-slate-400">Mande sua dúvida que respondemos o quanto antes.</p>
                 </div>
                 <a
+                    v-if="supportEmail"
                     :href="`mailto:${supportEmail}`"
-                    class="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-lg shadow-indigo-500/30">
+                    class="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-lg shadow-brand-500/30">
                     <PhPaperPlaneTilt :size="18" />
                     Falar com o suporte
                 </a>
@@ -81,8 +82,10 @@ import {
     PhCaretDown,
 } from '@phosphor-icons/vue';
 
-// TODO: ajuste para o e-mail real de suporte.
-const supportEmail = 'suporte@seudominio.com.br';
+// Vem da config `api-key.spa.support_email` (API_KEY_SUPPORT_EMAIL), que o
+// app.blade.php publica numa meta tag.
+const supportEmail =
+    document.querySelector<HTMLMetaElement>('meta[name="support-email"]')?.content?.trim() || '';
 
 const faq = [
     {

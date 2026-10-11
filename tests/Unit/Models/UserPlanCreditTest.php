@@ -132,4 +132,62 @@ describe('UserPlan proration credit', function () {
 
         expect($userPlan->unusedCredit())->toBe(50.00);
     });
+
+    it('credits what was paid, not the list price', function () {
+        $plan = Plan::factory()->create(['price' => 100.00]);
+
+        // Cupom de 60%: pagou R$ 40,00. Metade do período restante vale R$ 20,00.
+        $userPlan = UserPlan::factory()->create([
+            'plan_id' => $plan->id,
+            'start_date' => now()->subDays(15),
+            'end_date' => now()->addDays(15),
+            'active' => true,
+            'payment_amount' => 40.00,
+        ]);
+
+        expect($userPlan->unusedCredit())->toBe(20.00);
+    });
+
+    it('counts the switch credit used to pay the period', function () {
+        $plan = Plan::factory()->create(['price' => 5.00]);
+
+        $userPlan = UserPlan::factory()->create([
+            'plan_id' => $plan->id,
+            'start_date' => now(),
+            'end_date' => now()->addDays(30),
+            'active' => true,
+            'payment_amount' => 2.00,
+            'credit_applied' => 3.00,
+        ]);
+
+        expect($userPlan->unusedCredit())->toBe(5.00);
+    });
+
+    it('credits nothing for a plan paid in full by a coupon or granted by the admin', function () {
+        $plan = Plan::factory()->create(['price' => 100.00]);
+
+        $userPlan = UserPlan::factory()->create([
+            'plan_id' => $plan->id,
+            'start_date' => now(),
+            'end_date' => now()->addDays(30),
+            'active' => true,
+            'payment_amount' => 0,
+        ]);
+
+        expect($userPlan->unusedCredit())->toBe(0.0);
+    });
+
+    it('credits nothing for a trial', function () {
+        $plan = Plan::factory()->create(['price' => 100.00]);
+
+        $userPlan = UserPlan::factory()->create([
+            'plan_id' => $plan->id,
+            'start_date' => now(),
+            'end_date' => now()->addDays(7),
+            'active' => true,
+            'is_trial' => true,
+        ]);
+
+        expect($userPlan->unusedCredit())->toBe(0.0);
+    });
 });

@@ -1,6 +1,6 @@
 {
     "name": "risetechapps/api-key-for-laravel",
-    "description": "",
+    "description": "API key authentication, subscription plans with request quotas and Mercado Pago billing for Laravel.",
     "keywords": [
         "risetechapps",
         "service",
@@ -89,5 +89,5 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "version": "1.0.0"
+    "version": "2.0.0"
 }

@@ -34,6 +34,17 @@ class PlanActivatedNotification extends Notification
             $mail->line("Sua assinatura do plano **{$this->plan->name}** foi ativada com sucesso.");
         }
 
+        if ($this->userPlan->is_trial) {
+            $mail->line('Este é o seu **período de teste**, sem cobrança. Se não cancelar até '.optional($this->userPlan->end_date)->format('d/m/Y').', a assinatura é renovada e cobrada normalmente.');
+        }
+
+        // O recibo fica no painel, que exige login: o link não expõe nada a
+        // quem interceptar o e-mail.
+        if ($this->userPlan->payment_id) {
+            $valor = number_format((float) $this->userPlan->payment_amount, 2, ',', '.');
+            $mail->line("Valor pago: **R$ {$valor}**. O recibo está disponível em Painel → Cobrança.");
+        }
+
         return $mail
             ->line("Limite de requisições: **{$this->plan->request_limit}** por ciclo.")
             ->line('Validade do período atual: '.optional($this->userPlan->end_date)->format('d/m/Y').'.')

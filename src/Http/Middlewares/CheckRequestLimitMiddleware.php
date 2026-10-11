@@ -10,6 +10,9 @@ use RiseTechApps\ApiKey\Events\RequestLimitReached;
 use RiseTechApps\ApiKey\Jobs\LogApiRequestJob;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
+use RiseTechApps\ApiKey\Notifications\OverageStartedNotification;
+use RiseTechApps\ApiKey\Services\OverageBillingService;
+use RiseTechApps\ApiKey\Services\WebhookDispatcher;
 use Symfony\Component\HttpFoundation\Response;
 
 class CheckRequestLimitMiddleware
@@ -51,7 +54,7 @@ class CheckRequestLimitMiddleware
         // Reading the counter and incrementing it after the response let every
         // concurrent request observe the same pre-increment value: N simultaneous
         // requests all passed the check and the quota was overrun by N-1.
-        if ($activePlan && ! $this->reserveQuota($activePlan, $requestsLimit)) {
+        if ($activePlan && ! $this->reserveQuota($activePlan, $this->hardLimit($activePlan, $user, $requestsLimit))) {
             $requestsMade = $requestsLimit;
 
             logglyWarning()->withContext([
@@ -84,9 +87,88 @@ class CheckRequestLimitMiddleware
             return response()->json(['error' => __('api-key::messages.request_limit_reached')], 429);
         }
 
-        // Aviso de uso próximo do limite (ex.: 80%). Dispara em toda requisição
-        // dentro da faixa [threshold%, 100%); o listener faz throttle para enviar
-        // no máximo um e-mail por período do plano.
+        try {
+            $response = $next($request);
+        } catch (\Throwable $e) {
+            // The slot was claimed before the request ran, so an exception on the
+            // way through would otherwise leave it spent on a request that
+            // produced nothing. Hand it back, then let the handler take over.
+            $this->releaseQuota($activePlan);
+
+            throw $e;
+        }
+
+        $status = $response->getStatusCode();
+
+        // Server faults are not the caller's doing and must not be billed. Client
+        // errors (4xx) stay charged on purpose: those come from the caller's own
+        // malformed requests, and refunding them would make the quota trivially
+        // bypassable by anyone willing to send garbage.
+        //
+        // A recusa do próprio pacote é o terceiro caso, e não é nenhum dos dois.
+        // Este middleware reserva a cota antes de `api.key.origin` e do
+        // `feature:` da rota, então uma recusa vinda deles já consumiu a vaga —
+        // o cliente pagaria uma requisição para ouvir "não", e o que decide isso
+        // é a ordem dos middlewares, não uma política. Elas se marcam como não
+        // cobráveis e a vaga volta.
+        $billed = ! ($status >= 500 || $request->attributes->get(self::NOT_BILLABLE));
+
+        if (! $billed) {
+            $this->releaseQuota($activePlan);
+        }
+
+        // Só depois da resposta, e só se a requisição foi cobrada. Antes o aviso
+        // saía na reserva da cota: uma requisição recusada em seguida (origem,
+        // permissão da chave, feature) devolvia a vaga, mas já tinha disparado o
+        // aviso de 80% — que sai uma vez por período e então não saía mais
+        // quando o uso chegava lá de verdade.
+        if ($billed) {
+            $this->warnIfNearLimit($user, $activePlan, $requestsLimit);
+            $this->notifyOverageStarted($user, $activePlan, $requestsLimit);
+        }
+
+        // The counter was already incremented by reserveQuota(); only the log
+        // entry is deferred.
+        $this->logRequest($request, $user, $activePlan, $status);
+
+        return $response;
+    }
+
+    /**
+     * Aviso de uso próximo do limite (ex.: 80%). Dispara em toda requisição
+     * cobrada dentro da faixa [threshold%, 100%); o listener faz throttle para
+     * enviar no máximo um e-mail (e um webhook) por período do plano.
+     */
+    /**
+     * Avisa, uma vez por período, que a conta passou do limite e entrou no
+     * excedente: o cliente fica sabendo enquanto ainda pode desligar, e não só
+     * quando a cobrança chega.
+     */
+    private function notifyOverageStarted(?Authentication $user, ?UserPlan $activePlan, int $requestsLimit): void
+    {
+        if (! $user || ! $activePlan?->plan || $requestsLimit <= 0 || (int) $activePlan->requests_used <= $requestsLimit) {
+            return;
+        }
+
+        $ttl = $activePlan->end_date && $activePlan->end_date->isFuture() ? $activePlan->end_date : now()->addDay();
+
+        if (! Cache::add('api-key:overage-started:'.$activePlan->getKey(), true, $ttl)) {
+            return;
+        }
+
+        $notification = config('api-key.notifications.overage_started', OverageStartedNotification::class);
+        $user->notify(new $notification($activePlan->plan, $activePlan, OverageBillingService::extraAllowed($activePlan)));
+
+        WebhookDispatcher::dispatch($user, 'usage.overage_started', [
+            'subscription_id' => $activePlan->getKey(),
+            'plan' => $activePlan->plan->name,
+            'requests_limit' => $requestsLimit,
+            'price_per_request' => (float) $activePlan->plan->overage_price,
+        ]);
+    }
+
+    private function warnIfNearLimit(?Authentication $user, ?UserPlan $activePlan, int $requestsLimit): void
+    {
         if ($requestsLimit > 0 && $activePlan && $activePlan->plan) {
             $threshold = (int) config('api-key.request_limit.warning_threshold', 80);
             // Post-claim value: this request already counts towards the quota.
@@ -117,40 +199,6 @@ class CheckRequestLimitMiddleware
                 }
             }
         }
-
-        try {
-            $response = $next($request);
-        } catch (\Throwable $e) {
-            // The slot was claimed before the request ran, so an exception on the
-            // way through would otherwise leave it spent on a request that
-            // produced nothing. Hand it back, then let the handler take over.
-            $this->releaseQuota($activePlan);
-
-            throw $e;
-        }
-
-        $status = $response->getStatusCode();
-
-        // Server faults are not the caller's doing and must not be billed. Client
-        // errors (4xx) stay charged on purpose: those come from the caller's own
-        // malformed requests, and refunding them would make the quota trivially
-        // bypassable by anyone willing to send garbage.
-        //
-        // A recusa do próprio pacote é o terceiro caso, e não é nenhum dos dois.
-        // Este middleware reserva a cota antes de `api.key.origin` e do
-        // `feature:` da rota, então uma recusa vinda deles já consumiu a vaga —
-        // o cliente pagaria uma requisição para ouvir "não", e o que decide isso
-        // é a ordem dos middlewares, não uma política. Elas se marcam como não
-        // cobráveis e a vaga volta.
-        if ($status >= 500 || $request->attributes->get(self::NOT_BILLABLE)) {
-            $this->releaseQuota($activePlan);
-        }
-
-        // The counter was already incremented by reserveQuota(); only the log
-        // entry is deferred.
-        $this->logRequest($request, $user, $activePlan, $status);
-
-        return $response;
     }
 
     /**
@@ -166,6 +214,30 @@ class CheckRequestLimitMiddleware
      *
      * Returns false only when the quota is exhausted.
      */
+    /**
+     * Onde a cota bloqueia de fato.
+     *
+     * Com excedente (preço no plano e ligado pelo assinante) a cota não para
+     * no limite: segue até o menor teto, do plano ou do assinante, e o que
+     * passar do limite é cobrado no fim do período (billing:charge-overage).
+     * Sem isso, o limite é o bloqueio, como sempre foi.
+     */
+    private function hardLimit(UserPlan $activePlan, ?Authentication $user, int $limit): int
+    {
+        if ($limit <= 0) {
+            return $limit;
+        }
+
+        // O dono já está resolvido: evita uma consulta por requisição.
+        if ($user && ! $activePlan->relationLoaded('authentication')) {
+            $activePlan->setRelation('authentication', $user);
+        }
+        $extra = OverageBillingService::extraAllowed($activePlan);
+
+        // null = excedente sem teto; 0 em reserveQuota() significa sem limite.
+        return $extra === null ? 0 : $limit + $extra;
+    }
+
     private function reserveQuota(UserPlan $activePlan, int $limit): bool
     {
         $query = UserPlan::whereKey($activePlan->getKey());

@@ -20,6 +20,20 @@ class CheckPlanFeatureMiddleware
             return $next($request);
         }
 
+        // Permissões da chave: uma chave restrita a algumas features só passa
+        // por elas, mesmo que o plano tenha outras. Sem `scopes`, vale o plano.
+        $scopes = $request->attributes->get('api_key_model')?->scopes;
+
+        if (is_array($scopes) && ! array_intersect($features, $scopes)) {
+            $request->attributes->set(CheckRequestLimitMiddleware::NOT_BILLABLE, true);
+
+            return response()->json([
+                'status' => 'forbidden_scope',
+                'message' => __('api-key::messages.api_key_scope_denied'),
+                'features' => $features,
+            ], 403);
+        }
+
         $hasAccess = array_any($features, fn ($feature) => ApiKeyFacade::resolve($feature));
 
         if (! $hasAccess) {

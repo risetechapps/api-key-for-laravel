@@ -18,7 +18,7 @@ class PlansController extends Controller
 {
     use HandlesUniqueViolation;
 
-    private const string PLANS_CACHE_KEY = 'api_key:plans:active';
+    private const string PLANS_CACHE_KEY = Plan::ACTIVE_CACHE_KEY;
 
     public function __construct(protected readonly PlanRepository $planRepositor) {}
 

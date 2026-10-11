@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Services;
 use RiseTechApps\ApiKey\Events\PaymentRejected;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\PendingPayment\PendingPayment;
+use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Repositories\Coupon\CouponRepository;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 
@@ -76,6 +77,14 @@ class PaymentOutcomeService
             'coupon_released' => $pending->coupon !== null,
         ])->log('Pending payment settled as rejected');
 
+        // Excedente recusado (PIX que expirou, por exemplo) não é compra de
+        // plano: o aviso de "pagamento do plano não aprovado" seria falso.
+        $type = $this->parseExternalReference((string) ($payment->external_reference ?? ''))['type'] ?? null;
+
+        if ($type === 'overage') {
+            return true;
+        }
+
         if ($pending->authentication && $pending->plan) {
             PaymentRejected::dispatch(
                 $pending->authentication,
@@ -85,7 +94,7 @@ class PaymentOutcomeService
                 $this->rejectionReason($payment),
                 // O prefixo da referência é o que distingue renovação de compra
                 // nova, e o texto do aviso muda por completo entre as duas.
-                str_starts_with((string) ($payment->external_reference ?? ''), 'renewal|'),
+                $type === 'renewal',
             );
         }
 
@@ -97,13 +106,19 @@ class PaymentOutcomeService
      */
     private function approve(object $payment, string $status): bool
     {
-        if (! $payment->external_reference) {
-            return false;
-        }
+        // Gateway que limita o tamanho da referência (ou não a devolve) pode
+        // trazer só o id: a compra é achada pelo registro de espera.
+        $reference = $payment->external_reference
+            ? $this->parseExternalReference((string) $payment->external_reference)
+            : null;
 
-        $reference = $this->parseExternalReference((string) $payment->external_reference);
+        $reference ??= $this->referenceFromPending((string) $payment->id);
 
         if (! $reference) {
+            if (! $payment->external_reference) {
+                return false;
+            }
+
             logglyWarning()->withContext([
                 'external_reference' => $payment->external_reference,
                 'payment_id' => $payment->id,
@@ -118,6 +133,14 @@ class PaymentOutcomeService
             return false;
         }
 
+        // Excedente: quita o período, não assina nada.
+        if ($reference['type'] === 'overage') {
+            PendingPayment::where('payment_id', (string) $payment->id)->first()
+                ?->settle(PendingPayment::OUTCOME_APPROVED, $status);
+
+            return OverageBillingService::markPaid((string) $reference['user_plan_id'], (string) $payment->id);
+        }
+
         $user = Authentication::find($reference['user_id']);
 
         // findById, e não findActiveById: o dinheiro já trocou de mãos. Um plano
@@ -129,31 +152,25 @@ class PaymentOutcomeService
             return false;
         }
 
-        PendingPayment::where('payment_id', (string) $payment->id)
-            ->first()
-            ?->settle(PendingPayment::OUTCOME_APPROVED, $status);
+        $pending = PendingPayment::where('payment_id', (string) $payment->id)->first();
+        $pending?->settle(PendingPayment::OUTCOME_APPROVED, $status);
 
-        $alreadySubscribed = $user->userPlan()
-            ->where('plan_id', $plan->getKey())
-            ->where('active', true)
-            ->where('payment_id', (string) $payment->id)
-            ->exists();
-
-        if ($alreadySubscribed) {
-            return false;
-        }
-
-        $userPlan = $user->subscribeToPlan($plan);
-
-        // O checkout direto grava estes campos; o caminho do webhook não gravava,
-        // e assinaturas confirmadas por webhook ficavam sem rastro de pagamento,
-        // invisíveis para a tela de estorno, que filtra por payment_id.
-        $userPlan->update([
+        // Idempotente por payment_id: reentrega do webhook, a reconciliação ou o
+        // próprio checkout chegando depois não assinam de novo. A checagem antiga
+        // exigia `active = true`, então um webhook reentregue depois de um
+        // estorno ou cancelamento reativava a assinatura devolvida.
+        //
+        // credit_applied vem do registro de espera: o checkout o calculou antes
+        // de o pagamento ficar em análise, e sem ele o crédito usado na compra
+        // ficava sem rastro quando quem confirmava era o webhook.
+        $userPlan = $user->subscribeToPlan($plan, [
             'payment_id' => (string) $payment->id,
             'payment_amount' => (float) $payment->transaction_amount,
+            'credit_applied' => $pending?->credit_applied,
+            'payment_method' => ($payment->payment_method_id ?? null) === 'pix' ? 'pix' : 'card',
         ]);
 
-        return true;
+        return $userPlan->wasRecentlyCreated;
     }
 
     /**
@@ -179,28 +196,67 @@ class PaymentOutcomeService
     }
 
     /**
+     * Compra registrada como espera (PIX, cartão em análise) quando a
+     * referência do gateway não diz de quem é.
+     *
+     * @return array{type: string, user_id: string, plan_id: string, user_plan_id: ?string}|null
+     */
+    private function referenceFromPending(string $paymentId): ?array
+    {
+        if ($paymentId === '') {
+            return null;
+        }
+
+        // Excedente também fica em espera, com o plano da assinatura: tratado
+        // como compra, assinaria o plano de novo.
+        if ($userPlan = UserPlan::where('overage_payment_id', $paymentId)->first()) {
+            return ['type' => 'overage', 'user_id' => (string) $userPlan->authentication_id, 'plan_id' => (string) $userPlan->plan_id, 'user_plan_id' => (string) $userPlan->getKey()];
+        }
+
+        $pending = PendingPayment::where('payment_id', $paymentId)->first();
+
+        return $pending && $pending->authentication_id && $pending->plan_id
+            ? ['type' => 'checkout', 'user_id' => (string) $pending->authentication_id, 'plan_id' => (string) $pending->plan_id, 'user_plan_id' => null]
+            : null;
+    }
+
+    /**
      * Divide o external_reference do Mercado Pago.
      *
      * Dois formatos são emitidos pelo pacote:
      *   "<userId>|<planId>"                        — checkout e validação de cartão
      *   "renewal|<userId>|<planId>|<userPlanId>"   — renovação automática
+     *   "overage|<userId>|<planId>|<userPlanId>"   — excedente do período
+     *   "rn-<userPlanId>" / "ov-<userPlanId>"      — renovação e excedente
+     *                                                pelos Pagamentos Automáticos.
+     *                                                A Orders API aceita até 64
+     *                                                caracteres, sem `|`, então
+     *                                                o resto vem da assinatura.
      *
-     * @return array{user_id: string, plan_id: string}|null
+     * @return array{type: string, user_id: string, plan_id: string, user_plan_id: ?string}|null
      */
     private function parseExternalReference(string $reference): ?array
     {
         // explode nunca devolve lista vazia, entao o indice 0 sempre existe: so
         // os demais precisam de isset.
+        if (preg_match('/^(rn|ov)-(.+)$/', $reference, $m)) {
+            $userPlan = UserPlan::find($m[2]);
+
+            return $userPlan
+                ? ['type' => $m[1] === 'rn' ? 'renewal' : 'overage', 'user_id' => (string) $userPlan->authentication_id, 'plan_id' => (string) $userPlan->plan_id, 'user_plan_id' => (string) $userPlan->getKey()]
+                : null;
+        }
+
         $parts = explode('|', $reference);
 
-        if ($parts[0] === 'renewal') {
+        if (in_array($parts[0], ['renewal', 'overage'], true)) {
             return isset($parts[1], $parts[2])
-                ? ['user_id' => $parts[1], 'plan_id' => $parts[2]]
+                ? ['type' => $parts[0], 'user_id' => $parts[1], 'plan_id' => $parts[2], 'user_plan_id' => $parts[3] ?? null]
                 : null;
         }
 
         return isset($parts[1]) && $parts[0] !== ''
-            ? ['user_id' => $parts[0], 'plan_id' => $parts[1]]
+            ? ['type' => 'checkout', 'user_id' => $parts[0], 'plan_id' => $parts[1], 'user_plan_id' => null]
             : null;
     }
 }

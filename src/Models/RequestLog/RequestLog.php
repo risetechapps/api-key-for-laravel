@@ -3,8 +3,17 @@
 namespace RiseTechApps\ApiKey\Models\RequestLog;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use RiseTechApps\HasUuid\Traits\HasUuid;
 
+/**
+ * @property string $id
+ * @property string $authentication_id
+ * @property string $endpoint
+ * @property string $method
+ * @property string $response_code
+ * @property Carbon|null $requested_at
+ */
 class RequestLog extends Model
 {
     use HasUuid;

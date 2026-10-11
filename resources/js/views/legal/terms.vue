@@ -5,7 +5,7 @@
             <div class="mb-12">
                 <router-link
                     to="/"
-                    class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors mb-6">
+                    class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors mb-6">
                     <PhArrowLeft :size="16" />
                     Voltar para o início
                 </router-link>

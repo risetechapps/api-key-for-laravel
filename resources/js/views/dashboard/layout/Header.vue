@@ -1,201 +1,67 @@
 <template>
-    <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800">
-        <div class="px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <!-- Left -->
-                <div class="flex items-center gap-4">
-                    <button
-                        @click="$emit('toggle-sidebar')"
-                        class="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                        <PhList :size="24" class="text-slate-600 dark:text-slate-400" />
-                    </button>
-                    <h1 class="text-xl font-semibold text-slate-900 dark:text-white">{{ pageTitle }}</h1>
-                </div>
+    <header class="sticky top-0 z-30 glass border-b border-slate-200/70 dark:border-slate-800/80">
+        <div class="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
+            <button type="button" class="lg:hidden -ml-1 p-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="Abrir menu" @click="$emit('toggle-sidebar')">
+                <PhList :size="22" />
+            </button>
 
-                <!-- Right -->
-                <div class="flex items-center gap-3">
-                    <!-- Dark mode toggle -->
-                    <button
-                        @click="toggleDarkMode"
-                        class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                        :title="isDark ? 'Modo claro' : 'Modo escuro'"
-                    >
-                        <PhSun v-if="isDark" :size="20" class="text-amber-500" />
-                        <PhMoon v-else :size="20" class="text-slate-600" />
-                    </button>
+            <!-- Busca rápida -->
+            <button
+                type="button"
+                class="group flex h-10 flex-1 max-w-md items-center gap-2.5 rounded-xl border border-slate-200 bg-white/70 px-3 text-sm text-slate-400 shadow-xs transition-colors hover:border-slate-300 hover:text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:hover:border-slate-600 dark:hover:text-slate-300"
+                @click="openCommandPalette"
+            >
+                <PhMagnifyingGlass :size="16" />
+                <span class="flex-1 text-left truncate">Buscar páginas e ações…</span>
+                <kbd class="hidden sm:inline-flex items-center gap-0.5 rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 text-[10px] font-medium">{{ isMac ? '⌘' : 'Ctrl' }} K</kbd>
+            </button>
 
-                    <!-- Notifications -->
-                    <div class="relative">
-                        <button
-                            @click="showNotifications = !showNotifications"
-                            class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
-                        >
-                            <PhBell :size="20" class="text-slate-600 dark:text-slate-400" />
-                            <span
-                                v-if="notificationCount > 0"
-                                class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"
-                            />
-                        </button>
-
-                        <!-- Notification dropdown -->
-                        <Transition
-                            enter="transition ease-out duration-200"
-                            enter-from="opacity-0 scale-95"
-                            enter-to="opacity-100 scale-100"
-                            leave="transition ease-in duration-150"
-                            leave-from="opacity-100 scale-100"
-                            leave-to="opacity-0 scale-95"
-                        >
-                            <div
-                                v-if="showNotifications"
-                                class="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50"
-                            >
-                                <div class="px-4 py-2 border-b border-slate-200 dark:border-slate-700">
-                                    <span class="font-semibold text-slate-900 dark:text-white">Notificações</span>
-                                </div>
-                                <div class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 text-center">
-                                    Nenhuma notificação nova
-                                </div>
-                            </div>
+            <div class="ml-auto flex items-center gap-1.5">
+                <Tooltip :text="isDark ? 'Tema claro' : 'Tema escuro'" position="bottom">
+                    <button type="button" class="relative h-10 w-10 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors" :aria-label="isDark ? 'Ativar tema claro' : 'Ativar tema escuro'" @click="toggleTheme">
+                        <Transition name="ui-fade" mode="out-in">
+                            <PhSun v-if="isDark" key="sun" :size="19" weight="duotone" class="text-amber-400" />
+                            <PhMoon v-else key="moon" :size="19" weight="duotone" />
                         </Transition>
-                    </div>
+                    </button>
+                </Tooltip>
 
-                    <!-- User dropdown -->
-                    <div class="relative">
-                        <button
-                            @click="showUserMenu = !showUserMenu"
-                            class="flex items-center gap-2 p-1.5 pr-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                        >
-                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold">
-                                {{ userInitials }}
-                            </div>
-                            <PhCaretDown
-                                :size="16"
-                                class="text-slate-400 transition-transform"
-                                :class="{ 'rotate-180': showUserMenu }"
-                            />
+                <Dropdown :items="menu">
+                    <template #trigger>
+                        <button type="button" class="flex items-center gap-2.5 rounded-xl p-1 pr-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Menu da conta">
+                            <Avatar :name="displayName" size="sm" />
+                            <span class="hidden md:block text-left leading-tight">
+                                <span class="block max-w-36 truncate text-sm font-semibold text-slate-900 dark:text-white">{{ displayName }}</span>
+                                <span class="block max-w-36 truncate text-xs text-slate-500 dark:text-slate-400">{{ email }}</span>
+                            </span>
+                            <PhCaretDown :size="14" class="hidden md:block text-slate-400" />
                         </button>
-
-                        <!-- User menu -->
-                        <Transition
-                            enter="transition ease-out duration-200"
-                            enter-from="opacity-0 scale-95"
-                            enter-to="opacity-100 scale-100"
-                            leave="transition ease-in duration-150"
-                            leave-from="opacity-100 scale-100"
-                            leave-to="opacity-0 scale-95"
-                        >
-                            <div
-                                v-if="showUserMenu"
-                                class="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50"
-                            >
-                                <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700"
->
-                                    <p class="text-sm font-semibold text-slate-900 dark:text-white truncate">{{ user?.personal?.name || user?.name }}</p>
-                                    <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ user?.contact?.email || user?.email }}</p>
-                                </div>
-                                <div class="py-1">
-                                    <router-link
-                                        to="/dashboard/profile"
-                                        class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                                    >
-                                        <PhUser :size="18" />
-                                        Perfil
-                                    </router-link>
-                                    <router-link
-                                        to="/dashboard/plans"
-                                        class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                                    >
-                                        <PhCreditCard :size="18" />
-                                        Meu Plano
-                                    </router-link>
-                                </div>
-                                <div class="border-t border-slate-200 dark:border-slate-700 py-1"
->
-                                    <button
-                                        @click="logout"
-                                        class="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                    >
-                                        <PhSignOut :size="18" />
-                                        Sair
-                                    </button>
-                                </div>
-                            </div>
-                        </Transition>
-                    </div>
-                </div>
+                    </template>
+                </Dropdown>
             </div>
         </div>
     </header>
 </template>
 
-<script setup>
-import { ref, computed, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { PhList, PhSun, PhMoon, PhCaretDown, PhMagnifyingGlass, PhUser, PhShieldCheck, PhCreditCard, PhSignOut } from '@phosphor-icons/vue';
 import { useAuthStore } from '@/stores/auth';
-import {
-    PhList,
-    PhSun,
-    PhMoon,
-    PhBell,
-    PhCaretDown,
-    PhUser,
-    PhCreditCard,
-    PhSignOut,
-} from '@phosphor-icons/vue';
+import { isDark, toggleTheme } from '@/theme';
+import { Avatar, Dropdown, Tooltip, openCommandPalette } from '@/ui';
+import type { DropdownItem } from '@/ui';
 
-const emit = defineEmits(['toggle-sidebar']);
+defineEmits<{ 'toggle-sidebar': [] }>();
 
-const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
-const showNotifications = ref(false);
-const showUserMenu = ref(false);
-const isDark = ref(false);
-const notificationCount = ref(0);
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
-const user = computed(() => authStore.user);
-
-const userInitials = computed(() => {
-    const name = user.value?.personal?.name || user.value?.name;
-    if (!name) return '';
-    return name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
-});
-
-const pageTitles = {
-    '/dashboard': 'Dashboard',
-    '/dashboard/profile': 'Perfil',
-    '/dashboard/requests': 'Histórico de Requisições',
-    '/dashboard/plans': 'Planos',
-    '/dashboard/billing': 'Faturamento',
-};
-
-const pageTitle = computed(() => {
-    return pageTitles[route.path] || 'Dashboard';
-});
-
-onMounted(() => {
-    // Sincroniza o estado com a classe atual no DOM
-    isDark.value = document.documentElement.classList.contains('dark');
-});
-
-function toggleDarkMode() {
-    isDark.value = !isDark.value;
-    if (isDark.value) {
-        document.documentElement.classList.add('dark');
-        localStorage.setItem('darkMode', 'true');
-    } else {
-        document.documentElement.classList.remove('dark');
-        localStorage.setItem('darkMode', 'false');
-    }
-}
+const user = computed<any>(() => authStore.user);
+const displayName = computed(() => user.value?.personal?.name || user.value?.name || '');
+const email = computed(() => user.value?.contact?.email || user.value?.email || '');
 
 async function logout() {
     try {
@@ -205,11 +71,11 @@ async function logout() {
     }
 }
 
-// Close dropdowns when clicking outside
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.relative')) {
-        showNotifications.value = false;
-        showUserMenu.value = false;
-    }
-});
+const menu = computed<DropdownItem[]>(() => [
+    { label: 'Perfil', icon: PhUser, to: '/dashboard/profile' },
+    { label: 'Segurança', icon: PhShieldCheck, to: '/dashboard/security' },
+    { label: 'Faturamento', icon: PhCreditCard, to: '/dashboard/billing' },
+    { divider: true },
+    { label: 'Sair', icon: PhSignOut, danger: true, onClick: logout },
+]);
 </script>

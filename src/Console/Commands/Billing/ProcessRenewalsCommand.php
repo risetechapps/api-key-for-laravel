@@ -35,7 +35,15 @@ class ProcessRenewalsCommand extends Command
             // Cancelada: o período pago segue até o end_date, mas não há próxima
             // cobrança. Filtrar aqui evita enfileirar o job só para ele desistir.
             ->whereNull('cancelled_at')
-            ->whereBetween('end_date', [today()->startOfDay(), today()->endOfDay()])
+            ->whereNull('renewal_failed_at')
+            // A primeira cobrança no dia do vencimento, ou uma nova tentativa
+            // de renovação recusada que já chegou.
+            ->where(function ($q) {
+                $q->where(fn ($q) => $q
+                    ->where('renewal_attempts', 0)
+                    ->whereBetween('end_date', [today()->startOfDay(), today()->endOfDay()]))
+                    ->orWhere('next_renewal_attempt_at', '<=', now());
+            })
             ->with(['authentication:id,email', 'plan:id,name'])
             ->chunkById(200, function ($plans) use ($dryRun, $sync, $queue, &$dispatched) {
                 foreach ($plans as $userPlan) {

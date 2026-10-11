@@ -5,7 +5,7 @@
             <div class="mb-12">
                 <router-link
                     to="/"
-                    class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors mb-6">
+                    class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors mb-6">
                     <PhArrowLeft :size="16" />
                     Voltar para o início
                 </router-link>
@@ -42,7 +42,7 @@
             <div class="mt-12 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <p class="text-sm text-slate-500 dark:text-slate-400">
                     Para exercer seus direitos como titular de dados ou tirar dúvidas, fale com nosso
-                    <router-link to="/support" class="text-indigo-600 dark:text-indigo-400 hover:underline">suporte</router-link>.
+                    <router-link to="/support" class="text-brand-600 dark:text-brand-400 hover:underline">suporte</router-link>.
                 </p>
             </div>
         </div>

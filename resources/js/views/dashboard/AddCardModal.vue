@@ -1,60 +1,31 @@
 <template>
-    <Modal v-model="isOpen" title="Adicionar Cartão">
+    <Modal v-model="isOpen" title="Adicionar cartão" description="Os dados do cartão vão direto para o Mercado Pago, sem passar pelo nosso servidor.">
         <form @submit.prevent="handleSubmit" class="space-y-4">
 
-            <!-- Nome do titular -->
-            <div>
-                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
-                    Nome do titular
-                </label>
-                <input
-                    v-model="form.holder"
-                    type="text"
-                    placeholder="Como está no cartão"
-                    :class="fieldClass(errors.holder)"
-                    @input="form.holder = form.holder.toUpperCase()"
-                />
-                <p v-if="errors.holder" class="mt-1 text-xs text-red-500">{{ errors.holder }}</p>
-            </div>
-
-            <!-- CPF do titular -->
-            <div>
-                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
-                    CPF do titular
-                </label>
-                <input
-                    v-model="form.cpf"
-                    type="text"
-                    inputmode="numeric"
-                    placeholder="000.000.000-00"
-                    maxlength="14"
-                    :class="fieldClass(errors.cpf)"
-                    @input="formatCpf"
-                />
-                <p v-if="errors.cpf" class="mt-1 text-xs text-red-500">{{ errors.cpf }}</p>
-            </div>
+            <TextInput v-model="form.holder" label="Nome do titular" placeholder="Como está no cartão" uppercase autocomplete="cc-name" :error="errors.holder" />
+            <TextInput v-model="form.cpf" label="CPF do titular" placeholder="000.000.000-00" inputmode="numeric" maxlength="14" :error="errors.cpf" @update:model-value="formatCpf" />
 
             <!-- Skeleton enquanto os Secure Fields carregam -->
             <template v-if="fieldsLoading">
                 <div>
-                    <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Número do cartão</div>
-                    <div class="h-[42px] rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse"></div>
+                    <div class="mb-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">Número do cartão</div>
+                    <div class="h-10 rounded-xl ui-shimmer"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Validade</div>
-                        <div class="h-[42px] rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse"></div>
+                        <div class="mb-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">Validade</div>
+                        <div class="h-10 rounded-xl ui-shimmer"></div>
                     </div>
                     <div>
-                        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">CVV</div>
-                        <div class="h-[42px] rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse"></div>
+                        <div class="mb-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">CVV</div>
+                        <div class="h-10 rounded-xl ui-shimmer"></div>
                     </div>
                 </div>
             </template>
 
             <!-- Número do cartão — Secure Field (iframe MP) -->
             <div :class="{ hidden: fieldsLoading }">
-                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+                <label class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Número do cartão
                 </label>
                 <div id="sf-card-number" class="sf-field" :class="{ 'sf-field--error': errors.number }"></div>
@@ -64,14 +35,14 @@
             <!-- Validade + CVV — Secure Fields (iframes MP) -->
             <div class="grid grid-cols-2 gap-3" :class="{ hidden: fieldsLoading }">
                 <div>
-                    <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+                    <label class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
                         Validade
                     </label>
                     <div id="sf-expiration-date" class="sf-field" :class="{ 'sf-field--error': errors.expiry }"></div>
                     <p v-if="errors.expiry" class="mt-1 text-xs text-red-500">{{ errors.expiry }}</p>
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block">
+                    <label class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
                         CVV
                     </label>
                     <div id="sf-security-code" class="sf-field" :class="{ 'sf-field--error': errors.cvv }"></div>
@@ -79,35 +50,20 @@
                 </div>
             </div>
 
-            <!-- Aviso sobre cobrança de validação -->
-            <div class="flex items-start gap-3 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/30">
-                <PhInfo :size="18" weight="fill" class="text-indigo-500 mt-0.5 flex-shrink-0" />
-                <p class="text-xs text-indigo-700 dark:text-indigo-300 leading-relaxed">
-                    Para validar o cartão, será realizada uma cobrança de <strong>R$ 5,00</strong> que é
-                    <strong>estornada automaticamente</strong> após a confirmação.
-                </p>
-            </div>
+            <Alert tone="info">Para validar o cartão, cobramos R$ 5,00 e estornamos na hora, automaticamente.</Alert>
 
-            <!-- Erro geral -->
-            <div v-if="errorMessage" class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3">
-                <PhWarningCircle :size="18" weight="fill" class="text-red-500 mt-0.5 flex-shrink-0" />
-                <p class="text-sm text-red-700 dark:text-red-400">{{ errorMessage }}</p>
-            </div>
+            <Alert v-if="errorMessage" tone="danger">{{ errorMessage }}</Alert>
 
-            <Button type="submit" variant="primary" class="w-full" :loading="saving" :disabled="fieldsLoading">
-                Validar e Salvar Cartão
-            </Button>
+            <Button type="submit" block size="lg" :icon="PhLockSimple" :loading="saving" :disabled="fieldsLoading">Validar e salvar cartão</Button>
         </form>
     </Modal>
 </template>
 
 <script setup>
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
-import { PhWarningCircle, PhInfo } from '@phosphor-icons/vue';
-import Swal from 'sweetalert2';
+import { PhLockSimple } from '@phosphor-icons/vue';
 import axios from 'axios';
-import Modal from '@/views/componentes/Modal.vue';
-import Button from '@/views/componentes/Button.vue';
+import { Alert, Button, Modal, TextInput, toast } from '@/ui';
 import { useAuthStore } from '@/stores/auth';
 import { primeDeviceSession, getDeviceSessionId } from '@/mercadopago-device';
 
@@ -136,6 +92,7 @@ let sfExpirationDate = null;
 let sfSecurityCode   = null;
 
 const paymentMethodId = ref('');
+const paymentTypeId   = ref('');
 
 watch(() => isOpen.value, async (open) => {
     if (open) {
@@ -196,12 +153,14 @@ async function initSecureFields() {
     sfCardNumber = mpInstance.fields.create('cardNumber', { placeholder: '0000 0000 0000 0000', style });
     sfCardNumber.on('ready', onReady);
     sfCardNumber.on('binChange', async ({ bin }) => {
-        if (!bin) { paymentMethodId.value = ''; return; }
+        if (!bin) { paymentMethodId.value = ''; paymentTypeId.value = ''; return; }
         try {
             const { results } = await mpInstance.getPaymentMethods({ bin });
             paymentMethodId.value = results?.[0]?.id ?? '';
+            paymentTypeId.value   = results?.[0]?.payment_type_id ?? '';
         } catch (_) {
             paymentMethodId.value = '';
+            paymentTypeId.value   = '';
         }
     });
     sfCardNumber.mount('sf-card-number');
@@ -224,6 +183,7 @@ function destroyFields() {
     sfSecurityCode    = null;
     mpInstance        = null;
     paymentMethodId.value = '';
+    paymentTypeId.value   = '';
     fieldsLoading.value   = true;
 }
 
@@ -231,13 +191,13 @@ function fieldClass(err) {
     return [
         'w-full px-4 py-2.5 rounded-xl border text-sm',
         'bg-white dark:bg-slate-900 text-slate-900 dark:text-white',
-        'placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500',
+        'placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500',
         err ? 'border-red-400 dark:border-red-600' : 'border-slate-200 dark:border-slate-700',
     ];
 }
 
-function formatCpf(e) {
-    let v = e.target.value.replace(/\D/g, '').substring(0, 11);
+function formatCpf(value) {
+    let v = String(value ?? '').replace(/\D/g, '').substring(0, 11);
     if (v.length > 9)      v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
     else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
     else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
@@ -267,6 +227,21 @@ async function handleSubmit() {
             identificationNumber: cpf,
         });
 
+        // Segundo token, para o perfil de Pagamentos Automáticos: cada token
+        // serve uma vez só, e o primeiro vai na cobrança de validação. É o que
+        // deixa a renovação cobrar o cartão sem pedir o CVV de novo. Melhor
+        // esforço: sem ele o cartão é salvo do mesmo jeito.
+        let profileToken = null;
+        try {
+            profileToken = await mpInstance.fields.createCardToken({
+                cardholderName:       form.value.holder,
+                identificationType:   'CPF',
+                identificationNumber: cpf,
+            });
+        } catch (_) {
+            profileToken = null;
+        }
+
         // Melhor esforço: se o script de segurança não respondeu, segue sem o
         // identificador em vez de impedir o cadastro do cartão.
         const deviceId = await getDeviceSessionId();
@@ -278,6 +253,8 @@ async function handleSubmit() {
             holder_name:       form.value.holder,
             brand:             paymentMethodId.value,
             device_id:         deviceId,
+            profile_token:     profileToken?.id ?? undefined,
+            payment_type_id:   paymentTypeId.value || undefined,
         });
 
         isOpen.value = false;
@@ -285,13 +262,7 @@ async function handleSubmit() {
         form.value   = { holder: '', cpf: '' };
         errors.value = {};
 
-        await Swal.fire({
-            icon:               'success',
-            title:              'Cartão adicionado!',
-            text:               `Cartão final ${token.last_four_digits} validado. O estorno de R$ 5,00 será processado em breve.`,
-            confirmButtonText:  'Ok',
-            confirmButtonColor: '#6366f1',
-        });
+        toast.success('Cartão adicionado', { description: `Final ${token.last_four_digits} validado. O estorno dos R$ 5,00 já foi pedido.` });
 
     } catch (err) {
         if (Array.isArray(err)) {
@@ -319,15 +290,20 @@ onBeforeUnmount(() => destroyFields());
 <style>
 .sf-field {
     width: 100%;
-    height: 42px;
-    padding: 0 16px;
+    height: 40px;
+    padding: 0 14px;
     border-radius: 12px;
     border: 1px solid #e2e8f0;
     background-color: #ffffff;
     display: flex;
     align-items: center;
     overflow: hidden;
-    transition: border-color 0.15s;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.sf-field:hover {
+    border-color: #cbd5e1;
 }
 
 .dark .sf-field {

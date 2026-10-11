@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
+use RiseTechApps\ApiKey\Services\OverageBillingService;
 use RiseTechApps\ApiKey\Support\FeatureResolver;
 
 /**
@@ -40,6 +41,23 @@ class UserPlanResource extends JsonResource
             // Sem isto o painel não tem como distinguir "renova no dia X" de
             // "acesso acaba no dia X", que são a mesma data com significados
             // opostos para quem está lendo a tela.
+            'trial' => (bool) $this->is_trial,
+            'payment_method' => $this->payment_method,
+            // Renovação recusada aguardando nova tentativa: o painel mostra o
+            // aviso para trocar o cartão.
+            'renewal' => [
+                'attempts' => (int) $this->renewal_attempts,
+                'next_attempt_at' => $this->next_renewal_attempt_at?->toIso8601String(),
+                'failed_at' => $this->renewal_failed_at?->toIso8601String(),
+                // Renovação que só o assinante conclui, pelo painel:
+                // `no_card`, `pix` ou `cvv_required`.
+                'requires_payment' => $this->renewal_requires_payment,
+            ],
+            'overage' => $this->whenLoaded('plan', fn () => $this->plan?->overage_price !== null ? [
+                'requests' => OverageBillingService::overageRequests($this->resource),
+                'estimated_amount' => OverageBillingService::overageAmount($this->resource),
+                'price_per_request' => (float) $this->plan->overage_price,
+            ] : null),
             'cancellation' => [
                 'cancelled' => $this->isCancelled(),
                 'cancelled_at' => $this->cancelled_at?->toIso8601String(),

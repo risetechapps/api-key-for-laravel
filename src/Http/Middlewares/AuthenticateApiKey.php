@@ -18,13 +18,24 @@ class AuthenticateApiKey
             'method' => $request->method(),
         ];
 
-        // Internal bypass: only valid from localhost (127.0.0.1 / ::1)
+        // Internal bypass: only valid from localhost (127.0.0.1 / ::1).
+        //
+        // Both addresses have to be loopback. REMOTE_ADDR alone is the socket
+        // peer, which behind an nginx on the same host is 127.0.0.1 for every
+        // request on the internet. $request->ip() alone follows X-Forwarded-For
+        // when TrustProxies allows it, which a misconfigured trust list lets a
+        // client forge. Requiring both is never looser than the old check.
         $internalToken = $request->header('X-Internal-Token');
-        $isLoopback = in_array($request->server('REMOTE_ADDR'), ['127.0.0.1', '::1', '0:0:0:0:0:0:0:1'], true);
+        $loopback = ['127.0.0.1', '::1', '0:0:0:0:0:0:0:1'];
+        $isLoopback = in_array($request->server('REMOTE_ADDR'), $loopback, true)
+            && in_array($request->ip(), $loopback, true);
 
         if ($internalToken && $isLoopback && config('api-key.internal_token') && hash_equals(config('api-key.internal_token'), $internalToken)) {
             $userId = $request->header('X-User-Id');
             $user = Authentication::with('apiKey')->find($userId);
+            if ($user && ! $user->isEnabled()) {
+                return $this->disabled($user, $context);
+            }
             if ($user) {
                 auth()->setUser($user);
                 $request->attributes->set('_internal', true);
@@ -61,6 +72,19 @@ class AuthenticateApiKey
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
+        // A chave pode estar ativa e o dono suspenso: suspender não mexe na
+        // chave, para que reativar a conta devolva o acesso sem trocar a chave
+        // que o cliente já tem configurada.
+        if (! $user->isEnabled()) {
+            return $this->disabled($user, $context);
+        }
+
+        // Último uso, para a lista de chaves. No máximo uma escrita por minuto
+        // por chave, e sem eventos do model: isto roda em toda requisição.
+        if (! $apiKey->last_used_at || $apiKey->last_used_at->lt(now()->subMinute())) {
+            ApiKey::whereKey($apiKey->getKey())->update(['last_used_at' => now()]);
+        }
+
         $user->setRelation('apiKey', $apiKey);
         $apiKey->setRelation('authentication', $user);
         $request->attributes->set('api_key_model', $apiKey);
@@ -68,5 +92,16 @@ class AuthenticateApiKey
         auth()->setUser($user);
 
         return $next($request);
+    }
+
+    private function disabled(Authentication $user, array $context): Response
+    {
+        logglyWarning()->withContext([
+            'user_id' => $user->getKey(),
+            'status' => $user->status,
+            ...$context,
+        ])->log('API key authentication failed: account disabled');
+
+        return response()->json(['error' => __('api-key::messages.account_disabled')], 403);
     }
 }

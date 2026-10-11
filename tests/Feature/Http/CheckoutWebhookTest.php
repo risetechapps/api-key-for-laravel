@@ -321,3 +321,85 @@ describe('Webhook settling a payment', function () {
         expect(UserPlan::count())->toBe(0);
     });
 });
+
+describe('Notificacao que nao vira pagamento', function () {
+    it('responde 200 sem consultar o gateway quando falta o id', function () {
+        // Antes ia para get(0), a exceção do SDK virava 500 e o gateway
+        // reentregava para sempre uma notificação que nunca ia funcionar.
+        $this->postJson(
+            '/api/v1/dashboard/checkout/webhook',
+            ['type' => 'payment', 'data' => []],
+            signedHeaders('')
+        )->assertStatus(200);
+
+        expect($this->gateway->requests)->toBeEmpty();
+    });
+
+    it('responde 200 sem consultar o gateway quando o id nao e numerico', function () {
+        notifyPayment('abc')->assertStatus(200);
+
+        expect($this->gateway->requests)->toBeEmpty();
+    });
+
+    it('responde 200 quando o pagamento nao existe nesta conta', function () {
+        $this->gateway->pushFailure(['message' => 'Payment not found'], 404);
+
+        notifyPayment('123')->assertStatus(200);
+
+        expect(UserPlan::count())->toBe(0);
+    });
+
+    it('pede reentrega quando a consulta falha por motivo passageiro', function () {
+        // Gateway fora do ar não é motivo para perder a notificação: um não-2xx
+        // faz o Mercado Pago tentar de novo mais tarde.
+        $this->gateway->pushFailure(['message' => 'internal error'], 500);
+
+        notifyPayment('123')->assertStatus(503);
+
+        expect(UserPlan::count())->toBe(0);
+    });
+});
+
+describe('Validade temporal da assinatura', function () {
+    it('aceita ts antigo com a tolerancia desligada, que e o padrao', function () {
+        $this->gateway->pushResponse(['id' => 1, 'status' => 'pending']);
+
+        notifyPayment('1')->assertStatus(200);
+    });
+
+    it('recusa ts fora da tolerancia mesmo com HMAC valido', function () {
+        config(['api-key.mercadopago.webhook_tolerance_seconds' => 300]);
+
+        $this->postJson(
+            '/api/v1/dashboard/checkout/webhook',
+            ['type' => 'payment', 'data' => ['id' => '1']],
+            signedHeaders('1', 'req-1', (string) (time() - 3600))
+        )->assertStatus(400);
+
+        expect($this->gateway->requests)->toBeEmpty();
+    });
+
+    it('aceita ts recente, em segundos ou em milissegundos', function (int $ts) {
+        config(['api-key.mercadopago.webhook_tolerance_seconds' => 300]);
+        $this->gateway->pushResponse(['id' => 1, 'status' => 'pending']);
+
+        $this->postJson(
+            '/api/v1/dashboard/checkout/webhook',
+            ['type' => 'payment', 'data' => ['id' => '1']],
+            signedHeaders('1', 'req-1', (string) $ts)
+        )->assertStatus(200);
+    })->with([
+        'segundos' => fn () => time(),
+        'milissegundos' => fn () => time() * 1000,
+    ]);
+
+    it('confere o HMAC sobre o data_id em minusculas', function () {
+        // O Mercado Pago assina ids alfanuméricos em minúsculas; o id chega na
+        // query como o painel o mostra.
+        $this->postJson(
+            '/api/v1/dashboard/checkout/webhook?data_id=ABC123',
+            ['type' => 'merchant_order', 'data' => ['id' => 'ABC123']],
+            signedHeaders('abc123')
+        )->assertStatus(200);
+    });
+});

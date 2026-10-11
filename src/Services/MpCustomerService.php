@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Services;
 
 use Illuminate\Support\Facades\Http;
+use RiseTechApps\ApiKey\Gateways\GatewayRegistry;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\UserCard\UserCard;
 
@@ -14,7 +15,7 @@ class MpCustomerService
 
     public function __construct()
     {
-        $this->accessToken = config('api-key.mercadopago.access_token');
+        $this->accessToken = (string) config('api-key.mercadopago.access_token');
     }
 
     public function getOrCreateCustomer(Authentication $user): string
@@ -85,6 +86,51 @@ class MpCustomerService
         }
 
         return $response->json('id');
+    }
+
+    /**
+     * Tira o cartão do cofre do Mercado Pago, junto do perfil de Pagamentos
+     * Automáticos. Melhor esforço: a remoção local já vale para o pacote, que
+     * não cobra cartão que não está no banco. Sem isto, porém, o cartão
+     * continuaria guardado no gateway depois de o cliente pedir para tirar.
+     *
+     * @return bool Se o gateway confirmou (ou o cartão já não estava lá).
+     */
+    public function removeCard(UserCard $card): bool
+    {
+        if ($driver = GatewayRegistry::get((string) $card->gateway)) {
+            return $driver->deleteCard($card);
+        }
+
+        if (! $card->mp_customer_id) {
+            return true;
+        }
+
+        $removed = true;
+
+        if ($card->mp_payment_profile_id) {
+            $removed = app(AutomaticPaymentService::class)->deleteProfile($card);
+        }
+
+        if ($card->mp_card_id) {
+            try {
+                $response = Http::withToken($this->accessToken)
+                    ->delete("{$this->baseUrl}/v1/customers/{$card->mp_customer_id}/cards/{$card->mp_card_id}");
+
+                if (! $response->successful() && $response->status() !== 404) {
+                    logglyWarning()->withContext(['card_id' => $card->getKey(), 'status' => $response->status(), 'body' => $response->json()])
+                        ->log('MP card removal failed');
+
+                    $removed = false;
+                }
+            } catch (\Exception $e) {
+                logglyWarning()->withContext(['card_id' => $card->getKey(), 'error' => $e->getMessage()])->log('MP card removal failed');
+
+                $removed = false;
+            }
+        }
+
+        return $removed;
     }
 
     public function tokenizeCard(string $customerId, string $cardId, string $securityCode): string

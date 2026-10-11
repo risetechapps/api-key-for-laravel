@@ -3,12 +3,16 @@
 namespace RiseTechApps\ApiKey;
 
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use RiseTechApps\ApiKey\Console\Commands\Billing\ChargeOverageCommand;
 use RiseTechApps\ApiKey\Console\Commands\Billing\ProcessRenewalsCommand;
 use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
 use RiseTechApps\ApiKey\Console\Commands\CheckInstallationCommand;
@@ -27,12 +31,15 @@ use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
 use RiseTechApps\ApiKey\Http\Middlewares\AdminMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\ApiKeyOriginValidatorMiddleware;
+use RiseTechApps\ApiKey\Http\Middlewares\ApiKeyRateLimitMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\AuthenticateApiKey;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckActivePlanMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckPlanFeatureMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\CheckRequestLimitMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\DisableRouteWebMiddleware;
+use RiseTechApps\ApiKey\Http\Middlewares\EnsureUserIsEnabled;
 use RiseTechApps\ApiKey\Http\Middlewares\LanguageMiddleware;
+use RiseTechApps\ApiKey\Listeners\DispatchAccountWebhooks;
 use RiseTechApps\ApiKey\Listeners\SendGracePeriodNotification;
 use RiseTechApps\ApiKey\Listeners\SendPaymentRejectedNotification;
 use RiseTechApps\ApiKey\Listeners\SendPlanActivatedNotification;
@@ -48,6 +55,8 @@ use RiseTechApps\ApiKey\Rules\CouponRules;
 use RiseTechApps\ApiKey\Rules\PlanRules;
 use RiseTechApps\ApiKey\Rules\SignatureRules;
 use RiseTechApps\ApiKey\Services\FeatureRegistry;
+use RiseTechApps\ApiKey\Services\PaymentSettingsService;
+use RiseTechApps\ApiKey\Services\SystemHealthService;
 use RiseTechApps\FormRequest\RulesRegistry;
 use RiseTechApps\Repository\RepositoryServiceProvider;
 
@@ -61,6 +70,15 @@ class ApiKeyServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(
             __DIR__.'/../config/config.php', 'api-key'
         );
+
+        // Configuração de gateway salva pelo painel admin, por cima do .env.
+        // De novo antes de cada job: um worker vive por horas, e uma credencial
+        // trocada no painel precisa valer sem reiniciar a fila.
+        PaymentSettingsService::applyToConfig();
+        Queue::before(fn () => PaymentSettingsService::applyToConfig());
+
+        // Última execução de cada rotina do pacote, para a tela de saúde.
+        Event::listen(CommandFinished::class, fn (CommandFinished $e) => SystemHealthService::recordCommand((string) $e->command, $e->exitCode));
 
         $rulesRegistry = $this->app->make(RulesRegistry::class);
 
@@ -105,6 +123,7 @@ class ApiKeyServiceProvider extends ServiceProvider
 
         $this->loadMigrationsFrom($packageRoot.'/database/migrations');
         $this->loadTranslationsFrom(__DIR__.'/lang', 'api-key');
+        $this->registerValidationFallback();
         $this->loadViewsFrom($packageRoot.'/resources/views', 'api-key');
 
         ResetPassword::createUrlUsing(fn ($notifiable, string $token) => url('/reset-password?token='.$token.'&email='.urlencode((string) $notifiable->getEmailForPasswordReset())));
@@ -141,6 +160,13 @@ class ApiKeyServiceProvider extends ServiceProvider
                 ->withoutOverlapping()
                 ->onOneServer()
                 ->appendOutputTo(storage_path('logs/renewals.log'));
+
+            // Uma hora depois das renovações, com o período anterior já fechado.
+            $schedule->command('billing:charge-overage')
+                ->dailyAt('09:00')
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->appendOutputTo(storage_path('logs/overage.log'));
 
             if (config('api-key.request_log.prune_enabled', true)) {
                 // Off-peak: the batched delete competes with the writes that the
@@ -179,6 +205,34 @@ class ApiKeyServiceProvider extends ServiceProvider
     }
 
     /**
+     * Mensagens de validação em português como reserva.
+     *
+     * O LanguageMiddleware põe as rotas do pacote em `pt`, mas o Laravel só
+     * traz as mensagens de validação em inglês, e o usuário via "The password
+     * field confirmation does not match." no meio do painel em português.
+     *
+     * Carrega primeiro o lang/pt/validation.php do app (se existir) e só então
+     * completa as chaves que faltam: a tradução do app sempre vence, e uma
+     * chave que ele não traduziu ainda sai em português em vez de inglês.
+     */
+    protected function registerValidationFallback(): void
+    {
+        $this->callAfterResolving('translator', function ($translator) {
+            $translator->load('*', 'validation', 'pt');
+
+            $lines = [];
+
+            foreach (Arr::dot(require __DIR__.'/lang/pt/validation.php') as $key => $value) {
+                if (! $translator->hasForLocale("validation.{$key}", 'pt')) {
+                    $lines["validation.{$key}"] = $value;
+                }
+            }
+
+            $translator->addLines($lines, 'pt');
+        });
+    }
+
+    /**
      * Register the application services.
      */
     #[\Override]
@@ -203,6 +257,7 @@ class ApiKeyServiceProvider extends ServiceProvider
                 CheckInstallationCommand::class,
                 MakeAdminCommand::class,
                 ProcessRenewalsCommand::class,
+                ChargeOverageCommand::class,
                 PruneRequestLogsCommand::class,
                 ReconcilePendingPaymentsCommand::class,
                 RetryValidationRefundsCommand::class,
@@ -222,6 +277,8 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->aliasMiddleware('check.limit.plan', CheckRequestLimitMiddleware::class);
         $router->aliasMiddleware('api.key.origin', ApiKeyOriginValidatorMiddleware::class);
         $router->aliasMiddleware('feature', CheckPlanFeatureMiddleware::class);
+        $router->aliasMiddleware('active.user', EnsureUserIsEnabled::class);
+        $router->aliasMiddleware('api.key.rate', ApiKeyRateLimitMiddleware::class);
 
         $spaEnabled = config('api-key.spa.enabled', false);
 
@@ -231,6 +288,7 @@ class ApiKeyServiceProvider extends ServiceProvider
 
         $middlewareGroup = config('api-key.middleware_group.plan', [
             'api.key',
+            'api.key.rate',
             'check.active.plan',
             'check.limit.plan',
             'api.key.origin',
@@ -281,6 +339,7 @@ class ApiKeyServiceProvider extends ServiceProvider
         Event::listen(PlanChanged::class, SendPlanActivatedNotification::class);
         Event::listen(RequestLimitReached::class, SendRequestLimitReachedNotification::class);
         Event::listen(PlanUsageThresholdReached::class, SendUsageThresholdNotification::class);
+        Event::subscribe(DispatchAccountWebhooks::class);
     }
 
     private function setRules(RulesRegistry $rulesRegistry): void

@@ -88,3 +88,33 @@ jobs:
             # fixe o número que ela reportar (menos uma folga) aqui.
             - name: Coverage report
               run: vendor/bin/pest --coverage
+
+    frontend:
+        runs-on: ubuntu-latest
+        name: Frontend
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '22'
+                  cache: npm
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Type check
+              run: npm run typecheck
+
+            # dist/ é versionado: é o que o vendor:publish copia para quem instala
+            # o pacote sem rodar build. Um fonte alterado sem rebuild chega ao
+            # usuário como o painel antigo, sem erro nenhum. O build aqui tem que
+            # reproduzir exatamente o que foi commitado.
+            - name: Build
+              run: npm run build
+
+            - name: dist/ is up to date
+              run: git diff --exit-code --stat dist/ || (echo "::error::dist/ desatualizado. Rode 'npm run build' e commite o resultado." && exit 1)

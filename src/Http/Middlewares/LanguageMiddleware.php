@@ -10,38 +10,36 @@ use Symfony\Component\HttpFoundation\Response;
 class LanguageMiddleware
 {
     /**
-     * Maps browser locale variants to the base locale used by translation files.
-     * e.g. "pt-BR" and "pt_BR" both resolve to "pt".
+     * Idiomas com arquivo de tradução no pacote. Variantes regionais caem no
+     * idioma base: "pt-BR" e "pt_PT" viram "pt", "en-GB" vira "en".
      */
-    private array $localeMap = [
-        'pt-BR' => 'pt',
-        'pt-PT' => 'pt',
-        'pt_BR' => 'pt',
-        'pt_PT' => 'pt',
-        'en-US' => 'en',
-        'en-GB' => 'en',
-        'en_US' => 'en',
-        'en_GB' => 'en',
-    ];
+    private const SUPPORTED = ['pt', 'en'];
 
+    /**
+     * Usa o primeiro idioma do Accept-Language, em ordem de preferência, que o
+     * pacote traduz; sem nenhum, o `default_language` da config.
+     *
+     * A versão anterior entregava a lista a getPreferredLanguage(), que nunca
+     * devolve vazio: sem o header respondia em inglês e com um idioma não
+     * suportado respondia no primeiro da lista, ignorando a config nos dois.
+     */
     public function handle(Request $request, Closure $next): Response
     {
-        try {
-            $language = $request->getPreferredLanguage(array_keys($this->localeMap) + ['pt', 'en']);
+        app()->setLocale($this->resolve($request));
 
-            if (empty($language)) {
-                $language = config('api-key.default_language', 'pt');
+        return $next($request);
+    }
+
+    private function resolve(Request $request): string
+    {
+        foreach ($request->getLanguages() as $language) {
+            $base = strtolower(Str::before(str_replace('-', '_', $language), '_'));
+
+            if (in_array($base, self::SUPPORTED, true)) {
+                return $base;
             }
-
-            $language = $this->localeMap[$language] ?? Str::before($language, '-');
-
-            app()->setLocale($language);
-
-            return $next($request);
-        } catch (\Exception) {
-            app()->setLocale(config('api-key.default_language', 'pt'));
-
-            return $next($request);
         }
+
+        return (string) config('api-key.default_language', 'pt');
     }
 }

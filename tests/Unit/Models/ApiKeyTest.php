@@ -89,6 +89,49 @@ describe('Origin Validation', function () {
         expect($apiKey->isOriginAllowed('https://other.com'))->toBeFalse();
     });
 
+    it('trailing wildcard matches a single label', function () {
+        $apiKey = ApiKey::factory()->create([
+            'allowed_origins' => ['app.example.*'],
+        ]);
+
+        expect($apiKey->isOriginAllowed('https://app.example.com'))->toBeTrue()
+            ->and($apiKey->isOriginAllowed('https://app.example.org'))->toBeTrue();
+    });
+
+    it('trailing wildcard does not match a third-party domain', function () {
+        // "app.example.evil.com" começa com "app.example." mas é um domínio que
+        // qualquer um registra. O curinga vale por um rótulo, não por qualquer
+        // sufixo.
+        $apiKey = ApiKey::factory()->create([
+            'allowed_origins' => ['app.example.*'],
+        ]);
+
+        expect($apiKey->isOriginAllowed('https://app.example.evil.com'))->toBeFalse()
+            ->and($apiKey->isOriginAllowed('https://app.example.'))->toBeFalse()
+            ->and($apiKey->isOriginAllowed('https://app.examplex.com'))->toBeFalse();
+    });
+
+    it('trailing wildcard on an IP prefix covers the rest of the address', function () {
+        $apiKey = ApiKey::factory()->create([
+            'allowed_origins' => ['192.168.*'],
+        ]);
+
+        expect($apiKey->isOriginAllowed('192.168.0.15'))->toBeTrue()
+            ->and($apiKey->isOriginAllowed('192.168.evil.com'))->toBeFalse()
+            ->and($apiKey->isOriginAllowed('10.0.0.1'))->toBeFalse();
+    });
+
+    it('subdomain wildcard matches nested subdomains and the base domain only', function () {
+        $apiKey = ApiKey::factory()->create([
+            'allowed_origins' => ['*.example.com'],
+        ]);
+
+        expect($apiKey->isOriginAllowed('https://a.b.example.com'))->toBeTrue()
+            ->and($apiKey->isOriginAllowed('https://example.com'))->toBeTrue()
+            ->and($apiKey->isOriginAllowed('https://evilexample.com'))->toBeFalse()
+            ->and($apiKey->isOriginAllowed('https://example.com.evil.net'))->toBeFalse();
+    });
+
     it('is case insensitive for origins', function () {
         $apiKey = ApiKey::factory()->create([
             'allowed_origins' => ['EXAMPLE.COM'],

@@ -28,6 +28,10 @@ class PlansResource extends JsonResource
             // Resolve as keys para {key, name, description, icon}; a key nunca
             // é exibida como rótulo (ver FeatureResolver).
             'features' => FeatureResolver::resolve($this->features),
+            'trial_days' => (int) $this->trial_days,
+            'overage_price' => $this->overage_price !== null ? (float) $this->overage_price : null,
+            'overage_max_requests' => $this->overage_max_requests,
+            'rate_limit_per_minute' => $this->rate_limit_per_minute,
         ];
     }
 }

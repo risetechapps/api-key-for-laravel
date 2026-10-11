@@ -1,153 +1,84 @@
 <template>
-    <div
-        class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-50
-         via-indigo-50/30 to-purple-50/30 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
-        <div class="w-full max-w-md">
-            <!-- Logo -->
-            <div class="text-center mb-8">
-                <router-link to="/" class="inline-flex items-center gap-3 justify-center">
-                    <div
-                        class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center
-                        justify-center shadow-lg shadow-indigo-500/30">
-                        <PhHexagon :size="28" weight="fill" class="text-white"/>
-                    </div>
-                    <span
-                        class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text
-                        text-transparent">
-                        Api Key
-                    </span>
-                </router-link>
+    <AuthShell :title="sentTo ? 'Confirme seu e-mail' : 'Criar conta'" :subtitle="sentTo ? '' : 'Comece em menos de um minuto.'">
+        <Transition name="ui-slide" mode="out-in">
+            <div v-if="sentTo" key="sent" class="space-y-6 text-center">
+                <div class="relative mx-auto h-20 w-20">
+                    <span class="absolute inset-0 animate-ping rounded-full bg-brand-400/30 [animation-duration:2s]" />
+                    <span class="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-xl shadow-brand-600/30"><PhEnvelopeOpen :size="36" weight="duotone" /></span>
+                </div>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Enviamos um link de confirmação para <strong class="text-slate-900 dark:text-white">{{ sentTo }}</strong>. Confirme o endereço para poder entrar.</p>
+                <Button block size="lg" to="/login" :icon-right="PhArrowRight">Ir para o login</Button>
+                <p class="text-xs text-slate-500">Não chegou? Confira o spam. Na tela de login dá para pedir um novo link.</p>
             </div>
 
-            <Card class="shadow-xl shadow-slate-200/50 dark:shadow-none">
-                <div class="text-center mb-8">
-                    <h1 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                        Criar conta
-                    </h1>
-                    <p class="text-slate-600 dark:text-slate-400">
-                        Comece a usar a API gratuitamente
-                    </p>
-                </div>
-
-                <form @submit.prevent="handleRegister" class="space-y-5">
-                    <Input
-                        v-model="form.name"
-                        label="Nome completo"
-                        type="text"
-                        placeholder="Seu nome"
-                        required
-                        :icon="PhUser"
-                        :error="errors.name"
-                    />
-
-                    <Input
-                        v-model="form.email"
-                        label="Email"
-                        type="email"
-                        placeholder="seu@email.com"
-                        required
-                        :icon="PhEnvelope"
-                        :error="errors.email"
-                    />
-
-                    <Input
-                        v-model="form.password"
-                        label="Senha"
-                        :type="showPassword ? 'text' : 'password'"
-                        placeholder="Mínimo 8 caracteres"
-                        required
-                        :icon="PhLockKey"
-                        :error="errors.password"
-                    >
+            <form v-else key="form" class="space-y-5" @submit.prevent="handleRegister">
+                <TextInput v-model="form.name" label="Nome completo" autocomplete="name" placeholder="Seu nome" required :icon="PhUser" :error="errors.name" />
+                <TextInput v-model="form.email" label="E-mail" type="email" autocomplete="email" placeholder="seu@email.com" required :icon="PhEnvelope" :error="errors.email" />
+                <div>
+                    <TextInput v-model="form.password" label="Senha" :type="showPassword ? 'text' : 'password'" autocomplete="new-password" placeholder="Mínimo de 8 caracteres" required :icon="PhLockKey" :error="errors.password">
                         <template #suffix>
-                            <button
-                                type="button"
-                                @click="showPassword = !showPassword"
-                                class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                            >
-                                <PhEye v-if="!showPassword" :size="20"/>
-                                <PhEyeSlash v-else :size="20"/>
+                            <button type="button" class="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" :aria-label="showPassword ? 'Ocultar senha' : 'Mostrar senha'" @click="showPassword = !showPassword">
+                                <PhEyeSlash v-if="showPassword" :size="18" />
+                                <PhEye v-else :size="18" />
                             </button>
                         </template>
-                    </Input>
-
-                    <Input
-                        v-model="form.password_confirmation"
-                        label="Confirmar senha"
-                        :type="showPassword ? 'text' : 'password'"
-                        placeholder="Digite a senha novamente"
-                        required
-                        :icon="PhLockKeyOpen"
-                        :error="errors.password_confirmation"
-                    />
-
-                    <div class="flex items-start gap-2">
-                        <input
-                            v-model="form.terms"
-                            type="checkbox"
-                            id="terms"
-                            required
-                            class="mt-1 w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700"
-                        />
-                        <label for="terms" class="text-sm text-slate-600 dark:text-slate-400">
-                            Concordo com os
-                            <a href="#" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">Termos de
-                                Serviço</a>
-                            e
-                            <a href="#" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">Política de
-                                Privacidade</a>
-                        </label>
+                    </TextInput>
+                    <div v-if="form.password" class="mt-2 flex items-center gap-2">
+                        <div class="flex flex-1 gap-1">
+                            <span v-for="i in 4" :key="i" :class="['h-1 flex-1 rounded-full transition-colors duration-300', i <= strength.score ? strength.bar : 'bg-slate-200 dark:bg-slate-700']" />
+                        </div>
+                        <span :class="['text-xs font-medium', strength.text]">{{ strength.label }}</span>
                     </div>
-
-                    <Button
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        class="w-full"
-                        :loading="authStore.loading"
-                    >
-                        Criar conta
-                    </Button>
-                </form>
-
-                <div class="mt-8 text-center">
-                    <p class="text-slate-600 dark:text-slate-400">
-                        Já tem uma conta?
-                        <router-link
-                            to="/login"
-                            class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors ml-1"
-                        >
-                            Entrar
-                        </router-link>
-                    </p>
                 </div>
-            </Card>
-        </div>
-    </div>
+                <TextInput v-model="form.password_confirmation" label="Confirmar senha" :type="showPassword ? 'text' : 'password'" autocomplete="new-password" required :icon="PhLockKeyOpen" :error="errors.password_confirmation" />
+
+                <Checkbox v-model="form.terms">
+                    Concordo com os <router-link to="/terms" target="_blank" class="font-medium text-brand-600 hover:underline dark:text-brand-400">Termos de Serviço</router-link>
+                    e a <router-link to="/privacy" target="_blank" class="font-medium text-brand-600 hover:underline dark:text-brand-400">Política de Privacidade</router-link>
+                </Checkbox>
+                <p v-if="errors.terms" class="-mt-3 text-xs font-medium text-red-600">{{ errors.terms }}</p>
+
+                <Button type="submit" block size="lg" :icon-right="PhArrowRight" :loading="authStore.loading">Criar conta</Button>
+            </form>
+        </Transition>
+
+        <template v-if="!sentTo" #footer>
+            Já tem uma conta?
+            <router-link to="/login" class="ml-1 font-semibold text-brand-600 hover:underline dark:text-brand-400">Entrar</router-link>
+        </template>
+    </AuthShell>
 </template>
 
 <script setup>
-import {reactive, ref} from 'vue';
+import {computed, reactive, ref} from 'vue';
 import {useRouter} from 'vue-router';
 import {useAuthStore} from '@/stores/auth';
-import {
-    PhHexagon,
-    PhUser,
-    PhEnvelope,
-    PhLockKey,
-    PhLockKeyOpen,
-    PhEye,
-    PhEyeSlash,
-} from '@phosphor-icons/vue';
-import Swal from 'sweetalert2';
-import Card from "@/views/componentes/Card.vue";
-import Button from "@/views/componentes/Button.vue";
-import Input from "@/views/componentes/Input.vue";
+import { PhUser, PhEnvelope, PhEnvelopeOpen, PhLockKey, PhLockKeyOpen, PhEye, PhEyeSlash, PhArrowRight } from '@phosphor-icons/vue';
+import { Button, Checkbox, TextInput } from '@/ui';
+import AuthShell from '@/views/authentication/AuthShell.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
 
 const showPassword = ref(false);
+const sentTo = ref('');
+
+// Força aproximada, só para orientar: a regra que vale é a do servidor.
+const strength = computed(() => {
+    const p = form.password;
+    let score = 0;
+    if (p.length >= 8) score++;
+    if (p.length >= 12) score++;
+    if (/[A-Z]/.test(p) && /[a-z]/.test(p)) score++;
+    if (/\d/.test(p) && /[^A-Za-z0-9]/.test(p)) score++;
+    return [
+        { score: 1, label: 'Fraca', bar: 'bg-red-500', text: 'text-red-600' },
+        { score: 1, label: 'Fraca', bar: 'bg-red-500', text: 'text-red-600' },
+        { score: 2, label: 'Razoável', bar: 'bg-amber-500', text: 'text-amber-600' },
+        { score: 3, label: 'Boa', bar: 'bg-emerald-500', text: 'text-emerald-600' },
+        { score: 4, label: 'Forte', bar: 'bg-emerald-500', text: 'text-emerald-600' },
+    ][score];
+});
 
 const form = reactive({
     name: '',
@@ -162,6 +93,7 @@ const errors = reactive({
     email: '',
     password: '',
     password_confirmation: '',
+    terms: '',
 });
 
 async function handleRegister() {
@@ -192,6 +124,11 @@ async function handleRegister() {
         hasError = true;
     }
 
+    if (!form.terms) {
+        errors.terms = 'Aceite os termos para continuar';
+        hasError = true;
+    }
+
     if (hasError) return;
 
     try {
@@ -210,14 +147,7 @@ async function handleRegister() {
         // Login exige e-mail verificado, então o destino é a tela de login e não
         // o painel — a versão anterior mandava para /dashboard com uma sessão que
         // nunca existiu.
-        await Swal.fire({
-            icon: 'info',
-            title: 'Verifique seu e-mail',
-            text: `Enviamos um link de confirmação para ${form.email}. Confirme o endereço para poder entrar.`,
-            confirmButtonText: 'Ir para o login',
-        });
-
-        router.push('/login');
+        sentTo.value = form.email;
     } catch (err) {
         // Erro 429 - Too Many Requests (Rate Limit)
         if (err.response?.status === 429) {

@@ -80,6 +80,21 @@ export const useAdminStore = defineStore('admin', () => {
         } finally { loading.value = false; }
     }
 
+    // Suspender (`disabled`/`blocked`) revoga as sessões do usuário e recusa a
+    // API key até reativar; a assinatura segue como está.
+    async function updateUserStatus(id: string, status: 'enabled' | 'disabled' | 'blocked') {
+        const r = await axios.put(`dashboard/admin/users/${id}/status`, { status });
+        const row = users.value?.data?.find((u: any) => u.id === id);
+        if (row) row.status = status;
+        return r.data?.data ?? r.data;
+    }
+
+    // Concede o plano sem cobrança, encerrando a assinatura em curso.
+    async function grantPlan(id: string, planId: string) {
+        const r = await axios.post(`dashboard/admin/users/${id}/plan`, { plan_id: planId });
+        return r.data?.data ?? r.data;
+    }
+
     // ── Refunds (listing: package | process/execute: root MP) ─────────────
     async function fetchRefunds(params: any = {}) {
         loading.value = true;
@@ -118,7 +133,7 @@ export const useAdminStore = defineStore('admin', () => {
         fetchPlans, createPlan, updatePlan, deletePlan,
         fetchCoupons, createCoupon, updateCoupon, deleteCoupon,
         fetchFeatures,
-        fetchUsers,
+        fetchUsers, updateUserStatus, grantPlan,
         fetchRefunds, processRefund,
         fetchLogs, fetchLog,
     };

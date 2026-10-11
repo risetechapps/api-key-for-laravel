@@ -4,7 +4,6 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
-use RiseTechApps\RiseTools\Features\Device\Device;
 use Symfony\Component\HttpFoundation\Response;
 
 class ApiKeyOriginValidatorMiddleware
@@ -36,7 +35,12 @@ class ApiKeyOriginValidatorMiddleware
             return response()->json(['message' => 'Unauthorized: Request origin/IP not permitted.'], Response::HTTP_FORBIDDEN);
         }
 
-        $requestOrigin = $request->header('Origin') ?? Device::getClientPublicIp();
+        // Sem Origin, vale o IP do cliente — o de $request->ip(), que só segue
+        // X-Forwarded-For / CF-Connecting-IP vindos de um proxy listado no
+        // TrustProxies. Antes o IP vinha de Device::getClientPublicIp(), que lê
+        // esses headers direto de $_SERVER: quem tinha a chave furava a lista de
+        // IPs permitidos mandando `X-Forwarded-For: <ip permitido>`.
+        $requestOrigin = $request->header('Origin') ?? $request->ip();
 
         if (! $apiKey->isOriginAllowed($requestOrigin)) {
             logglyWarning()->withContext([
