@@ -40,6 +40,13 @@ class AccountService
      */
     public function delete(Authentication $user): void
     {
+        // A conta leva a equipe junto: sem o dono, o membro não tem onde agir.
+        foreach ($user->members()->get() as $member) {
+            $this->delete($member);
+        }
+
+        $user->teamInvitations()->delete();
+
         // Lidos antes: a linha local some na transação, e é ela que tem os ids
         // do cartão e do perfil no gateway.
         $cards = UserCard::where('authentication_id', $user->getKey())->get();

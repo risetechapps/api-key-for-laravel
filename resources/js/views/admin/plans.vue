@@ -24,6 +24,7 @@
                         <Badge v-if="row.trial_days > 0" tone="brand">{{ row.trial_days }}d teste</Badge>
                         <Badge v-if="row.overage_price" tone="info">excedente</Badge>
                         <Badge v-if="row.rate_limit_per_minute" tone="neutral">{{ row.rate_limit_per_minute }}/min</Badge>
+                        <Badge v-if="row.team_members_limit" tone="neutral">{{ row.team_members_limit }} na equipe</Badge>
                         <Badge tone="neutral">{{ row.features?.length ?? 0 }} features</Badge>
                     </span>
                 </template>
@@ -50,6 +51,7 @@
                         <Select v-model="form.billing_cycle" label="Ciclo de cobrança" :options="{ monthly: 'Mensal', annually: 'Anual', weekly: 'Semanal' }" />
                         <TextInput v-model="form.request_limit" type="number" min="0" label="Requisições por período" required :error="errors.request_limit" />
                         <TextInput v-model="form.rate_limit_per_minute" type="number" min="1" label="Requisições por minuto" placeholder="Sem limite" :error="errors.rate_limit_per_minute" />
+                        <TextInput v-model="form.team_members_limit" type="number" min="0" label="Membros na equipe" hint="Além do dono. 0 = só o dono." :error="errors.team_members_limit" />
                         <TextInput v-model="form.trial_days" type="number" min="0" max="365" label="Dias de teste grátis" hint="0: sem teste" :error="errors.trial_days" />
                     </div>
                 </section>
@@ -126,7 +128,7 @@ const columns: Column[] = [
 
 const emptyForm = () => ({
     name: '', description: '', price: 0 as number | string, billing_cycle: 'monthly', request_limit: 1000 as number | string,
-    is_active: true, features: [] as string[], trial_days: 0 as number | string, rate_limit_per_minute: '' as number | string,
+    is_active: true, features: [] as string[], trial_days: 0 as number | string, rate_limit_per_minute: '' as number | string, team_members_limit: 0 as number | string,
     overage_price: '' as number | string | null, overage_max_requests: '' as number | string,
 });
 
@@ -157,6 +159,7 @@ function openForm(plan: any = null) {
             is_active: !!plan.is_active,
             trial_days: plan.trial_days ?? 0,
             rate_limit_per_minute: plan.rate_limit_per_minute ?? '',
+            team_members_limit: plan.team_members_limit ?? 0,
             overage_price: plan.overage_price ?? '',
             overage_max_requests: plan.overage_max_requests ?? '',
             features: Array.isArray(plan.features) ? plan.features.map((f: any) => (f && typeof f === 'object' ? f.key : f)).filter(Boolean) : [],
@@ -183,6 +186,7 @@ async function save() {
             ...form.value,
             trial_days: Number(form.value.trial_days || 0),
             rate_limit_per_minute: blankToNull(form.value.rate_limit_per_minute),
+            team_members_limit: Number(form.value.team_members_limit) || 0,
             overage_price: blankToNull(form.value.overage_price),
             overage_max_requests: blankToNull(form.value.overage_price) === null ? null : blankToNull(form.value.overage_max_requests),
         };

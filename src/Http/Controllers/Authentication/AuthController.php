@@ -15,6 +15,7 @@ use RiseTechApps\ApiKey\Http\Resources\Authentication\AuthenticationMeResource;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Services\AuthService;
 use RiseTechApps\ApiKey\Services\UserRegistrationService;
+use RiseTechApps\ApiKey\Support\Team;
 use Throwable;
 
 class AuthController extends Controller
@@ -109,7 +110,9 @@ class AuthController extends Controller
         // dizia "usuário não encontrado", e quem quisesse saber se alguém tem
         // conta aqui só precisava tentar o e-mail. O hash é conferido mesmo sem
         // usuário para o tempo de resposta não denunciar a diferença.
-        if (! $this->authService->passwordMatches($user, $credentials['password'])) {
+        // Membro de integração (external_id) não entra pelo painel: quem fala
+        // por ele é o sistema do cliente, pela API. Mesma resposta do erro.
+        if ($user?->isExternal() || ! $this->authService->passwordMatches($user, $credentials['password'])) {
             logglyInfo()->withContext($context)->log($user
                 ? 'Login failed: incorrect credentials'
                 : 'Login failed: user not found');
@@ -253,6 +256,9 @@ class AuthController extends Controller
         }
 
         $user = $request->user()->load(['activePlan.plan', 'apiKey']);
+
+        // Membro da equipe: o plano e a chave mostrados são os da conta.
+        Team::account()?->loadMissing(['activePlan.plan', 'apiKey']);
 
         return response()->jsonSuccess(AuthenticationMeResource::make($user));
     }

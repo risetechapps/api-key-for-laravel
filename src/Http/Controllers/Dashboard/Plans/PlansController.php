@@ -47,7 +47,7 @@ class PlansController extends Controller
     {
         try {
 
-            $data = $request->validated();
+            $data = self::withTeamLimit($request->validated());
 
             $this->planRepositor->store($data);
 
@@ -93,7 +93,7 @@ class PlansController extends Controller
     {
         try {
 
-            $data = $request->validated();
+            $data = self::withTeamLimit($request->validated());
 
             $plan = Plan::find($plan);
 
@@ -154,5 +154,15 @@ class PlansController extends Controller
 
             return response()->jsonGone(__('api-key::messages.error_deleting_plan'));
         }
+    }
+
+    /** Vazio no formulário = só o dono (a coluna não aceita nulo). */
+    private static function withTeamLimit(array $data): array
+    {
+        if (array_key_exists('team_members_limit', $data)) {
+            $data['team_members_limit'] = (int) ($data['team_members_limit'] ?? 0);
+        }
+
+        return $data;
     }
 }

@@ -24,6 +24,7 @@ class PlanRules implements RulesContract
                 'overage_price' => 'bail|nullable|numeric|min:0',
                 'overage_max_requests' => 'bail|nullable|integer|min:1',
                 'rate_limit_per_minute' => 'bail|nullable|integer|min:1',
+                'team_members_limit' => 'bail|nullable|integer|min:0|max:1000',
             ],
         ];
     }

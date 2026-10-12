@@ -22,6 +22,8 @@ use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Checkout\CheckoutController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Coupons\CouponsController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Plans\PlansController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Signature\SignatureController;
+use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Team\TeamController;
+use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Team\TeamInvitationController;
 use RiseTechApps\ApiKey\Http\Controllers\Dashboard\Webhooks\WebhookController;
 
 class RoutesApiKey
@@ -48,6 +50,10 @@ class RoutesApiKey
                 Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
                 Route::post('/email/resend', [AuthController::class, 'resendVerification'])->name('verification.send');
                 Route::post('/login/two-factor', [TwoFactorController::class, 'verifyLogin']);
+
+                // Convite para a equipe: ver e aceitar (define a senha e entra).
+                Route::get('/team/invitations/{token}', [TeamInvitationController::class, 'show']);
+                Route::post('/team/invitations/{token}/accept', [TeamInvitationController::class, 'accept']);
             });
 
             Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])->name('verification.verify');
@@ -62,10 +68,13 @@ class RoutesApiKey
                 ->whereIn('gateway', array_keys(GatewayRegistry::DRIVERS));
 
             Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
-                Route::post('/logout', [AuthController::class, 'logout']);
-                Route::get('/auth/me', [AuthController::class, 'me']);
+                // Equipe (ver Support\Team): `team.self` = rota pessoal do membro;
+                // `team.role:owner` = só o dono. Sem marcação, a rota é da conta e
+                // vale para admin da equipe (atendente não entra).
+                Route::post('/logout', [AuthController::class, 'logout'])->middleware('team.self');
+                Route::get('/auth/me', [AuthController::class, 'me'])->middleware('team.self');
 
-                Route::middleware(self::throttle('payment_throttle', 10, 10, 'payment'))->group(function () {
+                Route::middleware([...self::throttle('payment_throttle', 10, 10, 'payment'), 'team.role:owner'])->group(function () {
                     Route::post('/dashboard/checkout/process', [CheckoutController::class, 'process']);
                     Route::post('/dashboard/checkout/coupon', [CheckoutController::class, 'validateCoupon']);
                     Route::post('/dashboard/cards', [CardController::class, 'store']);
@@ -75,14 +84,14 @@ class RoutesApiKey
                     Route::post('/dashboard/billing/overage/{id}/card', [OverageController::class, 'payWithCard']);
                 });
 
-                Route::get('/dashboard/checkout/payments/{paymentId}', [CheckoutController::class, 'paymentStatus']);
+                Route::get('/dashboard/checkout/payments/{paymentId}', [CheckoutController::class, 'paymentStatus'])->middleware('team.role:owner');
 
-                Route::get('/dashboard/profile', [ProfileController::class, 'show']);
-                Route::put('/dashboard/profile', [ProfileController::class, 'update']);
-                Route::get('/dashboard/profile/export', [ProfileController::class, 'export']);
+                Route::get('/dashboard/profile', [ProfileController::class, 'show'])->middleware('team.self');
+                Route::put('/dashboard/profile', [ProfileController::class, 'update'])->middleware('team.self');
+                Route::get('/dashboard/profile/export', [ProfileController::class, 'export'])->middleware('team.self');
                 // Tudo que confere a senha atual divide um contador por usuário,
                 // senão uma sessão roubada serviria para adivinhar a senha.
-                Route::middleware(self::throttle('auth_throttle', 5, 1, 'account'))->group(function () {
+                Route::middleware([...self::throttle('auth_throttle', 5, 1, 'account'), 'team.self'])->group(function () {
                     Route::delete('/dashboard/profile', [ProfileController::class, 'destroy']);
                     Route::put('/dashboard/profile/password', [AccountSecurityController::class, 'changePassword']);
                     Route::post('/dashboard/profile/email', [AccountSecurityController::class, 'requestEmailChange']);
@@ -107,16 +116,32 @@ class RoutesApiKey
                 Route::get('/dashboard/webhooks/{id}/deliveries', [WebhookController::class, 'deliveries']);
                 Route::post('/dashboard/webhooks/{id}/deliveries/{deliveryId}/redeliver', [WebhookController::class, 'redeliver']);
 
-                Route::get('/dashboard/billing/overage', [OverageController::class, 'show']);
-                Route::get('/dashboard/billing/renewal', [OverageController::class, 'renewal']);
-                Route::put('/dashboard/billing/overage', [OverageController::class, 'update']);
+                Route::middleware('team.role:owner')->group(function () {
+                    Route::get('/dashboard/billing/overage', [OverageController::class, 'show']);
+                    Route::get('/dashboard/billing/renewal', [OverageController::class, 'renewal']);
+                    Route::put('/dashboard/billing/overage', [OverageController::class, 'update']);
 
-                Route::get('/dashboard/receipts', [ReceiptController::class, 'index']);
-                Route::get('/dashboard/receipts/{id}', [ReceiptController::class, 'show']);
+                    Route::get('/dashboard/receipts', [ReceiptController::class, 'index']);
+                    Route::get('/dashboard/receipts/{id}', [ReceiptController::class, 'show']);
+                });
 
-                Route::get('/dashboard/sessions', [AccountSecurityController::class, 'sessions']);
-                Route::delete('/dashboard/sessions', [AccountSecurityController::class, 'revokeOtherSessions']);
-                Route::delete('/dashboard/sessions/{id}', [AccountSecurityController::class, 'revokeSession']);
+                Route::middleware('team.self')->group(function () {
+                    Route::get('/dashboard/sessions', [AccountSecurityController::class, 'sessions']);
+                    Route::delete('/dashboard/sessions', [AccountSecurityController::class, 'revokeOtherSessions']);
+                    Route::delete('/dashboard/sessions/{id}', [AccountSecurityController::class, 'revokeSession']);
+                });
+
+                // Equipe da conta: dono e admin gerenciam; o convite é aceito
+                // fora do login (rotas públicas, acima).
+                Route::get('/dashboard/team', [TeamController::class, 'index']);
+                Route::post('/dashboard/team/invitations', [TeamController::class, 'invite']);
+                Route::post('/dashboard/team/invitations/{id}/resend', [TeamController::class, 'resend']);
+                Route::delete('/dashboard/team/invitations/{id}', [TeamController::class, 'cancelInvitation']);
+                Route::put('/dashboard/team/members/{id}', [TeamController::class, 'updateMember']);
+                Route::delete('/dashboard/team/members/{id}', [TeamController::class, 'removeMember']);
+                // Lista enxuta de quem está na equipe (nome e papel), para
+                // atribuir trabalho; liberada a atendentes.
+                Route::get('/dashboard/team/members', [TeamController::class, 'members'])->middleware('team.role:agent');
 
                 Route::get('/dashboard/profile/allowed', [ProfileController::class, 'getAllowedOrigins']);
                 Route::post('/dashboard/profile/allowed', [ProfileController::class, 'updateAllowedOrigins']);
@@ -178,14 +203,16 @@ class RoutesApiKey
                     Route::post('/dashboard/admin/payment-settings/test/{gateway}', [PaymentSettingsController::class, 'test']);
                 });
 
-                Route::get('/dashboard/cards', [CardController::class, 'index']);
-                Route::delete('/dashboard/cards/{id}', [CardController::class, 'destroy']);
+                Route::middleware('team.role:owner')->group(function () {
+                    Route::get('/dashboard/cards', [CardController::class, 'index']);
+                    Route::delete('/dashboard/cards/{id}', [CardController::class, 'destroy']);
 
-                Route::post('/dashboard/signature', [SignatureController::class, 'signature']);
-                Route::get('/dashboard/signature/refund-preview', [SignatureController::class, 'refundPreview']);
-                Route::post('/dashboard/signature/cancel', [SignatureController::class, 'cancel']);
-                Route::post('/dashboard/signature/resume', [SignatureController::class, 'resume']);
-                Route::get('/dashboard/history', [SignatureController::class, 'history']);
+                    Route::post('/dashboard/signature', [SignatureController::class, 'signature']);
+                    Route::get('/dashboard/signature/refund-preview', [SignatureController::class, 'refundPreview']);
+                    Route::post('/dashboard/signature/cancel', [SignatureController::class, 'cancel']);
+                    Route::post('/dashboard/signature/resume', [SignatureController::class, 'resume']);
+                    Route::get('/dashboard/history', [SignatureController::class, 'history']);
+                });
                 Route::get('/dashboard/log', [SignatureController::class, 'log']);
                 Route::get('/dashboard/stats', [SignatureController::class, 'stats']);
             });

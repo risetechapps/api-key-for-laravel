@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Config;
@@ -39,6 +40,7 @@ use RiseTechApps\ApiKey\Http\Middlewares\CheckRequestLimitMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\DisableRouteWebMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\EnsureUserIsEnabled;
 use RiseTechApps\ApiKey\Http\Middlewares\LanguageMiddleware;
+use RiseTechApps\ApiKey\Http\Middlewares\TeamRoute;
 use RiseTechApps\ApiKey\Listeners\DispatchAccountWebhooks;
 use RiseTechApps\ApiKey\Listeners\SendGracePeriodNotification;
 use RiseTechApps\ApiKey\Listeners\SendPaymentRejectedNotification;
@@ -57,6 +59,7 @@ use RiseTechApps\ApiKey\Rules\SignatureRules;
 use RiseTechApps\ApiKey\Services\FeatureRegistry;
 use RiseTechApps\ApiKey\Services\PaymentSettingsService;
 use RiseTechApps\ApiKey\Services\SystemHealthService;
+use RiseTechApps\ApiKey\Support\Team;
 use RiseTechApps\FormRequest\RulesRegistry;
 use RiseTechApps\Repository\RepositoryServiceProvider;
 
@@ -279,6 +282,12 @@ class ApiKeyServiceProvider extends ServiceProvider
         $router->aliasMiddleware('feature', CheckPlanFeatureMiddleware::class);
         $router->aliasMiddleware('active.user', EnsureUserIsEnabled::class);
         $router->aliasMiddleware('api.key.rate', ApiKeyRateLimitMiddleware::class);
+        $router->aliasMiddleware('team.role', TeamRoute::class);
+        $router->aliasMiddleware('team.self', TeamRoute::class);
+
+        // O membro da equipe é resolvido por requisição (EnsureUserIsEnabled);
+        // não pode vazar para a próxima no mesmo processo (Octane, testes).
+        $this->app['events']->listen(RequestHandled::class, fn () => Team::forget());
 
         $spaEnabled = config('api-key.spa.enabled', false);
 

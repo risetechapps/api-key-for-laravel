@@ -26,6 +26,7 @@ use RiseTechApps\ToUpper\Traits\HasToUpper;
  * @property string|null $overage_price
  * @property int|null $overage_max_requests
  * @property int|null $rate_limit_per_minute
+ * @property int $team_members_limit membros da equipe além do dono (0 = só o dono)
  * @property-read string $formatted_price
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -47,10 +48,12 @@ class Plan extends Model
         'overage_price',
         'overage_max_requests',
         'rate_limit_per_minute',
+        'team_members_limit',
     ];
 
     protected $casts = [
         'request_limit' => 'integer',
+        'team_members_limit' => 'integer',
         'is_active' => 'boolean',
         'trial_days' => 'integer',
         'overage_price' => 'decimal:4',

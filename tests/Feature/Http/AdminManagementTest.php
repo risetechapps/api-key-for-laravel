@@ -293,7 +293,20 @@ describe('System health', function () {
         expect($checks['Gateway ativo: Pagar.me']['status'])->toBe('error');
     });
 
-    afterEach(fn () => Cache::flush());
+    it('shows the app checks added with extend(), and a broken one as a warning', function () {
+        SystemHealthService::extend(fn () => [['group' => 'WhatsApp', 'label' => 'Fila whatsapp-chat', 'status' => 'error', 'detail' => '900 job(s) esperando.']]);
+        SystemHealthService::extend(fn () => throw new RuntimeException('sem redis'));
+
+        $checks = collect($this->actingAs($this->admin, 'sanctum')->getJson('/api/v1/dashboard/admin/health')->json('data.checks'))->keyBy('label');
+
+        expect($checks['Fila whatsapp-chat'])->toMatchArray(['group' => 'WhatsApp', 'status' => 'error'])
+            ->and($checks['Verificação extra']['detail'])->toContain('sem redis');
+    });
+
+    afterEach(function () {
+        Cache::flush();
+        SystemHealthService::forgetExtensions();
+    });
 });
 
 describe('Appearance', function () {

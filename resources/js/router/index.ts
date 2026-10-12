@@ -1,6 +1,7 @@
 //@ts-nocheck
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import type { TeamRole } from '../stores/auth';
 import appConfig from '@/api-key.config';
 import PublicLayout from '../layouts/PublicLayout.vue';
 import home from '@/views/home/home.vue';
@@ -33,6 +34,8 @@ import adminAppearance from '@/views/admin/appearance.vue';
 import security from '@/views/dashboard/security.vue';
 import apiKeys from '@/views/dashboard/apiKeys.vue';
 import webhooks from '@/views/dashboard/webhooks.vue';
+import team from '@/views/dashboard/team.vue';
+import acceptInvite from '@/views/authentication/acceptInvite.vue';
 
 const routes: RouteRecordRaw[] = [
     {
@@ -52,17 +55,20 @@ const routes: RouteRecordRaw[] = [
     { path: '/register', name: 'register', component: register, meta: { guest: true } },
     { path: '/forgot-password', name: 'forgot-password', component: forgotPassword, meta: { guest: true } },
     { path: '/reset-password', name: 'reset-password', component: resetPassword, meta: { guest: true } },
+    // Convite para a equipe: público (a pessoa ainda não tem conta).
+    { path: '/invite/:token', name: 'accept-invite', component: acceptInvite },
     {
         path: '/dashboard',
         component: DashboardLayout,
         meta: { requiresAuth: true },
         children: [
             { path: '', name: 'dashboard', component: dashboard },
-            { path: 'profile', name: 'dashboard.profile', component: profile },
+            { path: 'profile', name: 'dashboard.profile', component: profile, meta: { teamRole: 'agent' } },
             { path: 'requests', name: 'dashboard.requests', component: requests },
-            { path: 'plans', name: 'dashboard.plans', component: plans },
-            { path: 'billing', name: 'dashboard.billing', component: billing },
-            { path: 'security', name: 'dashboard.security', component: security },
+            { path: 'plans', name: 'dashboard.plans', component: plans, meta: { teamRole: 'owner' } },
+            { path: 'billing', name: 'dashboard.billing', component: billing, meta: { teamRole: 'owner' } },
+            { path: 'security', name: 'dashboard.security', component: security, meta: { teamRole: 'agent' } },
+            { path: 'team', name: 'dashboard.team', component: team },
             { path: 'api-keys', name: 'dashboard.api-keys', component: apiKeys },
             { path: 'webhooks', name: 'dashboard.webhooks', component: webhooks },
             // Admin
@@ -131,6 +137,19 @@ router.beforeEach(async (to, from, next) => {
 
     if (to.meta.ability && !authStore.can(String(to.meta.ability))) {
         return next({ name: 'admin.users' });
+    }
+
+    // Equipe: cada tela do painel declara o papel mínimo em `meta.teamRole`
+    // (padrão admin). Quem não alcança vai para a tela inicial da equipe
+    // (`app.teamHome` em api-key.config.ts). A regra vale no servidor; aqui só
+    // evita abrir uma tela que quebraria nas chamadas recusadas.
+    if (to.meta.requiresAuth && authStore.isAuthenticated && to.path.startsWith('/dashboard')) {
+        const required = (to.meta.teamRole as TeamRole | undefined) ?? 'admin';
+        const home = appConfig.app.teamHome ?? '/dashboard/profile';
+
+        if (!authStore.teamCan(required) && to.path !== home) {
+            return next(home);
+        }
     }
 
     if (to.meta.guest && authStore.isAuthenticated) {

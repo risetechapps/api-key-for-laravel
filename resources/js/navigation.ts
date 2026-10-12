@@ -3,11 +3,13 @@ import type { Component } from 'vue';
 import {
     PhHouse, PhUser, PhShieldCheck, PhKey, PhPlugsConnected, PhClockCounterClockwise, PhCreditCard, PhReceipt,
     PhChartLineUp, PhUsersThree, PhWarningCircle, PhArrowCounterClockwise, PhTag, PhWallet, PhHeartbeat,
-    PhFileText, PhListChecks, PhPaintBrush,
+    PhFileText, PhListChecks, PhPaintBrush, PhUsersFour,
 } from '@phosphor-icons/vue';
 import appConfig from '@/api-key.config';
 import type { MenuItem } from '@/api-key.config';
 import { useAuthStore } from '@/stores/auth';
+import type { TeamRole } from '@/stores/auth';
+import { useRouter } from 'vue-router';
 
 /**
  * Menu do painel, usado pelo menu lateral e pela busca rápida.
@@ -37,6 +39,7 @@ const main: NavItem[] = [
 const account: NavItem[] = [
     { name: 'Perfil', to: '/dashboard/profile', icon: PhUser },
     { name: 'Segurança', to: '/dashboard/security', icon: PhShieldCheck },
+    { name: 'Equipe', to: '/dashboard/team', icon: PhUsersFour },
 ];
 
 const admin: NavItem[] = [
@@ -66,12 +69,18 @@ function group(items: NavItem[], fallback: string | null): NavSection[] {
 
 export function useNavigation() {
     const auth = useAuthStore();
-    const allowed = (item: NavItem) => !item.ability || auth.can(item.ability);
+    const router = useRouter();
+
+    // Equipe: o papel mínimo mora no `meta.teamRole` da rota (padrão admin para
+    // as telas do painel), e o menu o consulta. Ver o guard em router/index.ts.
+    const teamRole = (to: string) => (router.resolve(to).meta?.teamRole as TeamRole | undefined) ?? 'admin';
+
+    const allowed = (item: NavItem) => (!item.ability || auth.can(item.ability)) && auth.teamCan(teamRole(item.to));
 
     const sections = computed<NavSection[]>(() => {
         const out: NavSection[] = [
             ...group([...main, ...appConfig.menu.extraItems].filter(allowed), null),
-            { title: 'Conta', items: account },
+            { title: 'Conta', items: account.filter(allowed) },
         ];
 
         if (auth.isStaff) {

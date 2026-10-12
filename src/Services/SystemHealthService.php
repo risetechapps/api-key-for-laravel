@@ -19,9 +19,30 @@ use RiseTechApps\ApiKey\Models\PendingPayment\PendingPayment;
  * Último webhook e última execução de cada rotina são gravados no cache por
  * quem os recebe ou executa (ver record*()). Com cache `array` (sem
  * persistência) eles aparecem como "sem registro".
+ *
+ * O app acrescenta os próprios itens com extend() (ex.: filas e latência de
+ * um canal), num grupo próprio na mesma tela.
  */
 class SystemHealthService
 {
+    /** @var list<callable(): list<array{group: string, label: string, status: string, detail: string}>> */
+    private static array $extensions = [];
+
+    /**
+     * Itens extras do app na saúde do sistema. O callable devolve uma lista
+     * de ['group', 'label', 'status' (ok|warning|error), 'detail'].
+     */
+    public static function extend(callable $checks): void
+    {
+        self::$extensions[] = $checks;
+    }
+
+    /** Tira os itens extras (testes). */
+    public static function forgetExtensions(): void
+    {
+        self::$extensions = [];
+    }
+
     /**
      * Rotinas do pacote e de quanto em quanto tempo devem rodar, em minutos.
      *
@@ -67,6 +88,7 @@ class SystemHealthService
             ...$this->queueChecks(),
             ...$this->paymentChecks(),
             ...$this->appChecks(),
+            ...$this->extensionChecks(),
         ];
 
         $status = collect($checks)->contains('status', 'error')
@@ -199,6 +221,24 @@ class SystemHealthService
 
         $https = str_starts_with((string) config('app.url'), 'https://');
         $checks[] = $this->check('Aplicação', 'APP_URL com HTTPS', $https ? 'ok' : ($production ? 'error' : 'warning'), $https ? (string) config('app.url') : 'Os gateways só entregam webhook em HTTPS.');
+
+        return $checks;
+    }
+
+    /** Itens do app (extend()). Um que quebra vira aviso, sem derrubar a tela. */
+    private function extensionChecks(): array
+    {
+        $checks = [];
+
+        foreach (self::$extensions as $extension) {
+            try {
+                foreach ((array) $extension() as $item) {
+                    $checks[] = $this->check((string) $item['group'], (string) $item['label'], (string) $item['status'], (string) $item['detail']);
+                }
+            } catch (\Throwable $e) {
+                $checks[] = $this->check('Aplicação', 'Verificação extra', 'warning', 'Falhou: '.$e->getMessage());
+            }
+        }
 
         return $checks;
     }

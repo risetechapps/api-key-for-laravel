@@ -10,6 +10,8 @@ export interface AuthUser {
     role?: string;
     token?: string;
     admin_abilities?: string[];
+    /** Equipe: papel de quem está logado e a conta em que age. */
+    team?: { role: TeamRole; is_member: boolean; account: { id: string; name: string } };
     active_plan?: {
         cancellation?: { cancelled: boolean; cancelled_at: string | null };
         dates?: { start_date?: string; end_date?: string };
@@ -17,6 +19,11 @@ export interface AuthUser {
     } | null;
     [key: string]: unknown;
 }
+
+/** owner: dono da conta; admin: tudo menos cobrança; agent: só o liberado a atendentes. */
+export type TeamRole = 'owner' | 'admin' | 'agent';
+
+const TEAM_RANK: Record<TeamRole, number> = { agent: 1, admin: 2, owner: 3 };
 
 export interface RegisterPayload {
     name: string;
@@ -87,6 +94,14 @@ export const useAuthStore = defineStore('auth', () => {
         return (user.value?.admin_abilities ?? []).includes(ability);
     }
 
+    // Equipe da conta (ver Support\Team no pacote). Sem o campo, é o dono.
+    const teamRole = computed<TeamRole>(() => user.value?.team?.role ?? 'owner');
+    const isTeamMember = computed(() => !!user.value?.team?.is_member);
+    /** O papel de quem está logado alcança o mínimo? (agent < admin < owner) */
+    function teamCan(minimum: TeamRole = 'admin'): boolean {
+        return TEAM_RANK[teamRole.value] >= TEAM_RANK[minimum];
+    }
+
     function setAuth(userData: AuthUser, authToken: string) {
         user.value = userData;
         token.value = authToken;
@@ -115,6 +130,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     /**
+     * Completa o usuário com o /auth/me depois do login: é o endpoint que traz
+     * o plano e a equipe. Falhar aqui não derruba a sessão recém-aberta.
+     */
+    async function hydrateAfterLogin() {
+        try {
+            const response = await axios.get('/auth/me');
+            user.value = response.data?.data || response.data;
+        } catch {
+            // Mantém o payload do login; o próximo carregamento completa.
+        }
+    }
+
+    /**
      * Primeiro passo do login. Com 2FA ativa a API devolve `two_factor: true`
      * e um `challenge`, e o token só vem em verifyTwoFactor().
      */
@@ -129,6 +157,8 @@ export const useAuthStore = defineStore('auth', () => {
                 return responseData;
             }
             setAuth(responseData, responseData.token);
+            // O /login devolve o usuário cru: plano e equipe vêm do /auth/me.
+            await hydrateAfterLogin();
             return responseData;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Erro ao fazer login';
@@ -179,6 +209,7 @@ export const useAuthStore = defineStore('auth', () => {
             const response = await axios.post('/login/two-factor', payload);
             const responseData = response.data?.data || response.data;
             setAuth(responseData, responseData.token);
+            await hydrateAfterLogin();
             return responseData;
         } catch (err: any) {
             error.value = err.response?.data?.message || 'Código inválido';
@@ -186,6 +217,15 @@ export const useAuthStore = defineStore('auth', () => {
         } finally {
             loading.value = false;
         }
+    }
+
+    /** Aceita o convite para a equipe: cria a conta do membro e já entra. */
+    async function acceptInvitation(inviteToken: string, payload: { name?: string; password: string; password_confirmation: string }) {
+        const response = await axios.post(`/team/invitations/${inviteToken}/accept`, payload);
+        const data = response.data?.data || response.data;
+        setAuth(data.user, data.token);
+        await hydrateAfterLogin();
+        return data;
     }
 
     async function logout() {
@@ -243,6 +283,10 @@ export const useAuthStore = defineStore('auth', () => {
         isAdmin,
         isStaff,
         can,
+        teamRole,
+        isTeamMember,
+        teamCan,
+        acceptInvitation,
         setAuth,
         clearAuth,
         initializeAuth,

@@ -135,6 +135,7 @@ return [
         'status' => 'status',
         'expires_at' => 'data de expiração',
         'rate_limit_per_minute' => 'limite por minuto',
+        'team_members_limit' => 'membros da equipe',
         'trial_days' => 'dias de teste',
         'overage_price' => 'preço do excedente',
         'overage_max_requests' => 'teto de excedente',

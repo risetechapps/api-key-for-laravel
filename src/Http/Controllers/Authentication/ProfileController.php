@@ -69,7 +69,8 @@ class ProfileController extends Controller
     public function getAllowedOrigins(Request $request): JsonResponse
     {
         try {
-            $data = auth()->user()->apiKey->allowed_origins;
+            // Conta sem chave (ex.: admin da plataforma): não há origens, não é erro.
+            $data = auth()->user()->apiKey?->allowed_origins ?? [];
 
             return response()->jsonSuccess($data);
         } catch (\Exception $exception) {
@@ -82,7 +83,13 @@ class ProfileController extends Controller
     public function updateAllowedOrigins(Request $request): JsonResponse
     {
         try {
-            auth()->user()->apiKey->update([
+            $apiKey = auth()->user()->apiKey;
+
+            if (! $apiKey) {
+                return response()->jsonGone(__('api-key::messages.api_key_not_found'));
+            }
+
+            $apiKey->update([
                 'allowed_origins' => $request->get('allowed') ?? $request->get('allowed_origins'),
             ]);
 

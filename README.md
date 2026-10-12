@@ -220,7 +220,7 @@ O papel é trocado em Admin → Usuários → ficha → **Alterar papel**, ou pe
 | `GET` | `api/v1/dashboard/admin/payments` | Cobranças de todos os gateways, com filtros (`status`, `gateway`, `from`, `to`, `search`) e totais |
 | `GET` | `api/v1/dashboard/admin/delinquency` | Renovações em nova tentativa, esperando o assinante, e excedente não pago |
 | `GET` | `api/v1/dashboard/admin/export/{payments\|refunds\|users}` | CSV (separador `;`, com BOM) |
-| `GET` | `api/v1/dashboard/admin/health` | Saúde: gateway, último webhook, rotinas agendadas, fila e pagamentos parados |
+| `GET` | `api/v1/dashboard/admin/health` | Saúde: gateway, último webhook, rotinas agendadas, fila, pagamentos parados e os itens do app (`SystemHealthService::extend()`) |
 | `POST` | `api/v1/dashboard/admin/users/{id}/subscriptions/{planId}/{cancel\|extend\|retry-renewal\|waive-overage}` | Ações sobre a assinatura (`extend` recebe `days`) |
 | `PUT` | `api/v1/dashboard/admin/users/{id}/subscriptions/{planId}/usage` | Ajustar `requests_used` do período |
 | `POST` | `api/v1/dashboard/admin/users/{id}/{verification\|sessions/revoke\|api-keys/revoke\|two-factor/reset}` | Ações sobre a conta |
@@ -240,6 +240,18 @@ O papel é trocado em Admin → Usuários → ficha → **Alterar papel**, ou pe
 | `GET` | `api/v1/dashboard/admin/logs/{id}` | Detalhe de um registro |
 | `GET` | `api/v1/dashboard/admin/metrics` | MRR, assinantes, cancelamento, receita, conversão de teste |
 | `GET` | `api/v1/dashboard/admin/audit` | Trilha de auditoria (`action`, `actor_id`, `subject_id`) |
+
+**Itens do app na saúde do sistema.** O app acrescenta as próprias verificações (filas, latência de um canal…) num grupo próprio da mesma tela, sem mexer no pacote:
+
+```php
+use RiseTechApps\ApiKey\Services\SystemHealthService;
+
+SystemHealthService::extend(fn () => [
+    ['group' => 'WhatsApp', 'label' => 'Fila whatsapp-chat', 'status' => 'ok', 'detail' => 'Vazia.'], // status: ok | warning | error
+]);
+```
+
+Registre no `boot()` de um service provider. Uma verificação que lança exceção vira um aviso na tela, sem derrubar as outras.
 
 Com `two_factor.required_for_admins` ligado (padrão), as rotas de admin respondem 403 com `code: two_factor_required` até o admin ativar a verificação em duas etapas no perfil.
 
@@ -325,6 +337,67 @@ Route::middleware(['api', 'plan', 'feature:relatorios_avancados'])->group(functi
 ```
 
 ---
+
+## Equipe da conta
+
+O dono da conta (quem assina o plano) pode ter pessoas com login próprio trabalhando na conta dele.
+
+| Papel | Pode |
+|---|---|
+| `owner` (dono) | tudo, inclusive plano, cobrança e excluir a conta |
+| `admin` | tudo menos plano, cobrança e excluir a conta; convida e gerencia atendentes |
+| `agent` (atendente) | só as rotas que o app libera com `team.role:agent` |
+
+O plano define quantos membros inclui além do dono (`team_members_limit`, Admin → Planos; 0 = só o dono). Convites pendentes contam no limite.
+
+**Convite.** `POST /dashboard/team/invitations` (`name`, `email`, `role`) manda um e-mail com o link `/invite/{token}`, válido por 7 dias. A pessoa abre, define a senha e entra (`POST /team/invitations/{token}/accept` devolve o token de sessão). O e-mail não pode ter conta. Admin convida, altera e remove atendentes; admins, só o dono. Remover um membro exclui a conta dele.
+
+```http
+GET    /api/v1/dashboard/team                          # membros, convites, limite e uso
+POST   /api/v1/dashboard/team/invitations
+POST   /api/v1/dashboard/team/invitations/{id}/resend
+DELETE /api/v1/dashboard/team/invitations/{id}
+PUT    /api/v1/dashboard/team/members/{id}             # { "role": "admin" | "agent" }
+DELETE /api/v1/dashboard/team/members/{id}
+GET    /api/v1/dashboard/team/members                  # nome e papel, liberado a atendentes
+```
+
+**Como o membro age.** Nas rotas do painel, o membro age como o dono: `auth()->user()` é o dono, então o código do app que separa os dados por `auth()->user()->id` não muda. Quem de fato está logado:
+
+```php
+use RiseTechApps\ApiKey\Support\Team;
+
+Team::actor();   // o membro (ou o dono, se for ele)
+Team::role();    // 'owner' | 'admin' | 'agent'
+Team::member();  // o membro, ou null quando é o próprio dono
+```
+
+**Membros de integração (sem login).** Quando quem atende vive no sistema do cliente, o app cria o membro pelo id dele lá, sem convite nem senha:
+
+```php
+app(\RiseTechApps\ApiKey\Services\TeamService::class)
+    ->provisionExternal($dono, externalId: 'user-123', name: 'Ana Souza', role: 'agent');
+```
+
+Cria na primeira vez e atualiza nome e papel nas seguintes (`authentications.external_id`, único por conta). Conta no limite de equipe do plano. O e-mail é fictício (`.invalid`), a senha é aleatória e o login recusa o membro mesmo com a senha certa. Quem age por ele é o sistema do cliente, pela API do app, com `Team::enter($membro, $dono)`. Na tela Equipe ele aparece com o selo "Integração" e o `external_id`, sem e-mail; `/dashboard/team` devolve `external_id` e `email: null` para ele.
+
+**Marcando as rotas do app.** Toda rota do painel passa pelo `active.user`, que aplica a regra:
+
+| Marcação | Quem entra |
+|---|---|
+| (nenhuma) | dono e admin da equipe |
+| `team.role:agent` | dono, admin e atendente |
+| `team.role:owner` | só o dono |
+| `team.self` | o membro como ele mesmo (perfil, senha, 2FA, sessões) |
+
+```php
+Route::middleware(['auth:sanctum', 'active.user', 'team.role:agent'])
+    ->get('/api/v1/dashboard/atendimentos', AtendimentosController::class);
+```
+
+As rotas do pacote já vêm marcadas: perfil, senha, 2FA, sessões e `/auth/me` são pessoais; checkout, cartões, assinatura, recibos e excedente são do dono; rotas do admin da plataforma nunca valem para membros.
+
+**No SPA.** Cada tela declara o papel mínimo em `meta.teamRole` (padrão `admin`); o menu esconde e o router redireciona para `app.teamHome` (em `api-key.config.ts`, padrão `/dashboard/profile`) quem não alcança. `useAuthStore()` expõe `teamRole`, `isTeamMember` e `teamCan('agent' | 'admin' | 'owner')`.
 
 ## Planos de Assinatura
 

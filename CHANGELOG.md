@@ -3,6 +3,30 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [Unreleased]
+
+## [2.1.0] - 2026-10-12
+
+### Atenção ao atualizar
+
+- **Membros de integração.** Nova migration `2026_10_12_000002` (`external_id` em `authentications`, único por conta).
+- **Equipe da conta.** Nova migration `2026_10_12_000001` (`account_id` e `team_role` em `authentications`, `team_members_limit` em `plans`, tabela `team_invitations`). Planos existentes ficam com `team_members_limit = 0` (só o dono); defina o limite em Admin → Planos.
+- **Membro age como o dono.** Nas rotas do painel, o `active.user` troca o usuário da requisição pelo dono da conta quando quem entrou é membro da equipe. Código do app que usa `auth()->user()->id` como dono dos dados continua certo. O membro de fato fica em `Support\Team::actor()`.
+- **Atendente é negado por padrão.** Rota do app sem marcação vale para dono e admin da equipe. Para liberar a atendentes, marque com `team.role:agent`; para só o dono, `team.role:owner`; para rota pessoal (o membro como ele mesmo), `team.self`. Rotas com o middleware `admin` da plataforma nunca valem para membros.
+- **SPA publicado.** Quem publicou o SPA (`api-key-spa`) e o customizou precisa trazer as mudanças em `stores/auth.ts` (`team`, `teamCan`, `acceptInvitation`, `/auth/me` depois do login), `navigation.ts`, `router/index.ts` (`meta.teamRole`, rota `/invite/:token`, guard da equipe), `api-key.config.ts` (`app.teamHome`) e as telas novas `views/dashboard/team.vue` e `views/authentication/acceptInvite.vue`.
+
+### Adicionado
+
+- **Equipe da conta.** O dono convida pessoas por e-mail (nome, e-mail e papel); o convite vale 7 dias e a pessoa cria a própria senha pelo link (`/invite/{token}`). Papéis: **dono** (tudo), **administrador** (tudo menos plano, cobrança e excluir a conta; convida e gerencia atendentes) e **atendente** (só as rotas que o app libera). O plano limita quantos membros (convites pendentes contam). Tela Equipe no painel, `/dashboard/team` na API, campo "Membros na equipe" no cadastro de planos, auditoria de convite, entrada, troca de papel e remoção. Remover um membro exclui a conta dele (sessões encerradas, e-mail liberado); excluir a conta do dono leva a equipe junto. `/auth/me` traz `team` (papel e conta) e, para o membro, o plano e o uso da conta.
+- **`GET /dashboard/team/members`**: quem está na equipe (nome e papel), liberado a atendentes, para o app atribuir trabalho.
+- **Membros de integração.** `TeamService::provisionExternal($dono, $externalId, $nome, $papel)` cria (ou atualiza) um membro identificado pelo id dele no sistema do cliente (`authentications.external_id`, migration `2026_10_12_000002`), sem convite e sem login: o e-mail é fictício, a senha é aleatória e o `/login` recusa esses membros. Contam no limite de equipe. Na tela Equipe aparecem com o selo "Integração"; `/dashboard/team` devolve `external_id` e esconde o e-mail deles.
+- **`SystemHealthService::extend()`**: o app acrescenta as próprias verificações à Saúde do sistema (admin), num grupo próprio. Uma verificação que falha vira aviso, sem derrubar a tela.
+
+### Corrigido
+
+- As origens permitidas (`/dashboard/profile/allowed`) quebravam para conta sem chave de API (ex.: admin da plataforma): a leitura devolvia erro e gravava exceção no log. Agora a leitura devolve lista vazia e a gravação responde que não há chave.
+- O painel ficava sem plano até recarregar depois do login: o `/login` devolve o usuário sem o plano, e o SPA agora completa com o `/auth/me` (também depois da 2FA).
+
 ## [2.0.0]
 
 ### Atenção ao atualizar

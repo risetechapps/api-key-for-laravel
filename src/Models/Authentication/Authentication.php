@@ -5,6 +5,7 @@ namespace RiseTechApps\ApiKey\Models\Authentication;
 use Illuminate\Auth\MustVerifyEmail;
 use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -21,6 +22,7 @@ use RiseTechApps\ApiKey\Events\UserStatusChanged;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\RequestLog\RequestLog;
+use RiseTechApps\ApiKey\Models\Team\TeamInvitation;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\ApiKey\Notifications\ResetPasswordNotification;
@@ -56,12 +58,15 @@ use RiseTechApps\ToUpper\Traits\HasToUpper;
  * @property string|null $locale
  * @property string|null $status
  * @property string|null $role
+ * @property string|null $account_id dono da conta, quando é membro da equipe
+ * @property string|null $team_role admin ou agent (ver Support\Team)
  * @property Carbon|null $email_verified_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  * @property-read ApiKey|null $apiKey
  * @property-read UserPlan|null $activePlan
+ * @property-read Authentication|null $account
  */
 class Authentication extends Authenticatable implements HasLocalePreference, MediaContract
 {
@@ -117,7 +122,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
     // (AuthService::$ENABLE = 'enabled', $CLIENT = 'client') e com o e-mail de
     // login. Uppercase aqui violaria o enum de status/role (CHECK/enum no banco) e
     // quebraria o match — inclusive em produção quando o status é alterado.
-    protected array $no_upper = ['email', 'pending_email', 'status', 'role', 'locale', 'two_factor_secret', 'two_factor_recovery_codes'];
+    protected array $no_upper = ['email', 'pending_email', 'status', 'role', 'team_role', 'external_id', 'locale', 'two_factor_secret', 'two_factor_recovery_codes'];
 
     #[\Override]
     protected static function booted(): void
@@ -189,6 +194,55 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
      *
      * @return HasOne<ApiKey, $this>
      */
+    // ── Equipe ───────────────────────────────────────────────────────────────
+    // `account_id` e `team_role` ficam fora do $fillable: só o fluxo de convite
+    // (TeamService) os grava, com forceFill.
+
+    /**
+     * Dono da conta, quando esta Authentication é membro da equipe dele.
+     *
+     * @return BelongsTo<Authentication, $this>
+     */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'account_id');
+    }
+
+    /** @return HasMany<Authentication, $this> */
+    public function members(): HasMany
+    {
+        return $this->hasMany(self::class, 'account_id');
+    }
+
+    /** Membro criado por integração: sem login aqui (ver TeamService::provisionExternal). */
+    public function isExternal(): bool
+    {
+        return $this->external_id !== null;
+    }
+
+    /** @return HasMany<TeamInvitation, $this> */
+    public function teamInvitations(): HasMany
+    {
+        return $this->hasMany(TeamInvitation::class, 'account_id');
+    }
+
+    public function isTeamMember(): bool
+    {
+        return $this->account_id !== null;
+    }
+
+    /** A conta em nome de quem age: o dono, para membros; ela mesma, para o dono. */
+    public function owningAccount(): self
+    {
+        return $this->isTeamMember() ? ($this->account ?? $this) : $this;
+    }
+
+    /** Membros que o plano ativo inclui (0 = só o dono). */
+    public function teamMembersLimit(): int
+    {
+        return (int) ($this->activePlan?->plan->team_members_limit ?? 0);
+    }
+
     public function apiKey(): HasOne
     {
         // Ordenação simples, e não oldestOfMany(): esse desempata com MAX(id),

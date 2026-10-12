@@ -104,6 +104,12 @@ describe('Allowed origins', function () {
             ->assertJsonPath('data', ['https://app.example.com', 'https://admin.example.com']);
     });
 
+    it('without an API key, reads an empty list and refuses to save, without an error in the log', function () {
+        // jsonSuccess() omite o `data` vazio.
+        expect($this->getJson('/api/v1/dashboard/profile/allowed')->assertStatus(200)->json('data') ?? [])->toBe([]);
+        $this->postJson('/api/v1/dashboard/profile/allowed', ['allowed' => ['https://app.example.com']])->assertStatus(410);
+    });
+
     it('accepts the allowed_origins spelling too', function () {
         // O controller lê 'allowed' ou 'allowed_origins'; as duas grafias circulam
         // entre a SPA e integrações externas.

@@ -32,6 +32,7 @@ class PlansResource extends JsonResource
             'overage_price' => $this->overage_price !== null ? (float) $this->overage_price : null,
             'overage_max_requests' => $this->overage_max_requests,
             'rate_limit_per_minute' => $this->rate_limit_per_minute,
+            'team_members_limit' => (int) $this->team_members_limit,
         ];
     }
 }

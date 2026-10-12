@@ -11,6 +11,7 @@ use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Services\PaymentSettingsService;
 use RiseTechApps\ApiKey\Services\PixService;
 use RiseTechApps\ApiKey\Support\AdminRoles;
+use RiseTechApps\ApiKey\Support\Team;
 
 /**
  * @mixin Authentication
@@ -20,6 +21,10 @@ class AuthenticationMeResource extends JsonResource
     #[\Override]
     public function toArray(Request $request): array
     {
+        // Membro da equipe: a identidade é dele; plano, uso, chave e cobrança
+        // são da conta do dono (ver Support\Team).
+        $account = $this->account();
+
         return [
             'id' => $this->getKey(),
             'code' => $this->code,
@@ -35,10 +40,20 @@ class AuthenticationMeResource extends JsonResource
             'two_factor_required' => AdminRoles::isStaff($this->resource)
                 && (bool) config('api-key.two_factor.required_for_admins', true)
                 && $this->two_factor_confirmed_at === null,
-            'trial_available' => $this->trial_used_at === null,
+            'trial_available' => $account->trial_used_at === null,
             // Permissões no painel admin (vazio para quem não é da equipe).
             'admin_abilities' => AdminRoles::abilities($this->resource),
-            'overage_enabled' => (bool) $this->overage_enabled,
+            'overage_enabled' => (bool) $account->overage_enabled,
+
+            // Equipe: papel de quem está logado e a conta em que age.
+            'team' => [
+                'role' => Team::roleOf($this->resource),
+                'is_member' => $this->resource->isTeamMember(),
+                'account' => [
+                    'id' => $account->getKey(),
+                    'name' => mb_convert_case((string) $account->name, MB_CASE_TITLE),
+                ],
+            ],
 
             // Profile
             'profile' => [
@@ -50,8 +65,8 @@ class AuthenticationMeResource extends JsonResource
             ],
 
             // Relationships
-            'api_key' => $this->whenLoaded('apiKey', fn () => ApiKeyResource::make($this->apiKey)),
-            'active_plan' => $this->whenLoaded('activePlan', fn () => UserPlanResource::make($this->activePlan)),
+            'api_key' => $account->relationLoaded('apiKey') ? ApiKeyResource::make($account->apiKey) : $this->whenLoaded('apiKey', fn () => ApiKeyResource::make($this->apiKey)),
+            'active_plan' => $account->relationLoaded('activePlan') ? UserPlanResource::make($account->activePlan) : $this->whenLoaded('activePlan', fn () => UserPlanResource::make($this->activePlan)),
 
             // Usage statistics (requests_used nunca acima do limite)
             'usage' => $this->usageStats(),
@@ -79,8 +94,8 @@ class AuthenticationMeResource extends JsonResource
      */
     private function usageStats(): array
     {
-        $limit = (int) $this->requestLimit();
-        $used = (int) $this->countUsed();
+        $limit = (int) $this->account()->requestLimit();
+        $used = (int) $this->account()->countUsed();
 
         if ($limit > 0) {
             $used = min($used, $limit);
@@ -91,6 +106,12 @@ class AuthenticationMeResource extends JsonResource
             'requests_limit' => $limit,
             'remaining_requests' => $limit > 0 ? max(0, $limit - $used) : 0,
         ];
+    }
+
+    /** A conta em que age: o dono, para o membro da equipe; ela mesma, para o dono. */
+    private function account(): Authentication
+    {
+        return Team::account() ?? $this->resource->owningAccount();
     }
 
     /**

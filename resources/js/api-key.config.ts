@@ -19,6 +19,12 @@ export interface ApiKeyConfig {
         logoText: string;
         logoHref: string;
         logoImage?: string;
+        /**
+         * Tela inicial de quem é da equipe e não pode ver a tela pedida (ex.:
+         * atendente). Padrão: /dashboard/profile. O papel mínimo de cada tela
+         * fica em `meta.teamRole` da rota: 'agent', 'admin' (padrão) ou 'owner'.
+         */
+        teamHome?: string;
     };
     menu: {
         extraItems: MenuItem[];
