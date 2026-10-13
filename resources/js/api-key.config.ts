@@ -41,7 +41,21 @@ export interface ApiKeyConfig {
         headline?: string;
         bullets?: string[];
     };
+    /** Cartões do app nas abas do perfil. Ver `ProfileCard`. */
+    profile?: {
+        extraCards?: ProfileCard[];
+    };
 }
+
+/** Abas do perfil que aceitam cartões extras. */
+export type ProfileTab = 'personal' | 'address' | 'key' | 'privacy';
+
+/**
+ * Cartão extra do perfil: o componente (vai para a aba "API key principal")
+ * ou `{ component, tab }` para escolher a aba. Os cartões entram depois dos do
+ * pacote, na ordem da lista.
+ */
+export type ProfileCard = Component | { component: Component; tab?: ProfileTab };
 
 const config: ApiKeyConfig = {
     app: {
@@ -76,6 +90,9 @@ const config: ApiKeyConfig = {
 
     // Painel da marca no login e no cadastro (opcional)
     // auth: { headline: 'A API de dados mais rápida do Brasil.', bullets: ['…', '…'] },
+
+    // Cartões extras no perfil (opcional). Só o componente vai para a aba "API key principal".
+    // Exemplo: profile: { extraCards: [defineAsyncComponent(() => import('@/views/MeuCard.vue')), { component: OutroCard, tab: 'privacy' }] },
 };
 
 export default config;

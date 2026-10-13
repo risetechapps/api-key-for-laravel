@@ -7,7 +7,6 @@ use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Routing\Router;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -60,6 +59,8 @@ use RiseTechApps\ApiKey\Services\FeatureRegistry;
 use RiseTechApps\ApiKey\Services\PaymentSettingsService;
 use RiseTechApps\ApiKey\Services\SystemHealthService;
 use RiseTechApps\ApiKey\Support\Team;
+use RiseTechApps\ApiKey\Support\Translation\BaseLocaleLoader;
+use RiseTechApps\ApiKey\Support\Translation\ValidationFallback;
 use RiseTechApps\FormRequest\RulesRegistry;
 use RiseTechApps\Repository\RepositoryServiceProvider;
 
@@ -220,18 +221,11 @@ class ApiKeyServiceProvider extends ServiceProvider
      */
     protected function registerValidationFallback(): void
     {
+        // `pt` e a variante do app (pt_BR). Outras variantes que o
+        // LanguageMiddleware escolha recebem o mesmo fallback na hora.
         $this->callAfterResolving('translator', function ($translator) {
-            $translator->load('*', 'validation', 'pt');
-
-            $lines = [];
-
-            foreach (Arr::dot(require __DIR__.'/lang/pt/validation.php') as $key => $value) {
-                if (! $translator->hasForLocale("validation.{$key}", 'pt')) {
-                    $lines["validation.{$key}"] = $value;
-                }
-            }
-
-            $translator->addLines($lines, 'pt');
+            ValidationFallback::ensure($translator, 'pt');
+            ValidationFallback::ensure($translator, (string) config('app.locale'));
         });
     }
 
@@ -250,6 +244,9 @@ class ApiKeyServiceProvider extends ServiceProvider
         $this->app->alias('apikey.features', FeatureRegistry::class);
 
         $this->registerCommands();
+
+        // Mensagens do pacote em apps com locale regional (pt_BR → pt). Ver a classe.
+        $this->app->extend('translation.loader', fn ($loader) => new BaseLocaleLoader($loader));
     }
 
     protected function registerCommands(): void

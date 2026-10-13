@@ -37,6 +37,22 @@ describe('Registration', function () {
         ]);
     });
 
+    it('still answers success, with the key, when the verification e-mail fails', function () {
+        // A conta já existe quando o e-mail sai: falha nele não pode virar
+        // "erro no cadastro" (e-mail "já registrado" e a chave perdida).
+        Notification::shouldReceive('send')->andThrow(new RuntimeException('SMTP down'));
+
+        $response = $this->postJson('/api/v1/register', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertStatus(200)->assertJsonPath('data.api_key', fn ($key) => is_string($key) && $key !== '');
+        $this->assertDatabaseHas('authentications', ['email' => 'john@example.com']);
+    });
+
     it('sends email verification notification', function () {
         $this->postJson('/api/v1/register', [
             'name' => 'John Doe',

@@ -5,6 +5,25 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-12
+
+### Adicionado
+
+- Cartões do app no perfil (`profile.extraCards` em `api-key.config.ts`). Só o componente vai para a aba "API key principal"; `{ component, tab }` escolhe a aba (`personal`, `address`, `key` ou `privacy`). Antes o app precisava alterar o `profile.vue` do pacote, e a alteração sumia a cada republicação do front
+
+### Corrigido
+
+- **Mensagens do pacote em apps com locale regional (`pt_BR`).** O pacote traduz em `pt` e `en`; num app em `pt_BR`, o padrão do Laravel no Brasil, as mensagens saíam como chave crua (`"api-key::messages.account_disabled"`), inclusive os erros da API key, que rodam antes do middleware de idioma. Um carregador novo (`BaseLocaleLoader`) faz as mensagens do pacote caírem no idioma base quando a variante não tem arquivo (pt_BR → pt); traduções que o app publicar em pt_BR continuam vencendo
+- **`LanguageMiddleware` usa o locale do app quando o cliente pede o mesmo idioma:** num app em `pt_BR`, quem manda `Accept-Language: pt-BR` fica em `pt_BR` (antes `pt`, e as traduções do próprio app, em `lang/pt_BR` e `lang/pt_BR.json`, não eram achadas: parte da resposta saía em inglês). As mensagens de validação em português do pacote valem também para a variante, quando o app não tem as próprias
+- O avatar gerado no cadastro era gravado como o texto do data URI (`data:image/png;base64,...`) num arquivo `.png`. O avatar saía quebrado e a conversão da mídia falhava em todo cadastro ("improper image header"). Agora os bytes do PNG são decodificados antes de gravar
+- Falha no envio do e-mail de verificação depois de a conta já criada respondia "erro no cadastro": a pessoa perdia a API key mostrada só naquela resposta e não conseguia se cadastrar de novo (e-mail "já registrado"). Agora o erro vai para o log e o cadastro responde sucesso; o e-mail pode ser reenviado pela tela de login (`email/resend`)
+- Menu do painel: com dois itens em que um caminho é prefixo do outro (ex.: `/dashboard/shipping` e `/dashboard/shipping/senders`), os dois ficavam marcados como ativos. Agora só o mais específico (`isActivePath`)
+- `stubs/package.json` sem `qrcode` (e `@types/qrcode`): quem publicava o build (`api-key-build`) ficava com a tela de verificação em duas etapas sem compilar
+
+### Removido
+
+- `views/dashboard/layout/Footer.vue`: não era usado pelo layout e tinha "Api Key" escrito fixo
+
 ## [2.1.0] - 2026-10-12
 
 ### Atenção ao atualizar

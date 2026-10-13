@@ -72,7 +72,16 @@ class UserRegistrationService
         $this->validateAvatarGenerator();
 
         $avatarPath = $user->getKey().'.png';
-        $profileImage = avatarGenerator()->generateBase64($name);
+
+        // generateBase64() devolve um data URI (`data:image/png;base64,...`).
+        // Gravado como veio, o .png guardava esse texto: o avatar saía quebrado
+        // e a conversão da mídia falhava em todo cadastro ("improper image header").
+        $dataUri = avatarGenerator()->generateBase64($name);
+        $profileImage = base64_decode((string) preg_replace('#^data:image/[a-z]+;base64,#i', '', $dataUri), true);
+
+        if ($profileImage === false || $profileImage === '') {
+            throw new RuntimeException('Unable to decode generated avatar.');
+        }
 
         if (! Storage::put($avatarPath, $profileImage)) {
             throw new RuntimeException('Unable to persist generated avatar.');

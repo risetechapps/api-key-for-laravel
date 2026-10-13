@@ -4,7 +4,8 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use RiseTechApps\ApiKey\Support\Translation\BaseLocaleLoader;
+use RiseTechApps\ApiKey\Support\Translation\ValidationFallback;
 use Symfony\Component\HttpFoundation\Response;
 
 class LanguageMiddleware
@@ -25,7 +26,10 @@ class LanguageMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        app()->setLocale($this->resolve($request));
+        $locale = $this->resolve($request);
+
+        app()->setLocale($locale);
+        ValidationFallback::ensure(app('translator'), $locale);
 
         return $next($request);
     }
@@ -33,13 +37,26 @@ class LanguageMiddleware
     private function resolve(Request $request): string
     {
         foreach ($request->getLanguages() as $language) {
-            $base = strtolower(Str::before(str_replace('-', '_', $language), '_'));
+            $base = BaseLocaleLoader::base($language);
 
             if (in_array($base, self::SUPPORTED, true)) {
-                return $base;
+                return $this->forApp($base);
             }
         }
 
-        return (string) config('api-key.default_language', 'pt');
+        return $this->forApp((string) config('api-key.default_language', 'pt'));
+    }
+
+    /**
+     * O idioma no locale do app quando os dois são o mesmo idioma: num app em
+     * pt_BR, "pt" vira "pt_BR". Antes ficava "pt", e as traduções do próprio
+     * app (lang/pt_BR, lang/pt_BR.json) não eram achadas: parte da resposta
+     * saía em inglês. As do pacote continuam vindo de `pt` (BaseLocaleLoader).
+     */
+    private function forApp(string $language): string
+    {
+        $appLocale = (string) config('app.locale');
+
+        return BaseLocaleLoader::base($appLocale) === BaseLocaleLoader::base($language) ? $appLocale : $language;
     }
 }

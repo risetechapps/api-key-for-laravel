@@ -31,44 +31,50 @@
             <Tabs v-model="tab" :tabs="tabs" label="Seções do perfil">
                 <template #default="{ active }">
                     <!-- Dados pessoais -->
-                    <Card v-if="active === 'personal'" title="Dados pessoais" subtitle="Usados na nota, no recibo e na análise antifraude dos pagamentos">
-                        <div v-if="pageLoading" class="grid gap-5 md:grid-cols-2"><Skeleton v-for="i in 8" :key="i" height="2.5rem" /></div>
-                        <form v-else id="profile-form" class="grid gap-5 md:grid-cols-2" @submit.prevent="updateProfile">
-                            <TextInput v-model="form.name" label="Nome completo" required uppercase :icon="PhUser" :error="fieldErrors.name" />
-                            <TextInput v-model="form.email" label="E-mail" type="email" disabled :icon="PhEnvelope" hint="Troque em Segurança." />
-                            <TextInput v-model="form.cpf" label="CPF" placeholder="000.000.000-00" required :icon="PhIdentificationCard" :error="fieldErrors.cpf" />
-                            <TextInput v-model="form.rg" label="RG" uppercase :icon="PhIdentificationCard" :error="fieldErrors.rg" />
-                            <TextInput v-model="form.birth_date" label="Data de nascimento" type="date" required :icon="PhCalendarBlank" :error="fieldErrors.birth_date" />
-                            <Select v-model="form.genre" label="Gênero" placeholder="Selecione" :options="{ MASCULINE: 'Masculino', FEMININE: 'Feminino', OTHER: 'Outro', NOT_INFORMED: 'Prefiro não informar' }" />
-                            <TextInput v-model="form.cellphone" label="Celular" placeholder="(00) 00000-0000" :icon="PhDeviceMobile" :error="fieldErrors.cellphone" />
-                            <TextInput v-model="form.telephone" label="Telefone" placeholder="(00) 0000-0000" :icon="PhPhone" :error="fieldErrors.telephone" />
-                            <TextInput v-model="form.nationality" label="Nacionalidade" placeholder="Brasileiro(a)" uppercase :icon="PhGlobe" />
-                            <TextInput v-model="form.naturalness" label="Naturalidade" placeholder="Cidade/UF" uppercase :icon="PhMapPin" />
-                            <Select v-model="form.marital_status" label="Estado civil" placeholder="Selecione" :options="{ SINGLE: 'Solteiro(a)', MARRIED: 'Casado(a)', WIDOWER: 'Viúvo(a)', 'JUDICIALLY SEPARATED': 'Separado(a)' }" />
-                        </form>
-                        <template #footer>
-                            <div class="flex justify-end"><Button type="submit" form="profile-form" :loading="updating" :icon="PhCheck">Salvar alterações</Button></div>
-                        </template>
-                    </Card>
+                    <div v-if="active === 'personal'" class="space-y-6">
+                        <Card title="Dados pessoais" subtitle="Usados na nota, no recibo e na análise antifraude dos pagamentos">
+                            <div v-if="pageLoading" class="grid gap-5 md:grid-cols-2"><Skeleton v-for="i in 8" :key="i" height="2.5rem" /></div>
+                            <form v-else id="profile-form" class="grid gap-5 md:grid-cols-2" @submit.prevent="updateProfile">
+                                <TextInput v-model="form.name" label="Nome completo" required uppercase :icon="PhUser" :error="fieldErrors.name" />
+                                <TextInput v-model="form.email" label="E-mail" type="email" disabled :icon="PhEnvelope" hint="Troque em Segurança." />
+                                <TextInput v-model="form.cpf" label="CPF" placeholder="000.000.000-00" required :icon="PhIdentificationCard" :error="fieldErrors.cpf" />
+                                <TextInput v-model="form.rg" label="RG" uppercase :icon="PhIdentificationCard" :error="fieldErrors.rg" />
+                                <TextInput v-model="form.birth_date" label="Data de nascimento" type="date" required :icon="PhCalendarBlank" :error="fieldErrors.birth_date" />
+                                <Select v-model="form.genre" label="Gênero" placeholder="Selecione" :options="{ MASCULINE: 'Masculino', FEMININE: 'Feminino', OTHER: 'Outro', NOT_INFORMED: 'Prefiro não informar' }" />
+                                <TextInput v-model="form.cellphone" label="Celular" placeholder="(00) 00000-0000" :icon="PhDeviceMobile" :error="fieldErrors.cellphone" />
+                                <TextInput v-model="form.telephone" label="Telefone" placeholder="(00) 0000-0000" :icon="PhPhone" :error="fieldErrors.telephone" />
+                                <TextInput v-model="form.nationality" label="Nacionalidade" placeholder="Brasileiro(a)" uppercase :icon="PhGlobe" />
+                                <TextInput v-model="form.naturalness" label="Naturalidade" placeholder="Cidade/UF" uppercase :icon="PhMapPin" />
+                                <Select v-model="form.marital_status" label="Estado civil" placeholder="Selecione" :options="{ SINGLE: 'Solteiro(a)', MARRIED: 'Casado(a)', WIDOWER: 'Viúvo(a)', 'JUDICIALLY SEPARATED': 'Separado(a)' }" />
+                            </form>
+                            <template #footer>
+                                <div class="flex justify-end"><Button type="submit" form="profile-form" :loading="updating" :icon="PhCheck">Salvar alterações</Button></div>
+                            </template>
+                        </Card>
+                        <component :is="card" v-for="(card, i) in extraCards.personal" :key="`extra-personal-${i}`" />
+                    </div>
 
                     <!-- Endereço -->
-                    <Card v-else-if="active === 'address'" title="Endereço" subtitle="Digite o CEP para preencher o resto automaticamente">
-                        <form id="address-form" class="grid gap-5 md:grid-cols-6" @submit.prevent="updateProfile">
-                            <TextInput v-model="form.address.zip_code" class="md:col-span-2" label="CEP" placeholder="00000-000" :icon="PhMapPin">
-                                <template v-if="cepLoading" #suffix><Spinner size="sm" class="text-brand-500" /></template>
-                            </TextInput>
-                            <TextInput v-model="form.address.address" class="md:col-span-4" label="Endereço" uppercase :icon="PhHouse" />
-                            <TextInput v-model="form.address.number" class="md:col-span-2" label="Número" uppercase :icon="PhHash" />
-                            <TextInput v-model="form.address.complement" class="md:col-span-4" label="Complemento" placeholder="Apto, bloco…" uppercase :icon="PhNote" />
-                            <TextInput v-model="form.address.district" class="md:col-span-2" label="Bairro" uppercase :icon="PhBuildings" />
-                            <TextInput v-model="form.address.city" class="md:col-span-2" label="Cidade" uppercase :icon="PhBuildings" />
-                            <Select v-model="form.address.state" class="md:col-span-2" label="Estado" placeholder="Selecione" :options="brazilianStates.map((s) => ({ value: s.uf, label: s.name }))" />
-                            <TextInput v-model="form.address.country" class="md:col-span-2" label="País" uppercase :icon="PhGlobe" />
-                        </form>
-                        <template #footer>
-                            <div class="flex justify-end"><Button type="submit" form="address-form" :loading="updating" :icon="PhCheck">Salvar endereço</Button></div>
-                        </template>
-                    </Card>
+                    <div v-else-if="active === 'address'" class="space-y-6">
+                        <Card title="Endereço" subtitle="Digite o CEP para preencher o resto automaticamente">
+                            <form id="address-form" class="grid gap-5 md:grid-cols-6" @submit.prevent="updateProfile">
+                                <TextInput v-model="form.address.zip_code" class="md:col-span-2" label="CEP" placeholder="00000-000" :icon="PhMapPin">
+                                    <template v-if="cepLoading" #suffix><Spinner size="sm" class="text-brand-500" /></template>
+                                </TextInput>
+                                <TextInput v-model="form.address.address" class="md:col-span-4" label="Endereço" uppercase :icon="PhHouse" />
+                                <TextInput v-model="form.address.number" class="md:col-span-2" label="Número" uppercase :icon="PhHash" />
+                                <TextInput v-model="form.address.complement" class="md:col-span-4" label="Complemento" placeholder="Apto, bloco…" uppercase :icon="PhNote" />
+                                <TextInput v-model="form.address.district" class="md:col-span-2" label="Bairro" uppercase :icon="PhBuildings" />
+                                <TextInput v-model="form.address.city" class="md:col-span-2" label="Cidade" uppercase :icon="PhBuildings" />
+                                <Select v-model="form.address.state" class="md:col-span-2" label="Estado" placeholder="Selecione" :options="brazilianStates.map((s) => ({ value: s.uf, label: s.name }))" />
+                                <TextInput v-model="form.address.country" class="md:col-span-2" label="País" uppercase :icon="PhGlobe" />
+                            </form>
+                            <template #footer>
+                                <div class="flex justify-end"><Button type="submit" form="address-form" :loading="updating" :icon="PhCheck">Salvar endereço</Button></div>
+                            </template>
+                        </Card>
+                        <component :is="card" v-for="(card, i) in extraCards.address" :key="`extra-address-${i}`" />
+                    </div>
 
                     <!-- API key principal -->
                     <div v-else-if="active === 'key'" class="space-y-6">
@@ -101,6 +107,8 @@
                                 <Button type="submit" variant="outline" :icon="PhPlus" :disabled="!newOrigin">Adicionar</Button>
                             </form>
                         </Card>
+
+                        <component :is="card" v-for="(card, i) in extraCards.key" :key="`extra-key-${i}`" />
                     </div>
 
                     <!-- Privacidade -->
@@ -118,6 +126,8 @@
                                 <Button variant="danger" :icon="PhTrash" @click="deleteAccount">Excluir conta</Button>
                             </div>
                         </Card>
+
+                        <component :is="card" v-for="(card, i) in extraCards.privacy" :key="`extra-privacy-${i}`" />
                     </div>
                 </template>
             </Tabs>
@@ -135,6 +145,8 @@ import {
     PhDownloadSimple, PhTrash,
 } from '@phosphor-icons/vue';
 import { useAuthStore } from '@/stores/auth';
+import appConfig from '@/api-key.config';
+import type { ProfileCard, ProfileTab } from '@/api-key.config';
 import { Alert, Avatar, Badge, Button, Card, CopyField, PageHeader, Select, Skeleton, Spinner, Tabs, TextInput, errorMessage, prompt, toast } from '@/ui';
 import type { TabItem } from '@/ui';
 
@@ -142,6 +154,20 @@ const authStore = useAuthStore();
 const router = useRouter();
 
 const tab = ref('personal');
+// Cartões do app (api-key.config.ts → profile.extraCards), agrupados por aba.
+// Só o componente vai para a aba da API key; `{ component, tab }` escolhe outra.
+const extraCards = computed(() => {
+    const byTab: Record<ProfileTab, unknown[]> = { personal: [], address: [], key: [], privacy: [] };
+
+    for (const card of (appConfig.profile?.extraCards ?? []) as ProfileCard[]) {
+        const entry = card as { component?: unknown; tab?: ProfileTab };
+        const isEntry = typeof card === 'object' && card !== null && 'component' in card;
+        byTab[(isEntry && entry.tab) || 'key'].push(isEntry ? entry.component : card);
+    }
+
+    return byTab;
+});
+
 const tabs: TabItem[] = [
     { key: 'personal', label: 'Dados pessoais', icon: PhUser },
     { key: 'address', label: 'Endereço', icon: PhMapPin },

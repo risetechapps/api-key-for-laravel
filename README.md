@@ -1503,6 +1503,14 @@ export default {
     commands: [{ id: 'relatorios.novo', label: 'Novo relatório', group: 'Relatórios', to: '/dashboard/relatorios/novo' }],
     // Texto do painel da marca nas telas de login e cadastro.
     auth: { headline: 'Os dados da sua empresa, num lugar só.', bullets: ['…'] },
+    // Cartões do app no perfil, depois dos do pacote. Só o componente vai para a
+    // aba "API key principal"; `tab` escolhe outra: personal, address, key ou privacy.
+    profile: {
+        extraCards: [
+            defineAsyncComponent(() => import('@/views/profile/WebhookSecretCard.vue')),
+            { component: defineAsyncComponent(() => import('@/views/profile/ConsentCard.vue')), tab: 'privacy' },
+        ],
+    },
 };
 ```
 

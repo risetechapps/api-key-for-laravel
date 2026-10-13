@@ -30,7 +30,19 @@ class AuthController extends Controller
         try {
             $user = $this->registrationService->register($request->validated());
 
-            $user->sendEmailVerificationNotification();
+            // A conta já foi criada (a transação do register() fechou). Uma
+            // falha no envio do e-mail não pode virar "erro no cadastro": a
+            // pessoa ficaria sem a chave mostrada aqui e com o e-mail "já
+            // registrado". Ela pede o reenvio pela tela de login (email/resend).
+            try {
+                $user->sendEmailVerificationNotification();
+            } catch (Throwable $exception) {
+                logglyError()->withContext([
+                    'user_id' => $user->getKey(),
+                    'error' => $exception->getMessage(),
+                ])->log('Registration: verification e-mail failed');
+                report($exception);
+            }
 
             logglyInfo()->withContext([
                 'user_id' => $user->getKey(),

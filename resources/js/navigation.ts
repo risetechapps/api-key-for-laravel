@@ -93,9 +93,22 @@ export function useNavigation() {
     return { sections };
 }
 
-export function isActivePath(current: string, item: NavItem): boolean {
+function matchesPath(current: string, item: NavItem): boolean {
     if (item.exact) return current === item.to;
     return current === item.to || current.startsWith(`${item.to}/`);
+}
+
+/**
+ * Item ativo para a página atual. Quando dois itens casam (ex.: `/envios` e
+ * `/envios/remetentes`), só o mais específico fica marcado; antes os dois
+ * acendiam juntos.
+ */
+export function isActivePath(current: string, item: NavItem): boolean {
+    if (!matchesPath(current, item)) return false;
+
+    const all: NavItem[] = [...main, ...account, ...admin, ...appConfig.menu.extraItems, ...appConfig.menu.extraAdminItems];
+
+    return !all.some((other) => other.to !== item.to && other.to.length > item.to.length && matchesPath(current, other));
 }
 
 export type { Component };

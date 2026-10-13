@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Services\UserRegistrationService;
 
@@ -51,6 +52,20 @@ describe('Registration', function () {
         ]);
 
         expect($user->getMedia('profile'))->not->toBeEmpty();
+    });
+
+    it('stores the avatar as real PNG bytes, not the data URI text', function () {
+        $user = $this->service->register([
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'secret123',
+        ]);
+
+        $media = $user->getFirstMedia('profile');
+        $bytes = Storage::disk($media->disk)->get($media->getPathRelativeToRoot());
+
+        // Assinatura do PNG; antes o arquivo começava com "data:image/png;base64,".
+        expect(substr($bytes, 0, 8))->toBe("\x89PNG\r\n\x1a\n");
     });
 });
 
