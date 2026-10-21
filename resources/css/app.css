@@ -2,8 +2,8 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+/* Só arquivos versionados: o build do CI roda sem vendor/ nem storage/ e
+   precisa gerar o mesmo dist/ que o build local. */
 @source '../**/*.blade.php';
 @source '../**/*.js';
 @source '../**/*.ts';
