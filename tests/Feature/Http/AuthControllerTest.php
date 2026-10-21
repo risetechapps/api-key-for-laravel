@@ -1,0 +1,213 @@
+<?php
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
+use Laravel\Sanctum\Sanctum;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
+use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
+
+uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    Notification::fake();
+});
+
+describe('Registration', function () {
+    it('registers a new user', function () {
+        $response = $this->postJson('/api/v1/register', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [
+                    'message',
+                    'api_key',
+                ],
+            ]);
+
+        // O HasToUpper normaliza o nome para maiúsculo ao persistir; o e-mail está
+        // no $no_upper e permanece como enviado.
+        $this->assertDatabaseHas('authentications', [
+            'email' => 'john@example.com',
+            'name' => 'JOHN DOE',
+        ]);
+    });
+
+    it('still answers success, with the key, when the verification e-mail fails', function () {
+        // A conta já existe quando o e-mail sai: falha nele não pode virar
+        // "erro no cadastro" (e-mail "já registrado" e a chave perdida).
+        Notification::shouldReceive('send')->andThrow(new RuntimeException('SMTP down'));
+
+        $response = $this->postJson('/api/v1/register', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertStatus(200)->assertJsonPath('data.api_key', fn ($key) => is_string($key) && $key !== '');
+        $this->assertDatabaseHas('authentications', ['email' => 'john@example.com']);
+    });
+
+    it('sends email verification notification', function () {
+        $this->postJson('/api/v1/register', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $user = Authentication::where('email', 'john@example.com')->first();
+
+        Notification::assertSentTo($user, EmailVerifyNotification::class);
+    });
+
+    it('validates required fields', function () {
+        $response = $this->postJson('/api/v1/register', []);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['name', 'email', 'password']);
+    });
+
+    it('validates email uniqueness', function () {
+        Authentication::factory()->create(['email' => 'exists@example.com']);
+
+        $response = $this->postJson('/api/v1/register', [
+            'name' => 'John Doe',
+            'email' => 'exists@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['email']);
+    });
+
+    it('validates password confirmation', function () {
+        $response = $this->postJson('/api/v1/register', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'different',
+        ]);
+
+        // A regra é same:password sobre o campo password_confirmation, então o
+        // erro de validação é reportado nessa chave.
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['password_confirmation']);
+    });
+});
+
+describe('Login', function () {
+    it('logs in with valid credentials', function () {
+        $user = Authentication::factory()->create([
+            'email' => 'test@example.com',
+            'password' => bcrypt('password123'),
+            'email_verified_at' => now(),
+        ]);
+
+        $response = $this->postJson('/api/v1/login', [
+            'email' => 'test@example.com',
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [
+                    'token',
+                    'id',
+                    'email',
+                ],
+            ]);
+    });
+
+    it('rejects invalid credentials', function () {
+        Authentication::factory()->create([
+            'email' => 'test@example.com',
+            'password' => bcrypt('password123'),
+            'email_verified_at' => now(),
+        ]);
+
+        $response = $this->postJson('/api/v1/login', [
+            'email' => 'test@example.com',
+            'password' => 'wrongpassword',
+        ]);
+
+        $response->assertStatus(410)
+            ->assertJson(['message' => __('api-key::messages.incorrect_credentials')]);
+    });
+
+    it('requires email verification', function () {
+        $user = Authentication::factory()->unverified()->create([
+            'email' => 'unverified@example.com',
+            'password' => bcrypt('password123'),
+        ]);
+
+        $response = $this->postJson('/api/v1/login', [
+            'email' => 'unverified@example.com',
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(410)
+            ->assertJson(['message' => __('api-key::messages.account_not_verified')]);
+
+        Notification::assertSentTo($user, EmailVerifyNotification::class);
+    });
+
+    it('validates required fields', function () {
+        $response = $this->postJson('/api/v1/login', []);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['email', 'password']);
+    });
+});
+
+describe('Me', function () {
+    it('returns authenticated user data', function () {
+        // A rota /auth/me é protegida por auth:sanctum, então autenticamos com um
+        // token Sanctum (não com a API key, que serve às rotas do grupo 'plan').
+        $user = Authentication::factory()->create();
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/auth/me');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [
+                    'id',
+                    'email',
+                    'name',
+                ],
+            ]);
+    });
+
+    it('requires authentication', function () {
+        $response = $this->getJson('/api/v1/auth/me');
+
+        $response->assertStatus(401);
+    });
+});
+
+describe('Rate Limiting', function () {
+    it('rate limits login attempts', function () {
+        // Make 5 failed attempts
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/v1/login', [
+                'email' => 'test@example.com',
+                'password' => 'wrong',
+            ]);
+        }
+
+        // 6th attempt should be rate limited
+        $response = $this->postJson('/api/v1/login', [
+            'email' => 'test@example.com',
+            'password' => 'wrong',
+        ]);
+
+        $response->assertStatus(429);
+    });
+});

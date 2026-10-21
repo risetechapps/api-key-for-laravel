@@ -1,0 +1,91 @@
+<?php
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
+use RiseTechApps\ApiKey\Services\UserRegistrationService;
+
+uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    $this->service = new UserRegistrationService;
+});
+
+describe('Registration', function () {
+    it('creates a new user', function () {
+        $data = [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'secret123',
+        ];
+
+        $user = $this->service->register($data);
+
+        expect($user)->toBeInstanceOf(Authentication::class);
+        // HasToUpper normaliza o nome; o e-mail está no $no_upper.
+        expect($user->name)->toBe('JOHN DOE');
+        expect($user->email)->toBe('john@example.com');
+    });
+
+    it('creates an api key for the user', function () {
+        $data = [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'secret123',
+        ];
+
+        $user = $this->service->register($data);
+
+        expect($user->apiKey)->not->toBeNull();
+        expect($user->apiKey->plainKey)->not->toBeNull();
+    });
+
+    it('generates and stores the avatar', function () {
+        // O caminho que de fato roda: validateAvatarGenerator() passa, o avatar é
+        // gerado e anexado à coleção 'profile'. O ramo de erro dele depende de
+        // `function_exists('avatarGenerator')` ser falso, o que nunca acontece com
+        // o risetools instalado — está documentado no próprio método.
+        $user = $this->service->register([
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'secret123',
+        ]);
+
+        expect($user->getMedia('profile'))->not->toBeEmpty();
+    });
+
+    it('stores the avatar as real PNG bytes, not the data URI text', function () {
+        $user = $this->service->register([
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'secret123',
+        ]);
+
+        $media = $user->getFirstMedia('profile');
+        $bytes = Storage::disk($media->disk)->get($media->getPathRelativeToRoot());
+
+        // Assinatura do PNG; antes o arquivo começava com "data:image/png;base64,".
+        expect(substr($bytes, 0, 8))->toBe("\x89PNG\r\n\x1a\n");
+    });
+});
+
+describe('Transaction Safety', function () {
+    it('rolls back on error', function () {
+        $initialCount = Authentication::count();
+
+        try {
+            // name é NOT NULL no schema; passar null força um erro dentro da
+            // DB::transaction do register(), que deve reverter tudo (nem user nem
+            // api key persistem).
+            $this->service->register([
+                'name' => null,
+                'email' => 'x@example.com',
+                'password' => 'secret123',
+            ]);
+        } catch (Throwable) {
+            // Expected
+        }
+
+        expect(Authentication::count())->toBe($initialCount);
+    });
+});

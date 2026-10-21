@@ -1,0 +1,14 @@
+# Lido pelo Larastan (e pelo `vendor/bin/testbench`) para subir o app do
+# pacote. Com os providers carregados, o auth.providers.users.model vira
+# Authentication e a análise estática enxerga os métodos dele em auth()->user().
+providers:
+  - Tpetry\PostgresqlEnhanced\PostgresqlEnhancedServiceProvider
+  - RiseTechApps\CodeGenerate\CodeGenerateServiceProvider
+  - RiseTechApps\FormRequest\FormRequestServiceProvider
+  - RiseTechApps\RiseTools\RiseToolsServiceProvider
+  - RiseTechApps\ToUpper\ToUpperServiceProvider
+  - RiseTechApps\Media\MediaServiceProvider
+  - RiseTechApps\Address\AddressServiceProvider
+  - Laravel\Sanctum\SanctumServiceProvider
+  - RiseTechApps\Repository\RepositoryServiceProvider
+  - RiseTechApps\ApiKey\ApiKeyServiceProvider

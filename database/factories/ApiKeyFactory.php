@@ -1,0 +1,50 @@
+<?php
+
+namespace Database\Factories;
+
+use Illuminate\Database\Eloquent\Factories\Factory;
+use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
+
+class ApiKeyFactory extends Factory
+{
+    protected $model = ApiKey::class;
+
+    public function definition(): array
+    {
+        return [
+            'authentication_id' => Authentication::factory(),
+            // codeGenerate() cria a coluna com 4 caracteres; o PostgreSQL recusa
+            // um UUID ali (o SQLite ignora o tamanho e aceitava).
+            'code' => strtoupper($this->faker->unique()->bothify('****')),
+            // Plain key, exactly as production passes it: the model's saving hook
+            // is what hashes it and derives the lookup hash. Pre-hashing here meant
+            // the value was bcrypted twice and plainKey held a hash, not a key.
+            'key' => bin2hex(random_bytes(64)),
+            'expires_at' => null,
+            'active' => true,
+            'allowed_origins' => [],
+        ];
+    }
+
+    public function inactive(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'active' => false,
+        ]);
+    }
+
+    public function expired(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'expires_at' => now()->subDay(),
+        ]);
+    }
+
+    public function withAllowedOrigins(array $origins): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'allowed_origins' => $origins,
+        ]);
+    }
+}

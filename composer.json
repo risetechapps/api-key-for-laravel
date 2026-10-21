@@ -1,0 +1,97 @@
+{
+    "name": "risetechapps/api-key-for-laravel",
+    "description": "API key authentication, subscription plans with request quotas and multi-gateway billing for Laravel.",
+    "keywords": [
+        "risetechapps",
+        "service",
+        "auth",
+        "api",
+        "key"
+    ],
+    "homepage": "https://github.com/risetechapps/api-key-for-laravel",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Rise Tech",
+            "email": "apps@risetech.com.br",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "illuminate/support": "^12",
+        "mercadopago/dx-php": "3.10.0",
+        "laravel/pennant": "^1.20",
+        "laravel/sanctum": "^4.0",
+        "laravel/tinker": "^2.10.1",
+        "risetechapps/address-for-laravel": "^1.0.0",
+        "risetechapps/code-generate": "^1.0.0",
+        "risetechapps/form-request-for-laravel": "^1.0.0",
+        "risetechapps/media-for-laravel": "^1.0.0",
+        "risetechapps/repository-for-laravel": "^1.0.0",
+        "risetechapps/risetools": "^1.0.0",
+        "risetechapps/to-upper-for-laravel": "^1.0.0",
+        "risetechapps/view-suite": "^1.0.0",
+        "tpetry/laravel-postgresql-enhanced": "^3.7.0",
+        "predis/predis": "^3.3.0",
+        "risetechapps/monitoring-for-laravel": "^1.0.0"
+    },
+    "require-dev": {
+        "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.10",
+        "laravel/pail": "^1.2.2",
+        "laravel/pint": "^1.24",
+        "laravel/sail": "^1.41",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.6",
+        "orchestra/testbench": "^10.0",
+        "pestphp/pest": "^4.1",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "rector/rector": "^2.5"
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://risetechapps-repo-repman.risetech.app.br"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "RiseTechApps\\ApiKey\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "RiseTechApps\\ApiKey\\Tests\\": "tests",
+            "Database\\Factories\\": "database/factories",
+            "App\\": "tests/Support/App"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage --min=80",
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=1G",
+        "lint": "vendor/bin/pint",
+        "lint-test": "vendor/bin/pint --test"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "RiseTechApps\\ApiKey\\ApiKeyServiceProvider"
+            ],
+            "aliases": {
+                "ApiKey": "RiseTechApps\\ApiKey\\ApiKeyFacade",
+                "FeatureRegistry": "RiseTechApps\\ApiKey\\Facades\\FeatureRegistry"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

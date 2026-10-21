@@ -1,0 +1,203 @@
+name: run-tests
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+# Nenhum job escreve no repositório: o token fica só com leitura.
+permissions:
+    contents: read
+
+# Um push novo na mesma branch torna a execução anterior inútil.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    test:
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest]
+                # O composer.json pede php ^8.4, então 8.5 está dentro do que o
+                # pacote promete suportar e precisa ser exercitado — quem instalar
+                # numa stack 8.5 vai usar este código.
+                php: ['8.4', '8.5']
+                laravel: ['12.*']
+                # prefer-lowest instala o piso de cada constraint. É o que revela
+                # constraint frouxa: código que usa uma API só existente na versão
+                # nova passa em prefer-stable e quebra na casa de quem instalou o
+                # mínimo declarado.
+                stability: [prefer-lowest, prefer-stable]
+                include:
+                    - laravel: '12.*'
+                      testbench: '^10.0'
+
+        name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
+
+        # Estilo, análise estática e cobertura dependem só do código, não da
+        # combinação de versões: rodam uma vez, nesta perna.
+        env:
+            CANONICAL: ${{ matrix.php == '8.4' && matrix.stability == 'prefer-stable' }}
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ matrix.php }}
+                  extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, intl, fileinfo
+                  # pcov e não xdebug: mede linha coberta a uma fração do custo,
+                  # que é tudo o que o relatório precisa.
+                  coverage: ${{ env.CANONICAL == 'true' && 'pcov' || 'none' }}
+
+            - name: Setup problem matchers
+              run: |
+                  echo "::add-matcher::${{ runner.tool_cache }}/php.json"
+                  echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
+
+            - name: Get Composer cache directory
+              id: composer-cache
+              run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+            # Cache só dos downloads, não do vendor/: a resolução continua
+            # acontecendo a cada execução, então prefer-lowest segue valendo.
+            - name: Cache Composer downloads
+              uses: actions/cache@v5
+              with:
+                  path: ${{ steps.composer-cache.outputs.dir }}
+                  key: composer-${{ runner.os }}-php${{ matrix.php }}-${{ matrix.stability }}-${{ hashFiles('composer.json') }}
+                  restore-keys: |
+                      composer-${{ runner.os }}-php${{ matrix.php }}-${{ matrix.stability }}-
+                      composer-${{ runner.os }}-
+
+            # Parte das dependências vem do Repman da RiseTech, que exige token.
+            # O secret COMPOSER_AUTH guarda o JSON do auth.json:
+            # {"http-basic":{"risetechapps-repo-repman.risetech.app.br":{"username":"token","password":"..."}}}
+            - name: Install dependencies
+              env:
+                  COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+              run: |
+                  composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+                  composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+
+            - name: Code style
+              if: env.CANONICAL == 'true'
+              run: vendor/bin/pint --test
+
+            - name: Static analysis
+              if: env.CANONICAL == 'true'
+              run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+            # Piso de cobertura: medido em 82,2% (2026-10-21), com 2 pontos de
+            # folga. Suba junto quando a cobertura subir; nunca desça para fazer
+            # um PR passar.
+            - name: Execute tests
+              run: vendor/bin/pest ${{ env.CANONICAL == 'true' && '--coverage --min=80' || '' }}
+
+    postgres:
+        runs-on: ubuntu-latest
+        name: PostgreSQL
+
+        # Produção roda em PostgreSQL, a matriz acima em SQLite. Este job roda os
+        # caminhos por driver das migrations e as consultas como o banco real as
+        # executa. Não bloqueia enquanto a suíte nunca passou aqui: tire o
+        # continue-on-error depois da primeira execução verde.
+        continue-on-error: true
+
+        services:
+            postgres:
+                image: postgres:17
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: testing
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U postgres"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 10
+
+        env:
+            DB_CONNECTION: pgsql
+            DB_HOST: 127.0.0.1
+            DB_PORT: 5432
+            DB_DATABASE: testing
+            DB_USERNAME: postgres
+            DB_PASSWORD: postgres
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_pgsql, pgsql, bcmath, intl, fileinfo
+                  coverage: none
+
+            - name: Get Composer cache directory
+              id: composer-cache
+              run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+            - name: Cache Composer downloads
+              uses: actions/cache@v5
+              with:
+                  path: ${{ steps.composer-cache.outputs.dir }}
+                  key: composer-${{ runner.os }}-php8.4-prefer-stable-${{ hashFiles('composer.json') }}
+                  restore-keys: |
+                      composer-${{ runner.os }}-
+
+            - name: Install dependencies
+              env:
+                  COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+              run: composer update --prefer-stable --prefer-dist --no-interaction
+
+            - name: Execute tests
+              run: vendor/bin/pest
+
+    frontend:
+        runs-on: ubuntu-latest
+        name: Frontend
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
+
+            - name: Setup Node
+              uses: actions/setup-node@v5
+              with:
+                  node-version: '22'
+                  cache: npm
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Type check
+              run: npm run typecheck
+
+            - name: Tests
+              run: npm test
+
+            # dist/ é versionado: é o que o vendor:publish copia para quem instala
+            # o pacote sem rodar build. Um fonte alterado sem rebuild chega ao
+            # usuário como o painel antigo, sem erro nenhum. O build aqui tem que
+            # reproduzir exatamente o que foi commitado.
+            - name: Build
+              run: npm run build
+
+            # add -N põe os arquivos novos no índice sem conteúdo, para o diff
+            # enxergá-los. Sem isso um chunk novo (o nome leva hash) fica
+            # untracked, passa pela checagem e o pacote sai publicado sem ele.
+            - name: dist/ is up to date
+              run: |
+                  git add -N dist/
+                  git diff --exit-code --stat dist/ || (echo "::error::dist/ desatualizado. Rode 'npm run build' e commite o resultado." && exit 1)

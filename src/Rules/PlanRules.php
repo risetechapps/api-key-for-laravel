@@ -1,0 +1,64 @@
+<?php
+
+namespace RiseTechApps\ApiKey\Rules;
+
+use RiseTechApps\ApiKey\Enums\BillingCycle;
+use RiseTechApps\FormRequest\Contracts\RulesContract;
+
+class PlanRules implements RulesContract
+{
+    public static function Rules(): array
+    {
+        return [
+
+            'plan' => [
+                'name' => 'bail|required|min:5|max:255|unique:plans,name',
+                'description' => 'bail|nullable',
+                'request_limit' => 'bail|required|integer|min:0',
+                'price' => 'bail|required|numeric|min:0.01',
+                'billing_cycle' => 'bail|required|in:'.implode(',', BillingCycle::values()),
+                'is_active' => 'bail|required|boolean',
+                'features' => 'bail|required|array',
+                'trial_days' => 'bail|nullable|integer|min:0|max:365',
+                // Preço por requisição além do limite. Vazio: bloqueia no limite.
+                'overage_price' => 'bail|nullable|numeric|min:0',
+                'overage_max_requests' => 'bail|nullable|integer|min:1',
+                'rate_limit_per_minute' => 'bail|nullable|integer|min:1',
+                'team_members_limit' => 'bail|nullable|integer|min:0|max:1000',
+            ],
+        ];
+    }
+
+    public static function Validator(): array
+    {
+        return [];
+    }
+
+    public static function messages(): array
+    {
+        // Agrupadas pelo formulário, como as regras: o RulesRegistry entrega
+        // ao FormRegistry as mensagens de cada formulário pela chave. Planas,
+        // elas não pertenciam a formulário nenhum e nunca eram aplicadas.
+        return [
+            'plan' => [
+                'name.required' => 'O nome do plano é obrigatório.',
+                'name.min' => 'O nome deve ter pelo menos 5 caracteres.',
+                'name.max' => 'O nome deve ter no máximo 255 caracteres.',
+                'name.unique' => 'Já existe um plano com este nome.',
+                'description.required' => 'A descrição é obrigatória.',
+                'request_limit.required' => 'O limite de requisições é obrigatório.',
+                'request_limit.integer' => 'O limite de requisições deve ser um número inteiro.',
+                'request_limit.min' => 'O limite de requisições não pode ser negativo.',
+                'price.required' => 'O preço é obrigatório.',
+                'price.numeric' => 'O preço deve ser um valor numérico.',
+                'price.min' => 'O preço deve ser maior que zero.',
+                'billing_cycle.required' => 'O ciclo de cobrança é obrigatório.',
+                'billing_cycle.in' => 'Ciclo de cobrança inválido.',
+                'is_active.required' => 'O status do plano é obrigatório.',
+                'is_active.boolean' => 'O status do plano deve ser verdadeiro ou falso.',
+                'features.required' => 'Selecione ao menos uma feature.',
+                'features.array' => 'As features devem ser uma lista.',
+            ],
+        ];
+    }
+}

@@ -1,0 +1,37 @@
+{
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build --config vite-package.config.ts",
+        "dev": "vite --config vite-package.config.ts",
+        "watch": "vite build --watch --config vite-package.config.ts",
+        "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+        "test": "vitest run"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.0.0",
+        "@types/qrcode": "^1.5.5",
+        "@vitejs/plugin-vue": "^6.0.5",
+        "@vue/test-utils": "^2.5.1",
+        "jsdom": "^26.1.0",
+        "tailwindcss": "^4.0.0",
+        "typescript": "^5.6.3",
+        "vite": "^7.0.7",
+        "vitest": "^5.0.3",
+        "vue-tsc": "^2.1.10"
+    },
+    "dependencies": {
+        "@headlessui/vue": "^1.7.23",
+        "@phosphor-icons/vue": "^2.2.1",
+        "apexcharts": "^5.10.5",
+        "axios": "^1.11.0",
+        "date-fns": "^4.1.0",
+        "pinia": "^3.0.4",
+        "qrcode": "^1.5.4",
+        "sweetalert2": "^11.26.24",
+        "vue": "^3.5.32",
+        "vue-router": "^4.6.4",
+        "vue3-apexcharts": "^1.11.1"
+    }
+}

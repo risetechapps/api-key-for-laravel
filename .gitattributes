@@ -1,0 +1,29 @@
+# Normaliza a linha no repositório. O working tree segue com CRLF no Windows;
+# só o que é gravado no git vira LF, que é o que o Pint e o CI esperam.
+* text=auto eol=lf
+
+# Fora do tarball de distribuição: nada abaixo tem uso em produção, mas sem isto
+# tudo viaja no `composer require` de toda aplicação que instala o pacote. Afeta
+# apenas o `composer archive`/dist — o clone do repositório continua completo.
+#
+# Note o que NÃO está aqui: `resources/js`, `resources/css`, `resources/views`,
+# `stubs/` e `dist/` são publicados pelas tags api-key-frontend, api-key-views,
+# api-key-build e api-key-assets. Excluí-los quebraria a customização do frontend
+# e os assets da SPA para quem instala via Composer.
+/.github               export-ignore
+/.idea                 export-ignore
+/tests                 export-ignore
+/.gitattributes        export-ignore
+/.gitignore            export-ignore
+/phpunit.xml           export-ignore
+/pint.json             export-ignore
+/phpstan.neon          export-ignore
+/testbench.yaml        export-ignore
+/rector.php            export-ignore
+
+# Build da SPA, versionado para o api-key-assets (ver acima) e conferido pelo CI
+# contra o fonte. É minificado: o diff linha a linha não diz nada a ninguém e
+# só incha cada PR. linguist-generated recolhe os arquivos no diff do GitHub e
+# os tira das estatísticas de linguagem; -diff faz o git local mostrar só que
+# mudaram. O `git diff --exit-code` do CI segue detectando a diferença.
+/dist/** linguist-generated=true -diff

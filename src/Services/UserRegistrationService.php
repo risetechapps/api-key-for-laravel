@@ -1,0 +1,112 @@
+<?php
+
+namespace RiseTechApps\ApiKey\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
+use RuntimeException;
+
+class UserRegistrationService
+{
+    /**
+     * Register a new user with avatar and API key.
+     *
+     * @param  array  $data  Validated registration data
+     *
+     * @throws RuntimeException
+     */
+    public function register(array $data): Authentication
+    {
+        return DB::transaction(function () use ($data) {
+            $user = $this->createUser($data);
+            $this->createApiKey($user);
+            $this->generateAndStoreAvatar($user, $data['name']);
+
+            logglyInfo()->withContext([
+                'user_id' => $user->getKey(),
+                'email' => $user->email,
+                'has_api_key' => ! is_null($user->apiKey),
+            ])->log('User created in registration service');
+
+            return $user;
+        });
+    }
+
+    /**
+     * Create the user record.
+     */
+    private function createUser(array $data): Authentication
+    {
+        return Authentication::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => $data['password'],
+        ]);
+    }
+
+    /**
+     * Create API key for the user.
+     */
+    private function createApiKey(Authentication $user): void
+    {
+        $plainApiKey = bin2hex(random_bytes(64));
+
+        $user->apiKey()->create([
+            'name' => 'Principal',
+            'key' => $plainApiKey,
+            'active' => false,
+        ]);
+
+        // Store temporarily for return
+        $user->apiKey->plainKey = $plainApiKey;
+    }
+
+    /**
+     * Generate and store avatar for the user.
+     *
+     * @throws RuntimeException
+     */
+    private function generateAndStoreAvatar(Authentication $user, string $name): void
+    {
+        $this->validateAvatarGenerator();
+
+        $avatarPath = $user->getKey().'.png';
+
+        // generateBase64() devolve um data URI (`data:image/png;base64,...`).
+        // Gravado como veio, o .png guardava esse texto: o avatar saía quebrado
+        // e a conversão da mídia falhava em todo cadastro ("improper image header").
+        $dataUri = avatarGenerator()->generateBase64($name);
+        $profileImage = base64_decode((string) preg_replace('#^data:image/[a-z]+;base64,#i', '', $dataUri), true);
+
+        if ($profileImage === false || $profileImage === '') {
+            throw new RuntimeException('Unable to decode generated avatar.');
+        }
+
+        if (! Storage::put($avatarPath, $profileImage)) {
+            throw new RuntimeException('Unable to persist generated avatar.');
+        }
+
+        $user->addMediaFromDisk($avatarPath)->toMediaCollection('profile');
+    }
+
+    /**
+     * Validate that avatar generator helper exists.
+     *
+     * Guarda de instalação, não de execução: risetools é dependência declarada
+     * no composer.json, então na prática a função sempre existe e este ramo só
+     * dispara numa instalação quebrada. Como `function_exists()` consulta o nome
+     * global literal, não há como torná-lo falso num teste com o pacote
+     * carregado — por isso ele não tem cobertura, e não por esquecimento.
+     *
+     * @throws RuntimeException
+     */
+    private function validateAvatarGenerator(): void
+    {
+        if (! function_exists('avatarGenerator')) {
+            throw new RuntimeException(
+                'avatarGenerator helper is not available. Please install risetechapps/risetools package.'
+            );
+        }
+    }
+}
