@@ -31,14 +31,14 @@ it('usa o locale do app quando o cliente pede o mesmo idioma', function (string 
         ->assertJsonPath('message', trans('api-key::messages.account_disabled', [], 'pt'));
 })->with(['pt-BR', 'pt', 'pt-PT', 'pt-BR,pt;q=0.9,en;q=0.8']);
 
-it('sem Accept-Language, cai no default do pacote, também no locale do app', function () {
+it('sem Accept-Language, responde em português, no locale do app', function () {
     $this->getJson('/_locale', ['Accept-Language' => ''])->assertJsonPath('locale', 'pt_BR');
 });
 
-it('continua em inglês para quem pede inglês', function () {
+it('responde em português mesmo para quem pede inglês', function () {
     $this->getJson('/_locale', ['Accept-Language' => 'en-US'])
-        ->assertJsonPath('locale', 'en')
-        ->assertJsonPath('message', trans('api-key::messages.account_disabled', [], 'en'));
+        ->assertJsonPath('locale', 'pt_BR')
+        ->assertJsonPath('message', trans('api-key::messages.account_disabled', [], 'pt'));
 });
 
 it('responde a validação em português num app em pt_BR sem lang/pt_BR próprio', function () {

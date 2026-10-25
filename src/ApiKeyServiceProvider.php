@@ -298,7 +298,7 @@ class ApiKeyServiceProvider extends ServiceProvider
             'check.active.plan',
             'check.limit.plan',
             'api.key.origin',
-            'language',
+            'language:en',
         ]);
         $router->middlewareGroup('plan', $middlewareGroup);
 

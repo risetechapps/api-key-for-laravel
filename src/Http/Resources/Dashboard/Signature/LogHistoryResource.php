@@ -19,6 +19,7 @@ class LogHistoryResource extends JsonResource
             'request' => [
                 'endpoint' => $this->endpoint,
                 'method' => $this->method,
+                'ip' => $this->ip,
                 'requested_at' => $this->requested_at,
             ],
             'response' => [

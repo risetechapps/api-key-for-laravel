@@ -14,7 +14,7 @@
 
         <Card class="mt-6">
             <div class="mb-5 flex flex-col gap-3 lg:flex-row">
-                <TextInput v-model="filters.search" class="lg:flex-1" placeholder="Buscar por endpoint…" :icon="PhMagnifyingGlass" />
+                <TextInput v-model="filters.search" class="lg:flex-1" placeholder="Buscar por endpoint ou IP…" :icon="PhMagnifyingGlass" />
                 <div class="flex gap-3">
                     <Select v-model="filters.method" class="w-40" placeholder="Todos os métodos" :options="['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => ({ value: m, label: m }))" />
                     <Select v-model="filters.status" class="w-44" placeholder="Todos os status" :options="{ success: 'Sucesso (2xx)', error: 'Erro (4xx/5xx)' }" />
@@ -39,6 +39,10 @@
                 </template>
                 <template #cell-endpoint="{ row }"><span class="font-mono text-xs text-slate-900 dark:text-white">{{ row.endpoint }}</span></template>
                 <template #cell-method="{ row }"><Badge :tone="methodTone(row.method)">{{ row.method }}</Badge></template>
+                <template #cell-ip="{ row }">
+                    <span v-if="row.ip" class="whitespace-nowrap font-mono text-xs text-slate-600 dark:text-slate-300">{{ row.ip }}</span>
+                    <span v-else class="text-slate-400">—</span>
+                </template>
                 <template #cell-response_code="{ row }"><Badge :tone="statusTone(row.response_code)" dot>{{ row.response_code }}</Badge></template>
                 <template #cell-actions><PhCaretRight :size="16" class="text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" /></template>
             </DataTable>
@@ -60,6 +64,11 @@
                     <div class="py-3">
                         <dt class="text-slate-500 dark:text-slate-400">Endpoint</dt>
                         <dd class="mt-2"><CopyField :value="selected.endpoint" /></dd>
+                    </div>
+                    <div class="py-3">
+                        <dt class="text-slate-500 dark:text-slate-400">IP de origem</dt>
+                        <dd v-if="selected.ip" class="mt-2"><CopyField :value="selected.ip" /></dd>
+                        <dd v-else class="mt-2 text-slate-500 dark:text-slate-400">Não registrado (requisição anterior ao registro de IP)</dd>
                     </div>
                     <div v-for="(value, key) in extra(selected)" :key="key" class="flex justify-between gap-4 py-3">
                         <dt class="text-slate-500 dark:text-slate-400">{{ key }}</dt>
@@ -96,6 +105,7 @@ const columns: Column[] = [
     { key: 'requested_at', label: 'Data e hora' },
     { key: 'endpoint', label: 'Endpoint' },
     { key: 'method', label: 'Método' },
+    { key: 'ip', label: 'IP' },
     { key: 'response_code', label: 'Status' },
     { key: 'actions', label: '', align: 'right' },
 ];
@@ -108,7 +118,7 @@ function normalize(value: string): string {
 const filtered = computed(() => requests.value
     .filter((r) => {
         const q = filters.search.trim().toLowerCase();
-        return (!q || r.endpoint?.toLowerCase().includes(q))
+        return (!q || r.endpoint?.toLowerCase().includes(q) || r.ip?.toLowerCase().includes(q))
             && (!filters.method || r.method === filters.method)
             && (!filters.status || (filters.status === 'success' ? r.response_code < 300 : r.response_code >= 400));
     })
@@ -133,7 +143,7 @@ function statusTone(code: number): BadgeTone {
 
 // Campos que o log trouxer além dos que já estão na tela.
 function extra(row: any): Record<string, string> {
-    const skip = new Set(['id', 'endpoint', 'method', 'response_code', 'requested_at']);
+    const skip = new Set(['id', 'endpoint', 'method', 'ip', 'response_code', 'requested_at']);
     return Object.fromEntries(Object.entries(row).filter(([k, v]) => !skip.has(k) && v !== null && v !== '' && typeof v !== 'object').map(([k, v]) => [k, String(v)]));
 }
 

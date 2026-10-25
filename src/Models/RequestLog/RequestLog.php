@@ -20,7 +20,7 @@ class RequestLog extends Model
 {
     use HasUuids;
 
-    protected $fillable = ['authentication_id', 'endpoint', 'requested_at', 'method', 'response_code'];
+    protected $fillable = ['authentication_id', 'endpoint', 'requested_at', 'method', 'response_code', 'ip'];
 
     /**
      * Sem o cast, requested_at era serializado como string "crua" do banco

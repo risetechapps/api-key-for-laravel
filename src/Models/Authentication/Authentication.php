@@ -484,7 +484,8 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
         bool $countUsage = true,
         ?string $planId = null,
         ?string $endpoint = null,
-        ?string $method = null
+        ?string $method = null,
+        ?string $ip = null
     ): void {
         $activePlanId = $planId ?? UserPlan::where('authentication_id', $this->id)
             ->where('active', true)
@@ -501,6 +502,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
             'requested_at' => now(),
             'method' => $method ?? request()->method(),
             'response_code' => $status,
+            'ip' => $ip ?? request()->ip(),
         ]);
 
         if (! $countUsage) {

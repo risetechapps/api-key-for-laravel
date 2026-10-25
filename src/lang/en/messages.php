@@ -70,26 +70,18 @@ return [
     'api_key_limit_reached' => 'Limit of :max keys per account reached.',
     'api_key_last' => 'The account needs at least one key. Create another before revoking this one.',
     'api_key_revoked' => 'Key revoked.',
-    'api_key_scope_denied' => 'This key is not allowed to access this resource.',
-    'rate_limited' => 'Too many requests per minute. Please wait and try again.',
     'webhook_limit_reached' => 'Limit of :max webhooks per account reached.',
     'webhook_deleted' => 'Webhook removed.',
     'webhook_url_not_allowed' => 'URL not allowed: use HTTPS and a public address.',
     'overage_description' => 'Overage for plan :plan (:requests requests)',
-    'unauthorized' => 'Unauthorized',
-    'forbidden' => 'Forbidden',
 
     // API Key
     'api_key_not_active' => 'Your API key is not active',
     'api_key_expired' => 'Your API key has expired',
     'api_key_not_found' => 'API Key not found.',
     'error_regenerating_api_key' => 'Error regenerating the API Key. Please try again.',
-    'origin_not_allowed' => 'Unauthorized: Request origin/IP not permitted',
 
     // Plan & Subscription
-    'plan_expired_or_inactive' => 'Your plan has expired or is not active',
-    'plan_expired_grace_ended' => 'Your plan has expired. The grace period has also ended.',
-    'request_limit_reached' => 'Request limit reached',
     'grace_period_warning' => 'grace-period',
     'grace_period_days_remaining' => 'days remaining in grace period',
 

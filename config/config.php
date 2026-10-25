@@ -381,17 +381,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Default Language Configuration
-    |--------------------------------------------------------------------------
-    |
-    | The default language/locale to use when the request doesn't specify
-    | a preferred language or when the preferred language is not supported.
-    |
-    */
-    'default_language' => env('API_KEY_DEFAULT_LANGUAGE', 'pt'),
-
-    /*
-    |--------------------------------------------------------------------------
     | Routes Configuration
     |--------------------------------------------------------------------------
     |
@@ -421,7 +410,8 @@ return [
             'check.active.plan',
             'check.limit.plan',
             'api.key.origin',
-            'language',
+            // A API do cliente responde em inglês; o painel, em português.
+            'language:en',
         ],
     ],
 

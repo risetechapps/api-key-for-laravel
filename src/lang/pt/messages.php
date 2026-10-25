@@ -70,26 +70,18 @@ return [
     'api_key_limit_reached' => 'Limite de :max chaves por conta atingido.',
     'api_key_last' => 'A conta precisa de pelo menos uma chave. Crie outra antes de revogar esta.',
     'api_key_revoked' => 'Chave revogada.',
-    'api_key_scope_denied' => 'Esta chave não tem permissão para este recurso.',
-    'rate_limited' => 'Muitas requisições por minuto. Aguarde e tente novamente.',
     'webhook_limit_reached' => 'Limite de :max webhooks por conta atingido.',
     'webhook_deleted' => 'Webhook removido.',
     'webhook_url_not_allowed' => 'URL não permitida: use HTTPS e um endereço público.',
     'overage_description' => 'Excedente do plano :plan (:requests requisições)',
-    'unauthorized' => 'Não autorizado',
-    'forbidden' => 'Acesso negado',
 
     // API Key
     'api_key_not_active' => 'Sua chave API não está ativa',
     'api_key_expired' => 'Sua chave API expirou',
     'api_key_not_found' => 'API Key não encontrada.',
     'error_regenerating_api_key' => 'Erro ao regenerar a API Key. Tente novamente.',
-    'origin_not_allowed' => 'Não autorizado: Origem/IP da requisição não permitido',
 
     // Plan & Subscription
-    'plan_expired_or_inactive' => 'Seu plano expirou ou não está ativo',
-    'plan_expired_grace_ended' => 'Seu plano expirou. O período de tolerância também encerrou.',
-    'request_limit_reached' => 'Limite de requisições atingido',
     'grace_period_warning' => 'período-de-tolerância',
     'grace_period_days_remaining' => 'dias restantes no período de tolerância',
 

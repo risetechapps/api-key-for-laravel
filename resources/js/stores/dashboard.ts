@@ -14,6 +14,7 @@ export interface RequestLogEntry {
     id: string;
     endpoint?: string;
     method?: string;
+    ip?: string | null;
     response_code?: number;
     requested_at?: string;
 }
@@ -166,6 +167,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
             id:            log.id,
             endpoint:      log.request?.endpoint,
             method:        log.request?.method,
+            ip:            log.request?.ip ?? null,
             response_code: log.response?.code,
             requested_at:  log.request?.requested_at,
         }));

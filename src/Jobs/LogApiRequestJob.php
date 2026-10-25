@@ -36,6 +36,7 @@ class LogApiRequestJob implements ShouldQueue
         public readonly string $endpoint,
         public readonly string $method,
         public readonly int $status,
+        public readonly ?string $ip = null,
     ) {}
 
     public function handle(): void
@@ -58,6 +59,8 @@ class LogApiRequestJob implements ShouldQueue
             'requested_at' => now(),
             'method' => $this->method,
             'response_code' => $this->status,
+            // Job enfileirado antes da coluna existir chega sem a propriedade.
+            'ip' => $this->ip ?? null,
         ]);
     }
 }

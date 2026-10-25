@@ -4,6 +4,8 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
+use RiseTechApps\ApiKey\Enums\ApiError;
+use RiseTechApps\ApiKey\Http\Response\ApiResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 class ApiKeyOriginValidatorMiddleware
@@ -32,7 +34,7 @@ class ApiKeyOriginValidatorMiddleware
             // ser barrado aqui não pode custar uma requisição do plano.
             $request->attributes->set(CheckRequestLimitMiddleware::NOT_BILLABLE, true);
 
-            return response()->json(['message' => 'Unauthorized: Request origin/IP not permitted.'], Response::HTTP_FORBIDDEN);
+            return ApiResponse::apiError(ApiError::ORIGIN_NOT_ALLOWED);
         }
 
         // Sem Origin, vale o IP do cliente — o de $request->ip(), que só segue
@@ -54,7 +56,7 @@ class ApiKeyOriginValidatorMiddleware
 
             $request->attributes->set(CheckRequestLimitMiddleware::NOT_BILLABLE, true);
 
-            return response()->json(['message' => 'Unauthorized: Request origin/IP not permitted.'], Response::HTTP_FORBIDDEN);
+            return ApiResponse::apiError(ApiError::ORIGIN_NOT_ALLOWED);
         }
 
         $request->attributes->set('api_key_model', $apiKey);

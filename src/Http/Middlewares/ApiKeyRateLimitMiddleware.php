@@ -5,6 +5,8 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use RiseTechApps\ApiKey\Enums\ApiError;
+use RiseTechApps\ApiKey\Http\Response\ApiResponse;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -37,10 +39,7 @@ class ApiKeyRateLimitMiddleware
         if (RateLimiter::tooManyAttempts($key, $limit)) {
             $retryAfter = RateLimiter::availableIn($key);
 
-            return response()->json([
-                'error' => __('api-key::messages.rate_limited'),
-                'retry_after' => $retryAfter,
-            ], 429, [
+            return ApiResponse::apiError(ApiError::RATE_LIMITED, extra: ['retry_after' => $retryAfter], headers: [
                 'Retry-After' => $retryAfter,
                 'X-RateLimit-Limit' => $limit,
                 'X-RateLimit-Remaining' => 0,

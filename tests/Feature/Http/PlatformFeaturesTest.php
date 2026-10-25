@@ -92,7 +92,7 @@ describe('Multiple API keys', function () {
         $this->withHeaders(['X-API-KEY' => $key->plainKey])
             ->getJson('/api/v1/test-endpoint-feature')
             ->assertForbidden()
-            ->assertJsonPath('status', 'forbidden_scope');
+            ->assertJsonPath('error_code', 'API_KEY_SCOPE_DENIED');
 
         expect($this->userPlan->fresh()->requests_used)->toBe($before);
     });

@@ -4,6 +4,8 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 
 use Closure;
 use Illuminate\Http\Request;
+use RiseTechApps\ApiKey\Enums\ApiError;
+use RiseTechApps\ApiKey\Http\Response\ApiResponse;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use Symfony\Component\HttpFoundation\Response;
@@ -51,7 +53,7 @@ class AuthenticateApiKey
         if (! $key) {
             logglyInfo()->withContext($context)->log('API key authentication failed: missing key');
 
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return ApiResponse::apiError(ApiError::MISSING_API_KEY, ['header' => $headerName]);
         }
 
         $apiKey = ApiKey::validateKey($key);
@@ -59,7 +61,7 @@ class AuthenticateApiKey
         if (! $apiKey) {
             logglyInfo()->withContext($context)->log('API key authentication failed: invalid key');
 
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return ApiResponse::apiError(ApiError::INVALID_API_KEY);
         }
 
         $user = $apiKey->authentication;
@@ -69,7 +71,7 @@ class AuthenticateApiKey
                 'api_key_id' => $apiKey->id, ...$context,
             ])->log('API key authentication failed: key has no owner');
 
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return ApiResponse::apiError(ApiError::INVALID_API_KEY);
         }
 
         // A chave pode estar ativa e o dono suspenso: suspender não mexe na
@@ -102,6 +104,6 @@ class AuthenticateApiKey
             ...$context,
         ])->log('API key authentication failed: account disabled');
 
-        return response()->json(['error' => __('api-key::messages.account_disabled')], 403);
+        return ApiResponse::apiError(ApiError::ACCOUNT_DISABLED);
     }
 }

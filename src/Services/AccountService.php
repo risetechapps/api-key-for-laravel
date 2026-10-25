@@ -168,6 +168,7 @@ class AccountService
                 'endpoint' => $log->endpoint,
                 'method' => $log->method,
                 'response_code' => $log->response_code,
+                'ip' => $log->ip,
                 'requested_at' => $log->requested_at?->toIso8601String(),
             ], $flags);
 

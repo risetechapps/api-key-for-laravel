@@ -4,6 +4,7 @@ namespace RiseTechApps\ApiKey\Http\Response;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\ResourceCollection;
+use RiseTechApps\ApiKey\Enums\ApiError;
 use RiseTechApps\ApiKey\Http\Resources\ErrorResource;
 use RiseTechApps\ApiKey\Http\Resources\SuccessResource;
 
@@ -27,6 +28,20 @@ class ApiResponse
         $resource = new ErrorResource($message, $code, $errors, $error_code);
 
         return $resource->response()->setStatusCode($code);
+    }
+
+    /**
+     * Recusa da API do cliente: `{success, message, error_code, ...$extra}`,
+     * sem o envelope `data` do JsonResource.
+     */
+    public static function apiError(ApiError $error, array $replace = [], array $extra = [], array $headers = []): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $error->message($replace),
+            'error_code' => $error->value,
+            ...$extra,
+        ], $error->status(), $headers);
     }
 
     /**

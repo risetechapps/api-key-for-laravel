@@ -28,7 +28,7 @@ Gerenciamento de API keys, planos de assinatura e um painel SPA Vue 3 pronto par
 - **Logs em banco** — registros gravados pelo monitoring, com tela administrativa de consulta e filtros
 - **Diagnóstico da instalação** — `api-key:check` aponta fila sem worker, cron parado e credenciais faltando
 - **Painel SPA Vue 3** — assets pré-compilados, sem necessidade de Node.js no servidor host
-- **Internacionalização** — inglês e português (pt-BR), detectado automaticamente via `Accept-Language`
+- **Idioma por superfície** — painel e rotas embutidas sempre em português (pt-BR); API do cliente (grupo `plan`) sempre em inglês, com `error_code` estável
 - **Camada de Cache** — suporte a Redis/Memcached para validação de API keys
 - **Várias API keys por conta** — nome, permissões por feature, origens, validade e limite por minuto em cada chave
 - **Limite por minuto** — por chave ou por plano, além da cota do período
@@ -328,6 +328,34 @@ curl -H "X-API-KEY: sua-api-key-aqui" \
      -H "Origin: https://seudominio.com" \
      https://api.seuapp.com/api/v1/data
 ```
+
+### Respostas de erro da API
+
+A API do cliente responde sempre em inglês, qualquer que seja o `Accept-Language`, e com um `error_code` estável — decida pelo código, não pelo texto:
+
+```json
+{
+    "success": false,
+    "message": "Request limit reached for the current billing period.",
+    "error_code": "REQUEST_LIMIT_REACHED"
+}
+```
+
+| `error_code` | HTTP | Quando | Campos extras |
+|--------------|------|--------|---------------|
+| `MISSING_API_KEY` | 401 | Sem o header da chave | |
+| `INVALID_API_KEY` | 401 | Chave inexistente, inativa, expirada ou sem dono | |
+| `UNAUTHENTICATED` | 401 | `check.active.plan` sem usuário autenticado | |
+| `FEATURE_NOT_IN_PLAN` | 402 | Plano sem nenhuma das features da rota | `features` |
+| `ACCOUNT_DISABLED` | 403 | Conta suspensa | |
+| `PLAN_INACTIVE` | 403 | Sem plano ativo | |
+| `PLAN_EXPIRED` | 403 | Plano expirado e carência encerrada | |
+| `ORIGIN_NOT_ALLOWED` | 403 | Origem/IP fora da lista da chave | |
+| `API_KEY_SCOPE_DENIED` | 403 | Chave sem permissão para a feature da rota | `features` |
+| `RATE_LIMITED` | 429 | Acima do limite por minuto | `retry_after` (+ header `Retry-After`) |
+| `REQUEST_LIMIT_REACHED` | 429 | Cota do período esgotada | |
+
+Os textos ficam em `lang/en/api.php` do pacote; para trocar, publique `lang/vendor/api-key/en/api.php`. O painel (SPA e rotas embutidas) responde sempre em português.
 
 ### Middleware `feature`
 
@@ -999,11 +1027,11 @@ protected $listen = [
 | `check.active.plan` | `CheckActivePlanMiddleware` | Exige assinatura ativa ou em período de carência |
 | `check.limit.plan` | `CheckRequestLimitMiddleware` | Rejeita requisições acima do limite do plano |
 | `api.key.origin` | `ApiKeyOriginValidatorMiddleware` | Valida o header `Origin` contra as origens permitidas (ver nota abaixo) |
-| `language` | `LanguageMiddleware` | Define o locale pelo primeiro idioma suportado do `Accept-Language` (`pt-BR` → `pt`); sem nenhum, usa `default_language` |
+| `language` | `LanguageMiddleware` | Fixa o locale, sem olhar o `Accept-Language`: `language` / `language:pt` (painel) ou `language:en` (API) |
 | `admin` | `AdminMiddleware` | Exige `role = admin` |
 | `active.user` | `EnsureUserIsEnabled` | Recusa (403, `code: account_disabled`) usuário autenticado com conta suspensa |
 | `feature` | `CheckPlanFeatureMiddleware` | Exige feature específica no plano atual; aplica automaticamente `check.limit.plan` (log + contagem) |
-| `plan` | *(grupo)* | Combina `api.key + api.key.rate + check.active.plan + check.limit.plan + api.key.origin + language` |
+| `plan` | *(grupo)* | Combina `api.key + api.key.rate + check.active.plan + check.limit.plan + api.key.origin + language:en` |
 
 > **Origens permitidas não são autenticação.** O header `Origin` é preenchido pelo navegador, mas qualquer cliente fora dele (curl, servidor, script) envia o valor que quiser. A lista de origens impede que outro *site* use a chave a partir do navegador de um visitante; quem tem a chave em mãos passa por ela. Quem protege é a API key.
 >
@@ -1248,7 +1276,6 @@ return [
     ],
 
     'header_name'      => 'X-API-KEY',
-    'default_language' => 'pt',     // 'pt' ou 'en'
 
     'routes' => [
         'enabled' => true,
@@ -1258,10 +1285,11 @@ return [
     'middleware_group' => [
         'plan' => [
             'api.key',
+            'api.key.rate',
             'check.active.plan',
             'check.limit.plan',
             'api.key.origin',
-            'language',
+            'language:en',
         ],
     ],
 
@@ -1339,7 +1367,6 @@ return [
 | `API_KEY_PAYMENT_THROTTLE_DECAY` | Janela do limite de pagamento (minutos) | `10` |
 | `API_KEY_SUPPORT_EMAIL` | E-mail exibido na página de suporte da SPA | `MAIL_FROM_ADDRESS` |
 | `API_KEY_HEADER_NAME` | Header HTTP que carrega a API key | `X-API-KEY` |
-| `API_KEY_DEFAULT_LANGUAGE` | Locale padrão | `pt` |
 | `API_KEY_ROUTES_ENABLED` | Registrar rotas do pacote automaticamente | `true` |
 | `API_KEY_ROUTES_PREFIX` | Prefixo das rotas | `''` |
 | `API_KEY_SPA_ENABLED` | Servir o painel SPA Vue | `false` |

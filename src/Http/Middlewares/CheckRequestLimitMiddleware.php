@@ -5,8 +5,10 @@ namespace RiseTechApps\ApiKey\Http\Middlewares;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use RiseTechApps\ApiKey\Enums\ApiError;
 use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
+use RiseTechApps\ApiKey\Http\Response\ApiResponse;
 use RiseTechApps\ApiKey\Jobs\LogApiRequestJob;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
@@ -84,7 +86,7 @@ class CheckRequestLimitMiddleware
             // UPDATE condicional não alterou nenhuma linha.
             $this->logRequest($request, $user, $activePlan, 429);
 
-            return response()->json(['error' => __('api-key::messages.request_limit_reached')], 429);
+            return ApiResponse::apiError(ApiError::REQUEST_LIMIT_REACHED);
         }
 
         try {
@@ -306,12 +308,15 @@ class CheckRequestLimitMiddleware
         $planId = $activePlan?->getKey();
         $path = $request->path();
         $method = $request->method();
+        // O de $request->ip(): só segue X-Forwarded-For de proxy listado no
+        // TrustProxies, o mesmo IP que a validação de origem confere.
+        $ip = $request->ip();
 
         $queue = config('api-key.request_log.queue');
 
         if ($queue !== null && $queue !== '') {
             try {
-                $job = new LogApiRequestJob((string) $user->getKey(), $planId, $path, $method, $status)
+                $job = new LogApiRequestJob((string) $user->getKey(), $planId, $path, $method, $status, $ip)
                     ->onQueue($queue);
 
                 // Força a conexão (por padrão redis) para o Horizon processar o job.
@@ -336,8 +341,8 @@ class CheckRequestLimitMiddleware
             return;
         }
 
-        dispatch(function () use ($user, $status, $planId, $path, $method) {
-            $user->requestUsed($status, false, $planId, $path, $method);
+        dispatch(function () use ($user, $status, $planId, $path, $method, $ip) {
+            $user->requestUsed($status, false, $planId, $path, $method, $ip);
         })->afterResponse();
     }
 

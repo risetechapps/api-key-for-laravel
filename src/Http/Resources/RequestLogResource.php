@@ -21,6 +21,7 @@ class RequestLogResource extends JsonResource
             'id' => $this->getKey(),
             'endpoint' => $this->endpoint,
             'method' => $this->method,
+            'ip' => $this->ip,
             'response_code' => $this->response_code,
             'status' => $this->getStatusText(),
             'requested_at' => $this->requested_at?->toIso8601String(),

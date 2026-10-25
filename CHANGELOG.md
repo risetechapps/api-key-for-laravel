@@ -3,6 +3,15 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [Unreleased]
+
+### Alterado (quebra compatibilidade)
+
+- **Idioma fixo por superfície.** O `Accept-Language` deixou de ser lido: painel e rotas embutidas respondem sempre em português; a API do cliente (grupo `plan`), sempre em inglês. O middleware `language` aceita o idioma como parâmetro (`language:pt`, `language:en`) e a config `default_language` (`API_KEY_DEFAULT_LANGUAGE`) foi removida
+- **Formato único nas recusas da API.** `api.key`, `api.key.rate`, `check.active.plan`, `check.limit.plan`, `api.key.origin` e `feature` respondem `{success: false, message, error_code}`, com `error_code` estável (ver "Respostas de erro da API" no README). Sai o campo `error`, o `status` (`forbidden_scope`, `upgrade_required`) e o `grace_period_ended`
+- `feature` responde JSON (402) também para cliente que não manda `Accept: application/json`, em vez de página de erro
+- Quem publicou a config: troque `'language'` por `'language:en'` em `middleware_group.plan`, senão as rotas do app nesse grupo passam a rodar em português (as recusas do pacote continuam em inglês)
+
 ## [1.0.0] - 2026-10-21
 
 Primeiro lançamento oficial.

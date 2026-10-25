@@ -31,7 +31,7 @@ class RoutesApiKey
 {
     public static function register(array $options = []): void
     {
-        $options['middleware'][] = 'language';
+        $options['middleware'][] = 'language:pt';
 
         $prefix = config('api-key.routes.prefix', '');
         if (! empty($prefix)) {

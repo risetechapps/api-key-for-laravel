@@ -91,33 +91,15 @@ describe('Origin validation over HTTP', function () {
 describe('Language middleware', function () {
     beforeEach(function () {
         Route::middleware('language')->get('/_locale', fn () => response()->json(['locale' => app()->getLocale()]));
-        config(['api-key.default_language' => 'pt']);
+        Route::middleware('language:en')->get('/_locale-en', fn () => response()->json(['locale' => app()->getLocale()]));
     });
 
-    it('uses the configured default without Accept-Language', function () {
-        // O Request::create do Symfony preenche Accept-Language com "en-us" por
-        // padrão; header vazio é o que um cliente sem preferência manda.
-        $this->getJson('/_locale', ['Accept-Language' => ''])->assertJson(['locale' => 'pt']);
-    });
+    it('answers the dashboard in portuguese whatever the client asks', function (string $header) {
+        $this->getJson('/_locale', ['Accept-Language' => $header])->assertJson(['locale' => 'pt']);
+    })->with(['', 'en-US', 'fr-FR', 'en;q=1, pt;q=0.5']);
 
-    it('uses the configured default for an unsupported language', function () {
-        config(['api-key.default_language' => 'en']);
-
-        $this->getJson('/_locale', ['Accept-Language' => 'fr-FR'])->assertJson(['locale' => 'en']);
-    });
-
-    it('maps regional variants to the base language', function (string $header, string $expected) {
-        $this->getJson('/_locale', ['Accept-Language' => $header])->assertJson(['locale' => $expected]);
-    })->with([
-        ['pt-BR', 'pt'],
-        ['pt_PT', 'pt'],
-        ['en-GB', 'en'],
-        ['en', 'en'],
-    ]);
-
-    it('honours the preference order', function () {
-        $this->getJson('/_locale', ['Accept-Language' => 'fr;q=1, en;q=0.8, pt;q=0.5'])
-            ->assertJson(['locale' => 'en']);
+    it('answers in the language passed as parameter', function () {
+        $this->getJson('/_locale-en', ['Accept-Language' => 'pt-BR'])->assertJson(['locale' => 'en']);
     });
 });
 
@@ -130,6 +112,33 @@ describe('LogApiRequestJob', function () {
         expect($log->endpoint)->toBe('/api/v1/x')
             ->and($log->method)->toBe('POST')
             ->and((int) $log->response_code)->toBe(201);
+    });
+
+    it('records the client IP', function () {
+        new LogApiRequestJob($this->user->getKey(), $this->userPlan->getKey(), '/api/v1/x', 'GET', 200, '203.0.113.7')->handle();
+
+        expect(RequestLog::where('authentication_id', $this->user->getKey())->sole()->ip)->toBe('203.0.113.7');
+    });
+
+    it('records the IP of a request through the plan group, with or without a queue', function (?string $queue) {
+        config(['api-key.request_log.queue' => $queue]);
+        $key = keyWithOrigins([]);
+
+        $this->withHeaders(['X-API-KEY' => $key->plainKey])
+            ->withServerVariables(['REMOTE_ADDR' => '198.51.100.20'])
+            ->getJson('/api/v1/test-endpoint')
+            ->assertOk();
+
+        expect(RequestLog::where('authentication_id', $this->user->getKey())->sole()->ip)->toBe('198.51.100.20');
+    })->with(['queue' => 'logs', 'after response' => null]);
+
+    it('shows the IP in the dashboard request list', function () {
+        new LogApiRequestJob($this->user->getKey(), $this->userPlan->getKey(), '/api/v1/x', 'GET', 200, '2001:db8::1')->handle();
+        Sanctum::actingAs($this->user);
+
+        $this->getJson('/api/v1/dashboard/log')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.request.ip', '2001:db8::1');
     });
 
     it('resolves the active plan when none is passed', function () {

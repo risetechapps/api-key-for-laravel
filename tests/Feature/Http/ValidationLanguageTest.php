@@ -20,10 +20,10 @@ it('answers validation errors in portuguese for a portuguese client', function (
         ->assertJsonPath('errors.password.0', 'A confirmação de senha não confere.');
 });
 
-it('keeps english for an english client', function () {
+it('answers the dashboard in portuguese even for an english client', function () {
     invalidReset('en')
         ->assertStatus(422)
-        ->assertJsonPath('errors.password.0', 'The password field confirmation does not match.');
+        ->assertJsonPath('errors.password.0', 'A confirmação de senha não confere.');
 });
 
 it('lets the app translation win over the package fallback', function () {
