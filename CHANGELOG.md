@@ -3,7 +3,19 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
-## [Unreleased]
+## [1.0.1] - 2026-10-25
+
+### Atualização
+
+- Rode `php artisan migrate`: nova coluna `ip` em `request_logs`
+- Quem publicou a config: troque `'language'` por `'language:en'` em `middleware_group.plan` (ver abaixo)
+
+### Adicionado
+
+- **IP de cada requisição.** `request_logs` ganha a coluna `ip`, gravada com `$request->ip()` — o mesmo IP que a validação de origem confere, que só segue `X-Forwarded-For` de proxy listado no `TrustProxies`. Vale para o log pela fila (`LogApiRequestJob`) e depois da resposta (`requestUsed()`)
+- Painel: coluna IP na lista de requisições, IP de origem nos detalhes e busca por endpoint ou IP. `/dashboard/log` devolve `request.ip`
+- A exportação de dados da conta inclui o IP de cada requisição
+- Requisições registradas antes da atualização ficam sem IP; job já enfileirado na hora do deploy grava `null`
 
 ### Alterado (quebra compatibilidade)
 
