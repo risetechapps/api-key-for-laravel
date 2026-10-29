@@ -6,9 +6,7 @@ use Illuminate\Support\Facades\Facade;
 
 /**
  * O accessor 'apikey' resolve o FeatureManager, então é a interface dele que
- * vale aqui. A anotação anterior descrevia `ApiKeyService::routes()`, que não
- * passa por este facade, e era malformada (faltavam os parênteses); a
- * referência apontava para uma SkeletonClass que não existe no pacote.
+ * vale aqui. Rotas não passam por este facade: `RoutesApiKey::register()`.
  *
  * @see FeatureManager
  *

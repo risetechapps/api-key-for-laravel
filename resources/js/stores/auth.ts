@@ -58,6 +58,10 @@ axios.interceptors.response.use(
         if (status === 403 && error?.response?.data?.code === 'two_factor_required'
             && !window.location.pathname.startsWith('/dashboard/security')) {
             window.location.assign('/dashboard/security?two_factor_required=1');
+
+            // A página está saindo: rejeitar só deixaria um erro não tratado no
+            // console de quem chamou. A promessa fica pendente até a navegação.
+            return new Promise(() => {});
         }
 
         // Conta suspensa pelo admin no meio da sessão: toda chamada passa a
@@ -262,12 +266,14 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
+    /** @deprecated Origens da chave principal; use PUT /dashboard/api-keys/{id} (tela API Keys). */
     async function updateAllowedOrigins(origins: string[]) {
         const response = await axios.post('/dashboard/profile/allowed', { allowed_origins: origins });
         // A API retorna { success: true, data: {...} }
         return response.data?.data || response.data;
     }
 
+    /** @deprecated Origens da chave principal; use GET /dashboard/api-keys (tela API Keys). */
     async function fetchAllowedOrigins() {
         const response = await axios.get('/dashboard/profile/allowed');
         // A API retorna { success: true, data: [...] }

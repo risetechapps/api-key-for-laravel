@@ -22,6 +22,13 @@ class LogHistoryResource extends JsonResource
                 'ip' => $this->ip,
                 'requested_at' => $this->requested_at,
             ],
+            // Null nas linhas anteriores ao registro da chave. Chave excluída:
+            // vem o id, sem nome.
+            'api_key' => $this->api_key_id ? [
+                'id' => $this->api_key_id,
+                'name' => $this->apiKey?->name,
+                'deleted' => $this->apiKey === null,
+            ] : null,
             'response' => [
                 'code' => $this->response_code,
                 'status' => $this->getStatusText(),

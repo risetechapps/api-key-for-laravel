@@ -107,6 +107,7 @@ const labels: Record<string, string> = {
     'account.data_exported': 'Dados exportados',
     'account.session_revoked': 'Sessão encerrada',
     'account.sessions_revoked': 'Outras sessões encerradas',
+    'account.notification_preferences_changed': 'Avisos por e-mail alterados',
     'api_key.created': 'Chave criada',
     'api_key.revoked': 'Chave revogada',
     'api_key.regenerated': 'Chave regenerada',

@@ -27,14 +27,6 @@ parameters:
     reportUnmatchedIgnoredErrors: true
 
     ignoreErrors:
-        # Traits oferecidos ao app hospedeiro (scope de API key em models dele e
-        # respostas JSON padronizadas). O pacote não os usa, e é isso que o
-        # PHPStan aponta, mas removê-los quebraria quem os usa.
-        -
-            identifier: trait.unused
-            paths:
-                - src/Traits/HasApiKey.php
-                - src/Traits/ApiResponseTrait.php
         # Docblock errado no SDK do Mercado Pago, não no nosso código.
         # RequestOptions::setCustomHeaders() está anotado como array<string,string>,
         # mas o valor termina em CURLOPT_HTTPHEADER (MPDefaultHttpClient:109), que

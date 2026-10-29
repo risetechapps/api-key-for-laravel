@@ -15,6 +15,8 @@ export interface RequestLogEntry {
     endpoint?: string;
     method?: string;
     ip?: string | null;
+    /** Chave que fez a requisição. Null nas anteriores a esse registro. */
+    api_key?: { id: string; name: string | null; deleted: boolean } | null;
     response_code?: number;
     requested_at?: string;
 }
@@ -168,6 +170,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
             endpoint:      log.request?.endpoint,
             method:        log.request?.method,
             ip:            log.request?.ip ?? null,
+            api_key:       log.api_key ?? null,
             response_code: log.response?.code,
             requested_at:  log.request?.requested_at,
         }));

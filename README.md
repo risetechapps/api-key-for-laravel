@@ -32,6 +32,7 @@ Gerenciamento de API keys, planos de assinatura e um painel SPA Vue 3 pronto par
 - **Camada de Cache** — suporte a Redis/Memcached para validação de API keys
 - **Várias API keys por conta** — nome, permissões por feature, origens, validade e limite por minuto em cada chave
 - **Limite por minuto** — por chave ou por plano, além da cota do período
+- **Cota visível para o cliente** — headers `X-Quota-*` em toda resposta, `GET /usage` com a própria API key e especificação OpenAPI da API do cliente
 - **PIX e cartão** — PIX no checkout com QR code e confirmação automática; renovação e excedente sem cobrança automática são pagos pelo painel, nunca por e-mail
 - **Novas tentativas de renovação** — cartão recusado na renovação é cobrado de novo em dias configuráveis, com aviso por e-mail
 - **Período de teste** — dias grátis por plano, um teste por conta
@@ -52,6 +53,8 @@ Gerenciamento de API keys, planos de assinatura e um painel SPA Vue 3 pronto par
 ---
 
 ## Instalação
+
+> Atualizando de uma versão anterior? Siga o [UPGRADE.md](UPGRADE.md).
 
 Parte das dependências (`address-for-laravel`, `code-generate`, `form-request-for-laravel`, `media-for-laravel`, `monitoring-for-laravel`, `repository-for-laravel`, `to-upper-for-laravel`, `view-suite`) é distribuída pelo Repman da RiseTech, não pelo Packagist. O Composer não herda `repositories` de dependências, então o projeto que instala o pacote precisa declarar o repositório e a credencial:
 
@@ -147,6 +150,8 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 
 | Método | URI | Descrição |
 |--------|-----|-----------|
+| `GET` | `api/v1/usage` | Uso do período, autenticado pela API key (ver [Cota nas respostas e `GET /usage`](#cota-nas-respostas-e-get-usage)) |
+| `GET` | `api/v1/usage/daily` | Requisições por dia, autenticado pela API key |
 | `POST` | `api/v1/register` | Registrar novo usuário |
 | `POST` | `api/v1/login` | Login e recebimento do token Sanctum |
 | `POST` | `api/v1/logout` | Revogar token atual |
@@ -177,6 +182,7 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 | `GET/POST` | `api/v1/dashboard/api-keys` | Listar / criar chave (o texto da chave só vem na criação) |
 | `PUT/DELETE` | `api/v1/dashboard/api-keys/{id}` | Editar (nome, `scopes`, origens, validade, limite por minuto) / revogar |
 | `POST` | `api/v1/dashboard/api-keys/{id}/regenerate` | Trocar o segredo da chave |
+| `GET` | `api/v1/dashboard/api-keys/revoked` | Chaves já excluídas (id, nome, quando), para filtrar o histórico de requisições |
 | `GET/POST` | `api/v1/dashboard/webhooks` | Listar / cadastrar webhook (o segredo só vem na criação) |
 | `PUT/DELETE` | `api/v1/dashboard/webhooks/{id}` | Editar / excluir |
 | `POST` | `api/v1/dashboard/webhooks/{id}/rotate-secret` | Novo segredo de assinatura |
@@ -190,7 +196,7 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 | `GET` | `api/v1/dashboard/billing/renewal` | Renovação esperando o assinante (inclusive em carência), com o plano para o checkout |
 | `GET` | `api/v1/dashboard/receipts` | Recibos da conta |
 | `GET` | `api/v1/dashboard/receipts/{id}` | Recibo em HTML (`?kind=overage` para o de excedente) |
-| `POST` | `api/v1/dashboard/profile/regenerate-key` | Regenerar API key |
+| `POST` | `api/v1/dashboard/profile/regenerate-key` | **Obsoleta** (sai na próxima versão maior): regenera a chave principal. Use `dashboard/api-keys/{id}/regenerate` |
 | `GET` | `api/v1/dashboard/cards` | Listar cartões salvos |
 | `POST` | `api/v1/dashboard/cards` | Adicionar cartão |
 | `DELETE` | `api/v1/dashboard/cards/{id}` | Remover cartão |
@@ -199,7 +205,7 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 | `POST` | `api/v1/dashboard/signature/resume` | Reativar a renovação antes do vencimento |
 | `GET` | `api/v1/dashboard/signature/refund-preview` | O que acontece se cancelar agora: estorno, valor e até quando vai o acesso |
 | `GET` | `api/v1/dashboard/history` | Histórico de assinaturas |
-| `GET` | `api/v1/dashboard/log` | Log de requisições (ordenado do mais recente) |
+| `GET` | `api/v1/dashboard/log` | Log de requisições (ordenado do mais recente), com a chave que fez cada uma; `?api_key_id=` filtra por chave, inclusive excluída |
 | `GET` | `api/v1/dashboard/stats` | Estatísticas agregadas do dashboard (uso, restantes, hoje) |
 
 Rotas da equipe do painel. O middleware `admin:<permissão>` exige o papel certo (tabela abaixo); `admin` sem parâmetro vale `manage`, que só o papel `admin` tem. Toda a equipe precisa de 2FA quando `API_KEY_2FA_REQUIRED_FOR_ADMINS=true`.
@@ -215,7 +221,7 @@ Rotas da equipe do painel. O middleware `admin:<permissão>` exige o papel certo
 - `billing`: estornar, cancelar ou estender assinatura, ajustar consumo, tentar a renovação de novo, perdoar excedente e exportar CSV.
 - `manage`: planos, cupons, gateways, papéis, suspender conta, conceder plano e desligar a 2FA de alguém. Desligar 2FA fica só com o admin porque é o pedido que um golpe de engenharia social faria ao suporte.
 
-O papel é trocado em Admin → Usuários → ficha → **Alterar papel**, ou pelo `admin:make` para o primeiro admin. Ninguém muda o próprio papel, e quem perde permissões tem as sessões encerradas.
+O papel é trocado em Admin → Usuários → ficha → **Alterar papel**, ou pelo `api-key:admin-make` para o primeiro admin. Ninguém muda o próprio papel, e quem perde permissões tem as sessões encerradas.
 
 | Método | URI | Descrição |
 |--------|-----|-----------|
@@ -282,15 +288,152 @@ Com `two_factor.required_for_admins` ligado (padrão), as rotas de admin respond
 
 Cada conta pode ter até `api_keys.max_per_user` chaves (padrão 5), cada uma com nome, `scopes` (features que ela pode chamar; vazio = todas as do plano), origens permitidas, validade e limite por minuto próprio. `apiKey()` continua sendo a chave principal (a mais antiga) e `apiKeys()` traz todas. O campo `active` acompanha o plano: vencer desativa todas, assinar reativa todas. Revogar apaga a chave, e a última não pode ser revogada.
 
+Chave com validade avisa o dono antes de vencer: `api-key:notify-expiring`, agendado todo dia às 07:00, manda e-mail e o webhook `api_key.expiring` (id, nome, `expires_at`, `days_left`, nunca o segredo) para cada chave ativa que vence dentro de `api_keys.expiry_warning_days` (padrão 7). Sai uma vez por chave e por data de validade: estender a validade arma o aviso de novo. Contas suspensas não recebem. `API_KEY_EXPIRY_WARNING_DAYS=0` desliga o aviso e o agendamento.
+
 ### Limite por minuto
 
 O middleware `api.key.rate`, no grupo `plan` logo depois do `api.key`, limita requisições por minuto por chave: o limite da chave, ou o do plano (`rate_limit_per_minute`), ou `rate_limit.per_minute`. Sem nenhum, não limita. A resposta traz `X-RateLimit-Limit` e `X-RateLimit-Remaining`; acima do limite, 429 com `Retry-After`, sem gastar a cota. Se você define `middleware_group.plan` na config, inclua `api.key.rate` na lista.
 
 ### Webhooks de saída
 
-O cliente cadastra URLs HTTPS que recebem eventos da conta: `subscription.activated`, `subscription.changed`, `subscription.cancelled`, `subscription.expired`, `subscription.grace_period_started`, `subscription.refunded`, `subscription.renewal_failed`, `subscription.payment_required`, `payment.rejected`, `billing.overage_charged`, `usage.threshold_reached`, `usage.limit_reached` e `usage.overage_started`. Os de uso saem uma vez por período.
+O cliente cadastra URLs HTTPS que recebem eventos da conta: `subscription.activated`, `subscription.changed`, `subscription.cancelled`, `subscription.expired`, `subscription.grace_period_started`, `subscription.refunded`, `subscription.renewal_failed`, `subscription.payment_required`, `payment.rejected`, `billing.overage_charged`, `usage.threshold_reached`, `usage.limit_reached`, `usage.overage_started` e `api_key.expiring`. Os de uso saem uma vez por período.
 
-Cada entrega é um `POST` JSON `{id, event, created_at, data}` com `X-Webhook-Signature: sha256=HMAC(segredo, timestamp + "." + corpo)` e `X-Webhook-Timestamp`. Qualquer 2xx conta como entregue; falhas voltam para a fila em 1 min, 5 min, 15 min, 1 h e 6 h. Depois de `webhooks.disable_after_failures` entregas perdidas seguidas, o endpoint é desligado. Endereços privados, de loopback e reservados são recusados no cadastro e de novo a cada entrega (proteção contra SSRF), e redirecionamentos não são seguidos.
+**Eventos do seu app.** Todos os webhooks do sistema passam pelo pacote, os dele e os do seu app: o cliente escolhe no mesmo painel o que quer receber, e todos saem com o mesmo envelope, a mesma assinatura, as mesmas novas tentativas e o mesmo histórico. Quem recebe valida tudo do mesmo jeito (ver "Validando as entregas", abaixo), sem precisar deste pacote.
+
+1. **Registre** os eventos, no formato `recurso.acao` em minúsculas. A descrição é opcional e aparece no painel ao lado do nome:
+
+```php
+// AppServiceProvider::boot()
+use RiseTechApps\ApiKey\Services\WebhookDispatcher;
+
+WebhookDispatcher::registerEvents([
+    'pedido.criado' => 'Pedido criado',
+    'nota.emitida' => 'Nota fiscal emitida',
+]);
+```
+
+Também vale listar em `config('api-key.webhooks.events')`, com ou sem descrição: `['pedido.criado' => 'Pedido criado', 'nota.emitida']`.
+
+2. **Dispare** quando acontecer, para a conta dona do dado:
+
+```php
+WebhookDispatcher::dispatch($pedido->conta, 'pedido.criado', ['id' => $pedido->id, 'total' => $pedido->total]);
+```
+
+Só evento registrado sai. Um nome que não está no registro (um erro de digitação, um evento esquecido) não é enviado a ninguém, nem a quem marcou "Todos os eventos": o `dispatch()` devolve 0 e o erro vai para o log (`report()`). Assim o cliente só recebe o que pôde escolher. No cadastro do endpoint, um evento não registrado é recusado com 422.
+
+3. **Documente o `data`** dos seus eventos. O envelope, os headers e a assinatura são do pacote e estão em [`docs/openapi.yaml`](docs/openapi.yaml); o conteúdo de `data` é do seu app. No OpenAPI do seu app, reaproveite as partes do pacote:
+
+```yaml
+# openapi.yaml do seu app (OpenAPI 3.1)
+webhooks:
+  pedido.criado:
+    post:
+      summary: Pedido criado
+      parameters:
+        - $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/parameters/WebhookSignature'
+        - $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/parameters/WebhookTimestamp'
+        - $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/parameters/WebhookId'
+        - $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: pedido.criado }
+                    data:
+                      type: object
+                      required: [id, total]
+                      properties:
+                        id: { type: integer }
+                        total: { type: number }
+      responses:
+        '2XX': { $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/responses/WebhookAccepted' }
+        default: { $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/responses/WebhookRetried' }
+```
+
+Trate o `data` como contrato: acrescentar campo é seguro; renomear ou tirar quebra quem já recebe. Para uma mudança grande, crie um evento novo (`pedido.criado_v2`) e mantenha o antigo por um tempo.
+
+Endereços privados, de loopback e reservados são recusados no cadastro e de novo a cada entrega (proteção contra SSRF), e redirecionamentos não são seguidos. Os eventos, os headers e o `data` de cada um estão em [`docs/openapi.yaml`](docs/openapi.yaml), na seção `webhooks`.
+
+#### Validando as entregas (para quem recebe)
+
+Esta parte é para o sistema do cliente, o que recebe os webhooks. Cada entrega é um `POST` com corpo JSON e estes headers:
+
+| Header | Exemplo | Para quê |
+|---|---|---|
+| `X-Webhook-Signature` | `sha256=5f2b…` | Assinatura HMAC-SHA256 |
+| `X-Webhook-Timestamp` | `1793276848` | Hora desta tentativa, em segundos (epoch) |
+| `X-Webhook-Id` | `evt_01j…` | Id do evento, igual em todas as tentativas |
+| `X-Webhook-Event` | `subscription.activated` | Nome do evento |
+
+```json
+{ "id": "evt_01j…", "event": "subscription.activated", "created_at": "2026-10-29T12:00:00-03:00", "data": { … } }
+```
+
+A assinatura é `HMAC-SHA256(segredo, timestamp + "." + corpo_bruto)`, em hexadecimal, com o prefixo `sha256=`. O segredo é o `whsec_…` mostrado uma única vez no cadastro do endpoint (ou ao girar o segredo), e entra inteiro, com o prefixo.
+
+Para validar:
+
+1. **Leia o corpo bruto**, exatamente como chegou. Decodificar o JSON e codificar de novo muda espaços e escapes, e a assinatura deixa de bater.
+2. **Recalcule a assinatura** e compare com `X-Webhook-Signature` em tempo constante (`hash_equals`, `crypto.timingSafeEqual`), nunca com `==`.
+3. **Recuse timestamp com mais de 5 minutos** de diferença: quem capturar uma entrega não consegue reenviá-la depois. Funciona porque o timestamp faz parte do que é assinado.
+4. **Ignore `X-Webhook-Id` já processado.** Novas tentativas e o "Reenviar" do painel mandam o mesmo id.
+
+Se algo falhar, responda `401` e não processe.
+
+```php
+// Laravel
+public function __invoke(Request $request)
+{
+    $body      = $request->getContent();                                // corpo bruto
+    $timestamp = (string) $request->header('X-Webhook-Timestamp');
+    $received  = (string) $request->header('X-Webhook-Signature');
+
+    $expected = 'sha256='.hash_hmac('sha256', $timestamp.'.'.$body, config('services.parceiro.webhook_secret'));
+
+    abort_unless(hash_equals($expected, $received), 401);
+    abort_if(abs(time() - (int) $timestamp) > 300, 401);                 // mais de 5 min
+
+    // O mesmo evento pode chegar de novo.
+    if (! Cache::add('webhook:'.$request->header('X-Webhook-Id'), true, now()->addDays(2))) {
+        return response()->noContent();
+    }
+
+    ProcessarWebhook::dispatch($request->json()->all());                  // trabalho pesado na fila
+    return response()->noContent();                                       // 2xx rápido
+}
+```
+
+```js
+// Node / Express: express.raw, e não express.json, para ter o corpo bruto
+app.post('/webhooks', express.raw({ type: 'application/json' }), (req, res) => {
+  const ts  = req.get('X-Webhook-Timestamp');
+  const sig = req.get('X-Webhook-Signature') || '';
+  const expected = 'sha256=' + crypto.createHmac('sha256', process.env.WEBHOOK_SECRET)
+    .update(`${ts}.${req.body}`).digest('hex');
+
+  const ok = sig.length === expected.length
+    && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
+    && Math.abs(Date.now() / 1000 - Number(ts)) <= 300;
+
+  if (!ok) return res.sendStatus(401);
+  // conferir X-Webhook-Id já processado, enfileirar o trabalho e responder
+  res.sendStatus(204);
+});
+```
+
+O que mais o integrador precisa saber:
+
+- **Responda rápido.** Só um `2xx` em até 10 segundos (`webhooks.timeout`) conta como entregue. Valide, enfileire e responda; o processamento vem depois.
+- **Novas tentativas.** Qualquer outra resposta, ou falta de resposta, volta para a fila em 1 min, 5 min, 15 min, 1 h e 6 h, com o mesmo `X-Webhook-Id` e timestamp e assinatura novos. Depois de `webhooks.disable_after_failures` (20) entregas perdidas seguidas, o endpoint é desligado.
+- **Girar o segredo vale na hora.** O antigo para de funcionar já na próxima entrega, sem período de convivência. Atualize o segredo no seu sistema logo depois de girar.
+- **Relógio sincronizado** (NTP) no servidor que recebe, por causa da tolerância de 5 minutos.
+- **Para testar**, o botão "Enviar teste" do painel manda um `webhook.test` assinado do mesmo jeito. O histórico de entregas do endpoint mostra, para cada entrega, a última resposta HTTP e o erro, se houver.
 
 ### Registro manual de rotas com `RoutesApiKey`
 
@@ -356,6 +499,42 @@ A API do cliente responde sempre em inglês, qualquer que seja o `Accept-Languag
 | `REQUEST_LIMIT_REACHED` | 429 | Cota do período esgotada | |
 
 Os textos ficam em `lang/en/api.php` do pacote; para trocar, publique `lang/vendor/api-key/en/api.php`. O painel (SPA e rotas embutidas) responde sempre em português.
+
+### Cota nas respostas e `GET /usage`
+
+Toda resposta do grupo `plan`, inclusive o 429 de cota esgotada, informa a cota do período:
+
+| Header | Valor |
+|---|---|
+| `X-Quota-Limit` | Requisições do período. Ausente em plano sem limite |
+| `X-Quota-Remaining` | Quanto resta, já contando esta requisição. `0` no excedente. Ausente em plano sem limite |
+| `X-Quota-Used` | Quanto foi usado, esta incluída. Passa do limite no excedente |
+| `X-Quota-Reset` | Fim do período em Unix timestamp (segundos): o contador zera na renovação |
+
+Os números saem depois da reserva ou da devolução da vaga, então batem com o painel: um 5xx devolvido não aparece em `X-Quota-Used`. Desligue com `API_KEY_QUOTA_HEADERS=false`.
+
+O cliente também consulta o uso com a própria API key, sem login no painel:
+
+```bash
+curl -H "X-API-KEY: sua-api-key-aqui" https://api.seuapp.com/api/v1/usage
+```
+
+A resposta traz plano, período (`active` ou `grace_period`), requisições (`limit`, `used`, `remaining`, `resets_at`, com `null` em plano sem limite), excedente, limite por minuto e a chave usada (sem o segredo). A rota passa por `api.key`, `api.key.rate`, `check.active.plan` e `api.key.origin`, mas **não** pelo `check.limit.plan`: consultar não gasta a cota e continua respondendo com a cota esgotada. O limite por minuto vale normalmente.
+
+O histórico por dia fica em `GET /api/v1/usage/daily?days=30` (de 1 a 90; fora disso, o valor é trazido para dentro da faixa), nas mesmas condições: não gasta a cota. Cada dia da janela aparece, os vazios com zero, dividido em `success` (2xx/3xx), `client_error` (4xx) e `server_error` (5xx), no fuso da aplicação. Conta o que foi **registrado**, e o registro inclui chamadas que não consumiram cota (o 429 de cota esgotada, os 5xx): somado, não dá o `requests.used` do `/usage`. O gráfico do painel usa a mesma consulta.
+
+### Especificação OpenAPI
+
+[`docs/openapi.yaml`](docs/openapi.yaml) (OpenAPI 3.1) descreve a API do cliente: autenticação por API key, `GET /usage`, os headers de cota e de limite por minuto e cada `error_code` com o status HTTP e um exemplo. As rotas do painel (`/dashboard/*`, login, checkout) ficam de fora: são o contrato interno da SPA.
+
+O arquivo vai junto no pacote. Para documentar as suas rotas protegidas pelo `plan`, referencie os componentes a partir da sua própria especificação, sem copiá-los:
+
+```yaml
+responses:
+  '429': { $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/responses/TooManyRequests' }
+```
+
+Os testes do pacote conferem o documento contra o código: um `error_code` novo em `ApiError`, ou um campo novo no `/usage`, quebra a suíte enquanto não for documentado.
 
 ### Middleware `feature`
 
@@ -458,7 +637,7 @@ POST /api/v1/dashboard/signature/resume    # desfaz, enquanto o período corre
 
 **Cancelar não é revogar.** O período já pago continua valendo até o `end_date` e a API key segue funcionando — quem cancela no dia 2 de 30 não perde os outros 28. O que para é a próxima cobrança:
 
-- `billing:process-renewals` filtra `cancelled_at IS NULL` e nem enfileira o job
+- `api-key:billing-process-renewals` filtra `cancelled_at IS NULL` e nem enfileira o job
 - `ProcessPlanRenewalJob` refaz a checagem ao executar, **antes** de falar com o gateway: o job pode ter ficado na fila enquanto o assinante cancelava
 - no vencimento a assinatura expira pelo caminho normal (carência inclusive)
 
@@ -526,7 +705,7 @@ Com `trial_days` no plano, a primeira assinatura de uma conta começa em teste: 
 
 ### Cobrança por excedente
 
-Com `overage_price` no plano, o assinante **pode** ligar o excedente em Painel → Faturamento. Ele vem **desligado por padrão**: sem a escolha do cliente, o limite do plano bloqueia como sempre. Ligado, a cota não bloqueia no limite e continua atendendo até o menor entre `overage_max_requests` do plano e o teto de gasto que o próprio assinante definir (`overage_spend_cap`, em reais), ou sem teto se nenhum dos dois existir. Ao passar do limite, o assinante recebe um aviso (e-mail e webhook `usage.overage_started`) uma vez por período, enquanto ainda pode desligar. O excedente é cobrado depois que o período termina, pelo `billing:charge-overage`: no cartão salvo, pelo perfil de Pagamentos Automáticos ou quando a conta permite cobrar sem CVV. Senão (sem cartão, ou conta que exige CVV), o assinante é avisado e paga pelo painel em Faturamento → "Excedente a pagar", escolhendo um cartão salvo ou PIX. No cartão do Mercado Pago sem renovação automática, o painel pede o CVV (que vira token no navegador); nos outros gateways o cartão salvo é cobrado direto. Valores abaixo de `billing.overage_minimum_charge` são perdoados. Sem `overage_price`, o limite bloqueia como antes.
+Com `overage_price` no plano, o assinante **pode** ligar o excedente em Painel → Faturamento. Ele vem **desligado por padrão**: sem a escolha do cliente, o limite do plano bloqueia como sempre. Ligado, a cota não bloqueia no limite e continua atendendo até o menor entre `overage_max_requests` do plano e o teto de gasto que o próprio assinante definir (`overage_spend_cap`, em reais), ou sem teto se nenhum dos dois existir. Ao passar do limite, o assinante recebe um aviso (e-mail e webhook `usage.overage_started`) uma vez por período, enquanto ainda pode desligar. O excedente é cobrado depois que o período termina, pelo `api-key:billing-charge-overage`: no cartão salvo, pelo perfil de Pagamentos Automáticos ou quando a conta permite cobrar sem CVV. Senão (sem cartão, ou conta que exige CVV), o assinante é avisado e paga pelo painel em Faturamento → "Excedente a pagar", escolhendo um cartão salvo ou PIX. No cartão do Mercado Pago sem renovação automática, o painel pede o CVV (que vira token no navegador); nos outros gateways o cartão salvo é cobrado direto. Valores abaixo de `billing.overage_minimum_charge` são perdoados. Sem `overage_price`, o limite bloqueia como antes.
 
 ### Novas tentativas de renovação
 
@@ -566,6 +745,13 @@ if ($userPlan?->isInGracePeriod()) {
 $user->hasActivePlan();     // true durante o período de carência
 $user->isInGracePeriod();   // true somente durante o período de carência
 ```
+
+Duas rotinas agendadas cuidam do ciclo, sem depender de o cliente fazer requisições:
+
+- **Aviso de carência** — `api-key:check-expired-plans --grace-only`, todo dia às 10:00 (depois das renovações das 08:00). Avisa cada assinatura que venceu nas últimas 24 horas e continua ativa, ou seja, que não foi renovada: dispara `PlanGracePeriodStarted`, com o e-mail `GracePeriodStartedNotification` e o webhook `subscription.grace_period_started`. Sai uma vez por assinatura. Com `grace_period_days = 0`, não avisa nada.
+- **Encerramento** — `api-key:check-expired-plans`, de hora em hora. Desativa a assinatura e todas as chaves da conta quando a carência termina, e dispara `PlanExpired` (e-mail e webhook `subscription.expired`). Uma renovação recusada com nova tentativa marcada espera a tentativa.
+
+O `check.active.plan` continua encerrando na hora uma assinatura vencida que chega numa requisição; a rotina alcança quem parou de chamar a API.
 
 ---
 
@@ -770,6 +956,8 @@ Além de `payment`, o webhook trata `order` (cobranças dos Pagamentos Automáti
 
 O IPN chega justamente porque o pagamento carrega `notification_url`, e **não tem HMAC a conferir**. Quem verifica é o pacote, indo buscar o pagamento na API com o seu access token — só pagamentos da sua própria conta produzem efeito. Como é verificação mais fraca, dá para recusar o formato com `MP_ACCEPT_IPN=false`; nesse caso remova também o `notification_url`, senão o gateway reentrega indefinidamente contra um 400.
 
+O HMAC prova que o webhook veio do Mercado Pago, não que é recente. Por isso o `ts` assinado tem que estar a no máximo `MP_WEBHOOK_TOLERANCE_SECONDS` (padrão 300) do relógio do servidor, ou a notificação é recusada: uma notificação capturada não serve para ser reenviada depois. Mantenha o relógio sincronizado (NTP). Uma recusa por relógio errado não perde pagamento, porque o Mercado Pago reentrega e a reconciliação agendada alcança o que ficou para trás, mas aparece no log como `signature timestamp outside tolerance`. `0` desliga a checagem.
+
 ### Pagamentos em análise
 
 Quando o gateway responde `pending` ou `in_process`, não há assinatura ainda: ele decide depois e avisa pelo webhook. O pacote grava a espera em `pending_payments` — usuário, plano, valor, cupom reservado e `payment_id`.
@@ -915,6 +1103,7 @@ O pacote dispara eventos automaticamente e **já registra os listeners** que env
 | `RequestLimitReached` | Limite de requisições do plano atingido (100%) |
 | `UserStatusChanged` | Status do usuário alterado |
 | `ApiKeyCreated` / `ApiKeyStatusChanged` | API key criada / ativada-desativada |
+| `ApiKeyExpiring` | API key vence dentro de `api_keys.expiry_warning_days` |
 | `PlanCancelled` | Assinante cancelou a renovação (nada foi retirado ainda) |
 | `PlanRefunded` | Valor devolvido e acesso encerrado no mesmo ato |
 | `PaymentRejected` | Compra que estava em análise acabou recusada |
@@ -930,8 +1119,11 @@ O pacote dispara eventos automaticamente e **já registra os listeners** que env
 | `RequestLimitReachedNotification` | `RequestLimitReached` | 1 a cada 24h |
 | `GracePeriodStartedNotification` | `PlanGracePeriodStarted` | — |
 | `PlanExpiredNotification` | `PlanExpired` | — |
+| `ApiKeyExpiringNotification` | `ApiKeyExpiring` | 1 por chave e data de validade |
 
 > O aviso de uso dispara no limiar definido por `API_KEY_USAGE_WARNING_THRESHOLD` (padrão `80`%). Requisições bloqueadas por limite (429) são **registradas no log, mas não contam** na cota.
+
+**Avisos informativos opcionais.** `UsageThresholdNotification`, `ApiKeyExpiringNotification` e `OverageStartedNotification` podem ser desligados pelo dono da conta em Perfil → Notificações (`PUT /api/v1/dashboard/profile/notifications` com `{"usage_notices": false}`; coluna `authentications.usage_notices_enabled`, ligada por padrão). Cobrança, segurança, limite atingido, carência e expiração saem sempre. O evento e o webhook continuam disparando; só o e-mail é suprimido. A regra mora no trait `Notifications\Concerns\InformationalNotice` (`shouldSend()`): uma classe sua que estende a do pacote herda a preferência, e uma escrita do zero pode usar o trait.
 
 ### Personalizando notificações
 
@@ -1035,33 +1227,45 @@ protected $listen = [
 
 > **Origens permitidas não são autenticação.** O header `Origin` é preenchido pelo navegador, mas qualquer cliente fora dele (curl, servidor, script) envia o valor que quiser. A lista de origens impede que outro *site* use a chave a partir do navegador de um visitante; quem tem a chave em mãos passa por ela. Quem protege é a API key.
 >
-> Sem header `Origin`, vale o IP do cliente, lido de `$request->ip()`. Atrás de proxy ou Cloudflare, configure o `TrustProxies` para o IP real chegar; headers como `X-Forwarded-For` vindos de um cliente não confiável são ignorados.
+> A lista aceita dois tipos de entrada, e cada tipo só é conferido contra a sua fonte. A requisição passa se qualquer um casar:
 >
-> Curingas aceitos: `*.example.com` (qualquer subdomínio e o próprio domínio) e `app.example.*` (o `*` vale por **um** rótulo: casa `app.example.com`, não `app.example.evil.com`). Em prefixos de IP, como `192.168.*`, o curinga cobre o restante do endereço.
+> | Entrada | Exemplos | Conferida contra |
+> |---|---|---|
+> | Domínio | `app.example.com`, `*.example.com`, `app.example.*` | header `Origin` |
+> | IP | `203.0.113.5`, `10.0.0.0/8`, `2001:db8::/32`, `192.168.*` | IP da conexão, de `$request->ip()` |
+>
+> Por isso um IP na lista restringe de verdade: o `Origin` nunca é comparado com entradas de IP, e um `Origin` cujo host é um IP não casa com nada. Use IP (ou faixa CIDR) para chamadas de servidor e domínio para chamadas do navegador. Atrás de proxy ou Cloudflare, configure o `TrustProxies` para o IP real chegar; headers como `X-Forwarded-For` vindos de um cliente não confiável são ignorados.
+>
+> Curingas de domínio: `*.example.com` (qualquer subdomínio e o próprio domínio) e `app.example.*` (o `*` vale por **um** rótulo: casa `app.example.com`, não `app.example.evil.com`). Em prefixos de IP, como `192.168.*`, o curinga cobre o restante do endereço.
 
 ---
 
 ## Comandos Artisan
 
 ```bash
-# Verificar todos os planos e disparar eventos de expiração/carência
-php artisan apikey:check-expired
+# Encerrar assinaturas cuja carência terminou (roda automaticamente de hora em hora)
+php artisan api-key:check-expired-plans
 
-# Verificar apenas planos em período de carência
-php artisan apikey:check-expired --grace-only
+# Avisar as assinaturas que entraram em carência nas últimas 24h (roda automaticamente às 10:00)
+php artisan api-key:check-expired-plans --grace-only
 
 # Processar renovações agendadas (roda automaticamente todo dia às 08:00)
 # Cada assinatura vira um ProcessPlanRenewalJob; use --dry-run para listar sem cobrar
-php artisan billing:process-renewals
+php artisan api-key:billing-process-renewals
 
 # Cobrar o excedente dos períodos encerrados (roda automaticamente às 09:00)
-php artisan billing:charge-overage
-php artisan billing:charge-overage --dry-run
+php artisan api-key:billing-charge-overage
+php artisan api-key:billing-charge-overage --dry-run
 
 # Apagar logs de requisição além da janela de retenção (roda automaticamente às 03:30)
 php artisan api-key:prune-logs
 php artisan api-key:prune-logs --dry-run          # apenas relata quantas linhas seriam apagadas
 php artisan api-key:prune-logs --days=30          # sobrescreve a retenção configurada
+
+# Avisar sobre chaves que vencem em breve (roda automaticamente às 07:00)
+php artisan api-key:notify-expiring
+php artisan api-key:notify-expiring --dry-run     # lista as chaves, sem avisar
+php artisan api-key:notify-expiring --days=14     # sobrescreve a antecedência configurada
 
 # Diagnosticar a instalação: tabelas, credenciais do gateway, fila do log,
 # supervisors do Horizon, agendador e chaves legadas
@@ -1128,9 +1332,12 @@ php artisan api-key:rotate-keys --legacy --dry-run           # apenas conta quan
 
 | Comando | Frequência | Desligável por |
 |---------|------------|----------------|
-| `billing:process-renewals` | diária, 08:00 | — |
-| `billing:charge-overage` | diária, 09:00 | — |
+| `api-key:billing-process-renewals` | diária, 08:00 | — |
+| `api-key:billing-charge-overage` | diária, 09:00 | — |
+| `api-key:check-expired-plans --grace-only` | diária, 10:00 | — |
+| `api-key:check-expired-plans` | de hora em hora | — |
 | `api-key:prune-logs` | diária, 03:30 | `request_log.prune_enabled` |
+| `api-key:notify-expiring` | diária, 07:00 | `api_keys.expiry_warning_days = 0` |
 | `api-key:reconcile-payments` | a cada 15 min | `reconciliation.payments_enabled` |
 | `api-key:retry-validation-refunds` | de hora em hora | `reconciliation.validation_refunds_enabled` |
 
@@ -1200,6 +1407,7 @@ return [
 
     'request_limit' => [
         'warning_threshold' => 80,   // % de uso que dispara o e-mail de aviso (0 = desliga)
+        'headers' => true,           // X-Quota-* nas respostas do grupo `plan`
     ],
 
     // Janela de arrependimento no cancelamento. window_days = 0 DESLIGA o
@@ -1254,7 +1462,7 @@ return [
         'name'       => env('API_KEY_QUEUE_NAME'),   // null = fila default da conexão
     ],
 
-    // Fila do comando billing:process-renewals (null = fila default).
+    // Fila do comando api-key:billing-process-renewals (null = fila default).
     'billing' => [
         'queue' => env('API_KEY_BILLING_QUEUE'),
     ],
@@ -1307,7 +1515,7 @@ return [
         'accept_ipn' => env('MP_ACCEPT_IPN', true),
 
         // Idade máxima do `ts` de um webhook assinado (anti-replay). 0 desliga.
-        'webhook_tolerance_seconds' => env('MP_WEBHOOK_TOLERANCE_SECONDS', 0),
+        'webhook_tolerance_seconds' => env('MP_WEBHOOK_TOLERANCE_SECONDS', 300),
     ],
 
     'demo_user_id'   => env('API_KEY_DEMO_USER_ID'),
@@ -1347,6 +1555,7 @@ return [
 | `API_KEY_CACHE_TTL_STATS` | TTL do cache do endpoint `/dashboard/stats` (segundos) | `30` |
 | `API_KEY_RATE_LIMIT_CACHE_TTL` | TTL do contador de rate limit (segundos) | `3600` |
 | `API_KEY_USAGE_WARNING_THRESHOLD` | % de uso que dispara o e-mail de aviso (`0` desliga) | `80` |
+| `API_KEY_QUOTA_HEADERS` | Headers `X-Quota-*` nas respostas do grupo `plan` | `true` |
 | `API_KEY_LOOKUP_SECRET` | Secret p/ derivar o `lookup_hash` (busca O(1) de API key) | `app.key` |
 | `API_KEY_LEGACY_SCAN_ENABLED` | Liga o fallback de keys legadas; desligue depois de `api-key:rotate-keys --legacy` | `true` |
 | `API_KEY_LEGACY_SCAN_MAX_SECONDS` | Orçamento do fallback de keys legadas (`0` = sem limite) | `3` |
@@ -1357,7 +1566,7 @@ return [
 | `API_KEY_LOG_CONNECTION` | Conexão da fila do log (Horizon observa `redis`) | `redis` |
 | `API_KEY_QUEUE_CONNECTION` | Conexão dos listeners/notificações enfileirados | `redis` |
 | `API_KEY_QUEUE_NAME` | Fila dos listeners/notificações (`null` = default da conexão) | — |
-| `API_KEY_BILLING_QUEUE` | Fila do comando `billing:process-renewals` | — |
+| `API_KEY_BILLING_QUEUE` | Fila do comando `api-key:billing-process-renewals` | — |
 | `API_KEY_DISABLE_WEB_MIDDLEWARE` | Anexar `DisableRouteWebMiddleware` ao grupo `web` | `true` |
 | `API_KEY_AUTH_THROTTLE_ENABLED` | Habilitar throttle nos endpoints de autenticação | `true` |
 | `API_KEY_AUTH_THROTTLE_ATTEMPTS` | Máximo de tentativas nas rotas públicas de autenticação | `5` |
@@ -1377,7 +1586,7 @@ return [
 | `MP_WEBHOOK_SECRET` | Secret HMAC do webhook do MercadoPago | — |
 | `MP_NOTIFICATION_URL` | URL enviada em `notification_url` a cada pagamento. Vazia em desenvolvimento | — |
 | `MP_ACCEPT_IPN` | Aceitar notificações IPN, que chegam sem assinatura | `true` |
-| `MP_WEBHOOK_TOLERANCE_SECONDS` | Idade máxima do `ts` de um webhook assinado; 0 desliga | `0` |
+| `MP_WEBHOOK_TOLERANCE_SECONDS` | Idade máxima do `ts` de um webhook assinado; 0 desliga | `300` |
 | `API_KEY_REFUND_WINDOW_DAYS` | Dias de janela para estorno no cancelamento (`0` = desliga) | `0` |
 | `API_KEY_REFUND_MAX_USAGE_PERCENT` | Teto de consumo do ciclo que ainda dá direito a estorno | `50` |
 | `API_KEY_RECONCILE_PAYMENTS_ENABLED` | Agendar a reconciliação de pagamentos em análise | `true` |
@@ -1413,6 +1622,7 @@ return [
 | `API_KEY_OVERAGE_MINIMUM_CHARGE` | Excedente abaixo deste valor é perdoado | `1.00` |
 | `API_KEY_RATE_LIMIT_PER_MINUTE` | Limite por minuto padrão, quando chave e plano não definem | — |
 | `API_KEY_MAX_KEYS_PER_USER` | Máximo de API keys por conta | `5` |
+| `API_KEY_EXPIRY_WARNING_DAYS` | Antecedência, em dias, do aviso de chave vencendo (`0` desliga) | `7` |
 | `API_KEY_2FA_REQUIRED_FOR_ADMINS` | Exigir 2FA para as rotas de admin | `true` |
 | `API_KEY_WEBHOOKS_ENABLED` | Enviar webhooks de saída | `true` |
 | `API_KEY_WEBHOOKS_QUEUE` | Fila das entregas de webhook | — |
@@ -1537,10 +1747,10 @@ export default {
     // Texto do painel da marca nas telas de login e cadastro.
     auth: { headline: 'Os dados da sua empresa, num lugar só.', bullets: ['…'] },
     // Cartões do app no perfil, depois dos do pacote. Só o componente vai para a
-    // aba "API key principal"; `tab` escolhe outra: personal, address, key ou privacy.
+    // aba "Dados pessoais"; `tab` escolhe outra: personal, address, notifications (só o dono vê) ou privacy. (`key` é obsoleto e cai em personal.)
     profile: {
         extraCards: [
-            defineAsyncComponent(() => import('@/views/profile/WebhookSecretCard.vue')),
+            defineAsyncComponent(() => import('@/views/profile/DocumentosCard.vue')),
             { component: defineAsyncComponent(() => import('@/views/profile/ConsentCard.vue')), tab: 'privacy' },
         ],
     },
@@ -1573,12 +1783,21 @@ npm run typecheck
 npm run build
 ```
 
-Habilite o SQLite no `php.ini` para o banco de testes:
+A suíte roda em **PostgreSQL**, o banco de produção, e precisa da extensão `pdo_pgsql`. As migrations têm caminhos por driver e várias consultas dependem do banco; o SQLite em memória, usado antes, deixava passar o que só quebrava em produção.
 
-```ini
-extension=pdo_sqlite
-extension=sqlite3
+Por padrão (`phpunit.xml`) os testes conectam em `127.0.0.1:5432`, banco `testing`, usuário e senha `postgres`. Variáveis `DB_*` já definidas no ambiente prevalecem. O jeito mais simples é um contêiner descartável, em memória:
+
+```bash
+docker run -d --rm --name api-key-test -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=testing \
+  --tmpfs /var/lib/postgresql/data postgres:17
+
+vendor/bin/pest
+
+docker stop api-key-test
 ```
+
+> **Não aponte os testes para um banco com dados.** O `RefreshDatabase` apaga e recria todas as tabelas do banco configurado. Se a porta 5432 já tem um PostgreSQL de verdade, suba o contêiner em outra porta (`-p 127.0.0.1:55432:5432`) e rode `DB_PORT=55432 vendor/bin/pest`.
 
 ---
 
@@ -1590,7 +1809,7 @@ extension=sqlite3
 - Redefinição de senha usa o mecanismo de URL assinada do Laravel
 - Assinaturas de webhook são verificadas via HMAC
 
-Reporte problemas de segurança para apps@risetech.com.br em vez do issue tracker público.
+Reporte problemas de segurança pelo relato privado do GitHub (aba Security) ou para apps@risetech.com.br, nunca numa issue pública. Detalhes em [SECURITY.md](SECURITY.md).
 
 ---
 

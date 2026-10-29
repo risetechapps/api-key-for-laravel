@@ -10,7 +10,7 @@ use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
  * Números do negócio para o painel admin.
  *
  * Calculados em PHP sobre conjuntos pequenos (assinaturas ativas, períodos
- * recentes), para funcionar igual em PostgreSQL, MySQL e no SQLite dos testes
+ * recentes), para funcionar igual em PostgreSQL, MySQL e SQLite
  * sem SQL de data específico de cada banco.
  */
 class MetricsService

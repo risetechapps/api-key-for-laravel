@@ -1,6 +1,6 @@
 <template>
     <div>
-        <PageHeader title="Perfil" subtitle="Seus dados, endereço, chave principal e privacidade" :icon="PhUserCircle" />
+        <PageHeader title="Perfil" subtitle="Seus dados, endereço, avisos e privacidade" :icon="PhUserCircle" />
 
         <Alert v-if="pageError" tone="danger" title="Não foi possível carregar o perfil">
             {{ pageError }}
@@ -76,39 +76,22 @@
                         <component :is="card" v-for="(card, i) in extraCards.address" :key="`extra-address-${i}`" />
                     </div>
 
-                    <!-- API key principal -->
-                    <div v-else-if="active === 'key'" class="space-y-6">
-                        <Card title="API key principal" subtitle="A chave mais antiga da conta">
-                            <div class="space-y-4">
-                                <template v-if="generatedKey">
-                                    <Alert tone="warning" title="Copie agora">Ela não é mostrada de novo depois que você sair desta página. A chave anterior parou de funcionar.</Alert>
-                                    <CopyField :value="generatedKey" masked />
-                                </template>
-                                <Alert v-else tone="info">
-                                    A chave fica guardada criptografada e não pode ser exibida de novo. Regenere para ver uma nova, ou crie chaves separadas por ambiente em
-                                    <router-link to="/dashboard/api-keys" class="font-semibold underline">API Keys</router-link>.
-                                </Alert>
+                    <!-- Avisos por e-mail -->
+                    <div v-else-if="active === 'notifications'" class="space-y-6">
+                        <Card title="Avisos por e-mail" subtitle="Escolha quais e-mails informativos a conta recebe">
+                            <div class="space-y-5">
+                                <Switch
+                                    v-model="usageNotices"
+                                    label="Avisos de uso"
+                                    description="Uso em 80% do limite, chave de API perto de vencer e início do excedente. Desligue se você já acompanha pelo /usage, pelos headers X-Quota-* ou por webhook."
+                                />
+                                <p class="text-xs text-slate-500 dark:text-slate-400">E-mails de cobrança, de segurança da conta e de expiração do plano são sempre enviados.</p>
                             </div>
                             <template #footer>
-                                <div class="flex justify-end"><Button variant="outline" :icon="PhArrowsClockwise" :loading="regenerating" @click="regenerateKey">Regenerar chave principal</Button></div>
+                                <div class="flex justify-end"><Button :loading="savingNotices" :icon="PhCheck" @click="saveNotifications">Salvar</Button></div>
                             </template>
                         </Card>
-
-                        <Card title="Origens permitidas" subtitle="Restrinja o uso da chave principal por IP ou domínio">
-                            <TransitionGroup v-if="allowedOrigins.length" name="ui-list" tag="div" class="relative mb-4 flex flex-wrap gap-2">
-                                <span v-for="(origin, index) in allowedOrigins" :key="origin" class="inline-flex items-center gap-2 rounded-lg bg-slate-100 py-1.5 pl-3 pr-1.5 font-mono text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                    {{ origin }}
-                                    <button type="button" class="rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-red-500 dark:hover:bg-slate-700" :aria-label="`Remover ${origin}`" @click="removeOrigin(index)"><PhX :size="12" weight="bold" /></button>
-                                </span>
-                            </TransitionGroup>
-                            <p v-else class="mb-4 text-sm text-slate-500 dark:text-slate-400">Nenhuma restrição: a chave funciona de qualquer origem (não recomendado em produção).</p>
-                            <form class="flex gap-3" @submit.prevent="addOrigin">
-                                <TextInput v-model="newOrigin" class="flex-1" placeholder="Ex.: 203.0.113.10 ou *.meusite.com" :icon="PhGlobeHemisphereWest" />
-                                <Button type="submit" variant="outline" :icon="PhPlus" :disabled="!newOrigin">Adicionar</Button>
-                            </form>
-                        </Card>
-
-                        <component :is="card" v-for="(card, i) in extraCards.key" :key="`extra-key-${i}`" />
+                        <component :is="card" v-for="(card, i) in extraCards.notifications" :key="`extra-notifications-${i}`" />
                     </div>
 
                     <!-- Privacidade -->
@@ -140,14 +123,14 @@ import { ref, reactive, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 import {
-    PhUser, PhUserCircle, PhEnvelope, PhArrowsClockwise, PhPlus, PhX, PhIdentificationCard, PhCalendarBlank, PhPhone, PhDeviceMobile,
-    PhGlobe, PhGlobeHemisphereWest, PhMapPin, PhBuildings, PhHouse, PhHash, PhNote, PhCheck, PhCrown, PhShieldCheck, PhKey, PhLockKey,
-    PhDownloadSimple, PhTrash,
+    PhUser, PhUserCircle, PhEnvelope, PhIdentificationCard, PhCalendarBlank, PhPhone, PhDeviceMobile,
+    PhGlobe, PhMapPin, PhBuildings, PhHouse, PhHash, PhNote, PhCheck, PhCrown, PhShieldCheck, PhLockKey,
+    PhDownloadSimple, PhTrash, PhBell,
 } from '@phosphor-icons/vue';
 import { useAuthStore } from '@/stores/auth';
 import appConfig from '@/api-key.config';
 import type { ProfileCard, ProfileTab } from '@/api-key.config';
-import { Alert, Avatar, Badge, Button, Card, CopyField, PageHeader, Select, Skeleton, Spinner, Tabs, TextInput, errorMessage, prompt, toast } from '@/ui';
+import { Alert, Avatar, Badge, Button, Card, PageHeader, Select, Skeleton, Spinner, Switch, Tabs, TextInput, errorMessage, prompt, toast } from '@/ui';
 import type { TabItem } from '@/ui';
 
 const authStore = useAuthStore();
@@ -155,38 +138,37 @@ const router = useRouter();
 
 const tab = ref('personal');
 // Cartões do app (api-key.config.ts → profile.extraCards), agrupados por aba.
-// Só o componente vai para a aba da API key; `{ component, tab }` escolhe outra.
+// Só o componente vai para Dados pessoais; `{ component, tab }` escolhe outra.
+// A aba da API key saiu (as chaves ficam em API Keys): `tab: 'key'` cai em
+// Dados pessoais.
 const extraCards = computed(() => {
-    const byTab: Record<ProfileTab, unknown[]> = { personal: [], address: [], key: [], privacy: [] };
+    const byTab: Record<Exclude<ProfileTab, 'key'>, unknown[]> = { personal: [], address: [], notifications: [], privacy: [] };
 
     for (const card of (appConfig.profile?.extraCards ?? []) as ProfileCard[]) {
         const entry = card as { component?: unknown; tab?: ProfileTab };
         const isEntry = typeof card === 'object' && card !== null && 'component' in card;
-        byTab[(isEntry && entry.tab) || 'key'].push(isEntry ? entry.component : card);
+        const target = isEntry && entry.tab && entry.tab !== 'key' ? entry.tab : 'personal';
+        byTab[target].push(isEntry ? entry.component : card);
     }
 
     return byTab;
 });
 
-const tabs: TabItem[] = [
+// Os avisos vão para o dono da conta: só ele vê a aba de notificações.
+const tabs = computed<TabItem[]>(() => [
     { key: 'personal', label: 'Dados pessoais', icon: PhUser },
     { key: 'address', label: 'Endereço', icon: PhMapPin },
-    { key: 'key', label: 'API key principal', icon: PhKey },
+    ...(authStore.teamCan('owner') ? [{ key: 'notifications', label: 'Notificações', icon: PhBell }] : []),
     { key: 'privacy', label: 'Privacidade', icon: PhLockKey },
-];
+]);
 
 const exporting = ref(false);
 const updating = ref(false);
-const regenerating = ref(false);
 const cepLoading = ref(false);
-const newOrigin = ref('');
 const pageLoading = ref(true);
 const pageError = ref('');
-const allowedOrigins = ref<string[]>([]);
-
-// A chave fica hasheada no servidor. Ela existe em texto puro só nesta aba,
-// na memória, entre a regeneração e o próximo recarregamento.
-const generatedKey = ref('');
+const usageNotices = ref(true);
+const savingNotices = ref(false);
 
 const user = computed<any>(() => authStore.user);
 
@@ -312,6 +294,7 @@ function loadUserData() {
         number: address.number || '',
         complement: address.complement || '',
     });
+    usageNotices.value = user.value.notifications?.usage_notices !== false;
 }
 
 async function reloadProfile() {
@@ -320,8 +303,6 @@ async function reloadProfile() {
     try {
         await authStore.fetchProfile();
         loadUserData();
-        const origins = await authStore.fetchAllowedOrigins();
-        allowedOrigins.value = Array.isArray(origins) ? origins : [];
     } catch (err) {
         pageError.value = errorMessage(err, 'Não foi possível carregar os dados do perfil.');
     } finally {
@@ -367,42 +348,16 @@ async function updateProfile() {
     }
 }
 
-async function regenerateKey() {
-    regenerating.value = true;
+async function saveNotifications() {
+    savingNotices.value = true;
     try {
-        const response = await axios.post('/dashboard/profile/regenerate-key');
-        if (response.data?.data?.key) {
-            generatedKey.value = response.data.data.key;
-            await authStore.fetchProfile();
-            toast.success('Nova chave gerada', { description: 'A anterior parou de funcionar. Copie a nova agora.' });
-        }
+        const response = await axios.put('/dashboard/profile/notifications', { usage_notices: usageNotices.value });
+        usageNotices.value = response.data?.data?.usage_notices !== false;
+        toast.success(usageNotices.value ? 'Avisos de uso ligados' : 'Avisos de uso desligados');
     } catch (err) {
-        toast.error('Não foi possível regenerar', { description: errorMessage(err) });
+        toast.error('Não foi possível salvar', { description: errorMessage(err) });
     } finally {
-        regenerating.value = false;
-    }
-}
-
-async function addOrigin() {
-    const value = newOrigin.value.trim();
-    if (!value || allowedOrigins.value.includes(value)) return;
-    const next = [...allowedOrigins.value, value];
-    try {
-        await authStore.updateAllowedOrigins(next);
-        allowedOrigins.value = next;
-        newOrigin.value = '';
-    } catch (err) {
-        toast.error('Não foi possível adicionar', { description: errorMessage(err) });
-    }
-}
-
-async function removeOrigin(index: number) {
-    const next = allowedOrigins.value.filter((_, i) => i !== index);
-    try {
-        await authStore.updateAllowedOrigins(next);
-        allowedOrigins.value = next;
-    } catch (err) {
-        toast.error('Não foi possível remover', { description: errorMessage(err) });
+        savingNotices.value = false;
     }
 }
 

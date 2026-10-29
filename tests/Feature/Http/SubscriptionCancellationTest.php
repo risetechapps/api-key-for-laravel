@@ -23,7 +23,7 @@ beforeEach(function () {
  * Vence hoje, mas ainda não venceu.
  *
  * Os casos de renovação precisam das duas coisas ao mesmo tempo: dentro da
- * janela do `billing:process-renewals` (`[today 00:00, today 23:59:59]`) e com
+ * janela do `api-key:billing-process-renewals` (`[today 00:00, today 23:59:59]`) e com
  * `isExpired()` falso (`now()->gt($end_date)`). O valor anterior era
  * `today()->addHours(3)`, ou seja 03:00 de hoje, que vira passado a partir das
  * 03:00 — o teste de `resume` recebia 422 e a suíte passava ou falhava conforme
@@ -136,7 +136,7 @@ describe('Renewal after cancellation', function () {
             'cancelled_at' => now(),
         ]);
 
-        $this->artisan('billing:process-renewals')->assertSuccessful();
+        $this->artisan('api-key:billing-process-renewals')->assertSuccessful();
 
         Queue::assertNothingPushed();
     });
@@ -146,7 +146,7 @@ describe('Renewal after cancellation', function () {
 
         activeSubscription(['end_date' => dueToday()]);
 
-        $this->artisan('billing:process-renewals')->assertSuccessful();
+        $this->artisan('api-key:billing-process-renewals')->assertSuccessful();
 
         Queue::assertPushed(ProcessPlanRenewalJob::class);
     });
@@ -193,7 +193,7 @@ describe('Resuming a subscription', function () {
         ]);
 
         $this->postJson('/api/v1/dashboard/signature/resume')->assertStatus(200);
-        $this->artisan('billing:process-renewals')->assertSuccessful();
+        $this->artisan('api-key:billing-process-renewals')->assertSuccessful();
 
         Queue::assertPushed(ProcessPlanRenewalJob::class);
     });

@@ -11,9 +11,12 @@
         <!-- Métricas -->
         <div class="ui-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard style="--i: 0" label="Requisições hoje" :value="stats.today" :icon="PhLightning" :loading="loading" hint="desde a meia-noite" />
-            <StatCard style="--i: 1" label="Neste período" :value="stats.used" :icon="PhChartLineUp" tone="success" :loading="loading" :hint="stats.limit ? `de ${stats.limit.toLocaleString('pt-BR')}` : 'sem limite'" />
-            <StatCard style="--i: 2" label="Restantes" :value="stats.limit ? stats.remaining : '∞'" :icon="PhGauge" :tone="usagePercentage >= 90 ? 'danger' : usagePercentage >= 75 ? 'warning' : 'info'" :loading="loading" :hint="stats.limit ? `${Math.round(100 - usagePercentage)}% do plano livre` : 'plano ilimitado'" />
-            <StatCard style="--i: 3" label="Limite do plano" :value="stats.limit || 'Ilimitado'" :icon="PhStack" tone="neutral" :loading="loading" :to="'/dashboard/plans'" hint="ver planos" />
+            <!-- Limite 0 quer dizer duas coisas: plano ilimitado ou nenhum plano.
+                 Sem plano, "Ilimitado" e "∞" diziam o contrário da verdade. -->
+            <StatCard style="--i: 1" label="Neste período" :value="stats.used" :icon="PhChartLineUp" tone="success" :loading="loading" :hint="!hasPlan ? 'sem plano ativo' : stats.limit ? `de ${stats.limit.toLocaleString('pt-BR')}` : 'sem limite'" />
+            <StatCard v-if="hasPlan" style="--i: 2" label="Restantes" :value="stats.limit ? stats.remaining : '∞'" :icon="PhGauge" :tone="usagePercentage >= 90 ? 'danger' : usagePercentage >= 75 ? 'warning' : 'info'" :loading="loading" :hint="stats.limit ? `${Math.round(100 - usagePercentage)}% do plano livre` : 'plano ilimitado'" />
+            <StatCard v-else style="--i: 2" label="Restantes" value="—" :icon="PhGauge" tone="neutral" :loading="loading" hint="a API não responde sem plano" />
+            <StatCard style="--i: 3" label="Limite do plano" :value="!hasPlan ? 'Sem plano' : stats.limit || 'Ilimitado'" :icon="PhStack" :tone="hasPlan ? 'neutral' : 'warning'" :loading="loading" :to="'/dashboard/plans'" :hint="hasPlan ? 'ver planos' : 'escolher um plano'" />
         </div>
 
         <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -81,6 +84,10 @@
             >
                 <template #cell-endpoint="{ row }"><span class="font-mono text-xs text-slate-900 dark:text-white">{{ row.endpoint }}</span></template>
                 <template #cell-method="{ row }"><Badge :tone="methodTone(row.method)">{{ row.method }}</Badge></template>
+                <template #cell-ip="{ row }">
+                    <span v-if="row.ip" class="whitespace-nowrap font-mono text-xs text-slate-600 dark:text-slate-300">{{ row.ip }}</span>
+                    <span v-else class="text-slate-400">—</span>
+                </template>
                 <template #cell-response_code="{ row }"><Badge :tone="statusTone(row.response_code)" dot>{{ row.response_code }}</Badge></template>
                 <template #cell-requested_at="{ row }"><span class="text-slate-500 dark:text-slate-400">{{ format.relative(row.requested_at) }}</span></template>
             </DataTable>
@@ -142,6 +149,7 @@ const recentRequests = computed<any[]>(() => dashboardStore.requests.slice(0, 8)
 const columns: Column[] = [
     { key: 'endpoint', label: 'Endpoint' },
     { key: 'method', label: 'Método' },
+    { key: 'ip', label: 'IP' },
     { key: 'response_code', label: 'Status' },
     { key: 'requested_at', label: 'Quando', align: 'right' },
 ];

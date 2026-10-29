@@ -1,6 +1,7 @@
 <?php
 
 use RiseTechApps\ApiKey\Notifications\AccountSecurityNotification;
+use RiseTechApps\ApiKey\Notifications\ApiKeyExpiringNotification;
 use RiseTechApps\ApiKey\Notifications\EmailChangeNotification;
 use RiseTechApps\ApiKey\Notifications\EmailVerifyNotification;
 use RiseTechApps\ApiKey\Notifications\GracePeriodStartedNotification;
@@ -64,6 +65,13 @@ return [
         // Desligue apenas em desenvolvimento.
         'allow_http' => env('API_KEY_WEBHOOKS_ALLOW_HTTP', false),
         'block_private_networks' => env('API_KEY_WEBHOOKS_BLOCK_PRIVATE', true),
+        // Eventos do seu app, além dos do pacote, para o cliente assinar no
+        // painel. Formato recurso.acao, minúsculo; com descrição, ela aparece
+        // no painel: ['pedido.criado' => 'Pedido criado', 'nota.emitida'].
+        // Também dá para registrar em código:
+        // WebhookDispatcher::registerEvents(['pedido.criado' => 'Pedido criado']).
+        // Evento não registrado não sai (vira erro no log).
+        'events' => [],
     ],
 
     'two_factor' => [
@@ -74,6 +82,11 @@ return [
     'api_keys' => [
         // Máximo de chaves por conta.
         'max_per_user' => env('API_KEY_MAX_KEYS_PER_USER', 5),
+
+        // Dias de antecedência do aviso de chave vencendo (e-mail + webhook
+        // `api_key.expiring`), enviado pelo `api-key:notify-expiring` todo dia
+        // às 07:00. 0 desliga o aviso e o agendamento.
+        'expiry_warning_days' => env('API_KEY_EXPIRY_WARNING_DAYS', 7),
     ],
 
     /*
@@ -89,6 +102,10 @@ return [
     */
     'request_limit' => [
         'warning_threshold' => env('API_KEY_USAGE_WARNING_THRESHOLD', 80),
+
+        // X-Quota-Limit, X-Quota-Remaining, X-Quota-Used e X-Quota-Reset em
+        // toda resposta do grupo `plan`, inclusive no 429 de cota esgotada.
+        'headers' => env('API_KEY_QUOTA_HEADERS', true),
     ],
 
     /*
@@ -169,6 +186,7 @@ return [
         'overage_started' => OverageStartedNotification::class,
         'account_security' => AccountSecurityNotification::class,
         'email_change' => EmailChangeNotification::class,
+        'api_key_expiring' => ApiKeyExpiringNotification::class,
     ],
 
     /*
@@ -574,10 +592,13 @@ return [
         /*
         | Idade máxima, em segundos, do `ts` de um webhook assinado. Acima disso
         | a notificação é recusada mesmo com HMAC válido, o que impede reenviar
-        | uma notificação antiga capturada. 0 desliga a checagem (padrão): ligue
-        | depois de confirmar que o relógio do servidor está sincronizado.
+        | uma notificação antiga capturada. Cinco minutos por padrão: folga
+        | para a latência e para algum desvio de relógio, curto demais para
+        | servir de janela de reenvio. Exige o relógio do servidor sincronizado
+        | (NTP); recusada, a notificação volta pela reentrega do Mercado Pago ou
+        | pela reconciliação agendada. 0 desliga a checagem.
         */
-        'webhook_tolerance_seconds' => env('MP_WEBHOOK_TOLERANCE_SECONDS', 0),
+        'webhook_tolerance_seconds' => env('MP_WEBHOOK_TOLERANCE_SECONDS', 300),
 
         /*
         | PIX. Precisa estar habilitado na conta do Mercado Pago (chave PIX
@@ -614,7 +635,7 @@ return [
     | Billing
     |--------------------------------------------------------------------------
     |
-    | Queue used by `billing:process-renewals`. Each due subscription is charged
+    | Queue used by `api-key:billing-process-renewals`. Each due subscription is charged
     | in its own job so workers can process them in parallel. Leave null to use
     | the default queue; a dedicated queue is recommended so a billing backlog
     | does not delay other work.

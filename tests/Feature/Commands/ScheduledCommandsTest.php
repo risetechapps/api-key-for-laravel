@@ -44,8 +44,22 @@ describe('Rotinas agendadas', function () {
 
     it('agenda a cobranca de renovacoes e a poda de logs', function () {
         expect(scheduledCommands())
-            ->toHaveKey('billing:process-renewals')
+            ->toHaveKey('api-key:billing-process-renewals')
             ->toHaveKey('api-key:prune-logs');
+    });
+
+    it('agenda o aviso de chave vencendo, uma vez por dia', function () {
+        expect(scheduledCommands()['api-key:notify-expiring'] ?? null)->toBe('0 7 * * *');
+    });
+
+    it('agenda o aviso de carencia depois das renovacoes e o encerramento de hora em hora', function () {
+        // Sem isto o aviso de carencia nunca saia, e um plano so era encerrado
+        // quando o cliente fazia uma requisicao.
+        $runs = collect(app(Schedule::class)->events())
+            ->filter(fn ($e) => str_contains($e->command ?? '', 'api-key:check-expired-plans'))
+            ->mapWithKeys(fn ($e) => [str_contains($e->command, '--grace-only') ? 'grace' : 'expire' => $e->expression]);
+
+        expect($runs->all())->toBe(['grace' => '0 10 * * *', 'expire' => '0 * * * *']);
     });
 
     // As chaves que desligam cada rotina nao tem teste: o agendamento e montado

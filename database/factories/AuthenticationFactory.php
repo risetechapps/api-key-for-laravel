@@ -13,7 +13,11 @@ class AuthenticationFactory extends Factory
     public function definition(): array
     {
         return [
-            'code' => $this->faker->uuid(),
+            // Sem `code`: o code-generate gera o sequencial, como em produção.
+            // Um UUID aqui quebrava a sequência dele, que deriva o próximo
+            // número dos códigos gravados: `(int) "3e45..."` é notação
+            // científica e vira PHP_INT_MAX, e o PostgreSQL recusa o float
+            // seguinte no contador `bigint` — em ~2% dos UUIDs, ao acaso.
             'name' => $this->faker->name(),
             'email' => $this->faker->unique()->safeEmail(),
             'email_verified_at' => now(),

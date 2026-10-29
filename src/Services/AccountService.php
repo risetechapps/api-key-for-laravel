@@ -169,6 +169,7 @@ class AccountService
                 'method' => $log->method,
                 'response_code' => $log->response_code,
                 'ip' => $log->ip,
+                'api_key_id' => $log->api_key_id,
                 'requested_at' => $log->requested_at?->toIso8601String(),
             ], $flags);
 

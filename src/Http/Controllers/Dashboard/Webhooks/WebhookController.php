@@ -30,7 +30,13 @@ class WebhookController extends Controller
 
         return response()->jsonSuccess([
             'endpoints' => $endpoints->values()->all(),
-            'available_events' => array_values(array_diff(WebhookDispatcher::EVENTS, ['webhook.test'])),
+            'available_events' => array_values(array_diff(WebhookDispatcher::events(), ['webhook.test'])),
+            // Mesmos eventos, com a descrição para o painel (null: só o nome).
+            'events_catalog' => collect(WebhookDispatcher::catalog())
+                ->except('webhook.test')
+                ->map(fn (?string $description, string $name) => ['name' => $name, 'description' => $description])
+                ->values()
+                ->all(),
         ]);
     }
 
@@ -155,7 +161,7 @@ class WebhookController extends Controller
         $data = $request->validate([
             'url' => [$creating ? 'required' : 'sometimes', 'url', 'max:2048'],
             'events' => ['sometimes', 'nullable', 'array'],
-            'events.*' => ['string', Rule::in(WebhookDispatcher::EVENTS)],
+            'events.*' => ['string', Rule::in(WebhookDispatcher::events())],
             'active' => ['sometimes', 'boolean'],
         ]);
 

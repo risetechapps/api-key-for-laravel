@@ -46,7 +46,10 @@ class PlanActivatedNotification extends Notification
         }
 
         return $mail
-            ->line("Limite de requisições: **{$this->plan->request_limit}** por ciclo.")
+            // `request_limit` 0 é plano ilimitado, não "limite zero".
+            ->line($this->plan->hasRequestLimit()
+                ? "Limite de requisições: **{$this->plan->request_limit}** por ciclo."
+                : 'Requisições **ilimitadas** por ciclo.')
             ->line('Validade do período atual: '.optional($this->userPlan->end_date)->format('d/m/Y').'.')
             ->action('Acessar painel', url('/dashboard'))
             ->salutation('Atenciosamente, Equipe '.config('app.name'));

@@ -271,7 +271,7 @@ describe('Payments, delinquency and exports', function () {
 describe('System health', function () {
     it('reports the gateway, routines and pending payments', function () {
         config(['api-key.mercadopago.access_token' => 'TEST-x', 'api-key.mercadopago.webhook_secret' => 's']);
-        SystemHealthService::recordCommand('billing:process-renewals', 0);
+        SystemHealthService::recordCommand('api-key:billing-process-renewals', 0);
         SystemHealthService::recordWebhook('mercadopago');
 
         $checks = collect($this->actingAs($this->support, 'sanctum')

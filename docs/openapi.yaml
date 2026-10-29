@@ -1,0 +1,983 @@
+openapi: 3.1.0
+
+info:
+  title: API key for Laravel — client API
+  version: 1.1.0
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    The surface the **API consumer** talks to: requests authenticated by an API
+    key, protected by the `plan` middleware group (key, per-minute rate limit,
+    active plan, period quota, origin) and optionally by `feature:<name>`.
+
+    The dashboard routes used by the bundled SPA (`/dashboard/*`, login,
+    checkout) are not part of this contract.
+
+    ## Using it for your own routes
+
+    Every route you put under `plan` behaves the same way: same headers, same
+    refusals. Reference the components from your own spec:
+
+    ```yaml
+    paths:
+      /reports:
+        get:
+          security: [{ ApiKeyAuth: [] }]
+          responses:
+            '200':
+              description: OK
+              headers:
+                X-Quota-Remaining: { $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/headers/X-Quota-Remaining' }
+            '401': { $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/responses/Unauthorized' }
+            '403': { $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/responses/Forbidden' }
+            '429': { $ref: 'vendor/risetechapps/api-key-for-laravel/docs/openapi.yaml#/components/responses/TooManyRequests' }
+    ```
+
+    ## Errors
+
+    Refusals are always in English, whatever the `Accept-Language`, and carry a
+    stable `error_code`. Decide on the code, never on the message text.
+
+    ## Webhooks
+
+    The account owner registers HTTPS URLs in the dashboard and picks the
+    events. Each delivery is a signed `POST`; see the `webhooks` section for
+    the events, their payloads and how to verify the signature. Events added
+    by the application that installs the package (`WebhookDispatcher::registerEvents()`)
+    use the same envelope and signature, with a `data` defined by that
+    application.
+
+    ## Quota accounting
+
+    | Outcome | Counts against the quota? |
+    |---|---|
+    | 2xx / 3xx | yes |
+    | 4xx from your own request | yes |
+    | 429 `REQUEST_LIMIT_REACHED` | no |
+    | 5xx | no — the slot is given back |
+    | Refused by origin, key scope or plan feature | no |
+
+servers:
+  - url: '{baseUrl}/api/v1'
+    variables:
+      baseUrl:
+        default: https://api.example.com
+        description: Your application's URL. The `/api/v1` prefix is the package default.
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /usage:
+    get:
+      operationId: getUsage
+      summary: Current period usage
+      description: |
+        Plan, period, quota and overage for the account that owns the key.
+
+        Does **not** count against the quota and keeps answering after the quota
+        is exhausted. It is subject to the per-minute rate limit like any other
+        call.
+      tags: [Usage]
+      responses:
+        '200':
+          description: Usage of the current period.
+          headers:
+            X-Quota-Limit: { $ref: '#/components/headers/X-Quota-Limit' }
+            X-Quota-Remaining: { $ref: '#/components/headers/X-Quota-Remaining' }
+            X-Quota-Used: { $ref: '#/components/headers/X-Quota-Used' }
+            X-Quota-Reset: { $ref: '#/components/headers/X-Quota-Reset' }
+            X-RateLimit-Limit: { $ref: '#/components/headers/X-RateLimit-Limit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/X-RateLimit-Remaining' }
+            X-Plan-Status: { $ref: '#/components/headers/X-Plan-Status' }
+            X-Grace-Period-Days-Remaining: { $ref: '#/components/headers/X-Grace-Period-Days-Remaining' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    const: true
+                  data:
+                    $ref: '#/components/schemas/Usage'
+              example:
+                success: true
+                data:
+                  plan:
+                    id: 9d1c1a52-3f0e-4a8e-9a8e-2f7c4b1d6e10
+                    name: Pro
+                    billing_cycle: monthly
+                  period:
+                    start: '2026-10-01T00:00:00+00:00'
+                    end: '2026-10-31T00:00:00+00:00'
+                    status: active
+                    grace_period_ends_at: null
+                    trial: false
+                    cancelled: false
+                  requests:
+                    limit: 100000
+                    used: 81234
+                    remaining: 18766
+                    resets_at: '2026-10-31T00:00:00+00:00'
+                  overage:
+                    available: true
+                    enabled: false
+                    requests: 0
+                    max_requests: 0
+                    price_per_request: 0.002
+                    amount: 0
+                  rate_limit:
+                    per_minute: 120
+                  api_key:
+                    id: 4b0a7d0e-8f1e-4c1a-b7a3-0c2d9e5f6a71
+                    name: Production
+                    expires_at: null
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /usage/daily:
+    get:
+      operationId: getDailyUsage
+      summary: Requests per day
+      description: |
+        Requests recorded per day over the last `days` days, today included,
+        split by status class. Every day in the window is listed, empty ones
+        with zeros. Dates are in the application's time zone (`timezone`).
+
+        This counts what was **recorded**, which includes calls that did not
+        count against the quota (429 for an exhausted quota, 5xx). Summed over
+        the period it is therefore not `requests.used` from `/usage`.
+
+        Does not count against the quota.
+      tags: [Usage]
+      parameters:
+        - name: days
+          in: query
+          required: false
+          description: Window size. Values outside 1–90 are clamped into that range.
+          schema: { type: integer, minimum: 1, maximum: 90, default: 30 }
+      responses:
+        '200':
+          description: Daily request counts.
+          headers:
+            X-Quota-Limit: { $ref: '#/components/headers/X-Quota-Limit' }
+            X-Quota-Remaining: { $ref: '#/components/headers/X-Quota-Remaining' }
+            X-Quota-Used: { $ref: '#/components/headers/X-Quota-Used' }
+            X-Quota-Reset: { $ref: '#/components/headers/X-Quota-Reset' }
+            X-RateLimit-Limit: { $ref: '#/components/headers/X-RateLimit-Limit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/X-RateLimit-Remaining' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    const: true
+                  data:
+                    $ref: '#/components/schemas/DailyUsage'
+              example:
+                success: true
+                data:
+                  from: '2026-10-26'
+                  to: '2026-10-28'
+                  timezone: America/Sao_Paulo
+                  days:
+                    - { date: '2026-10-26', total: 1520, success: 1490, client_error: 28, server_error: 2 }
+                    - { date: '2026-10-27', total: 0, success: 0, client_error: 0, server_error: 0 }
+                    - { date: '2026-10-28', total: 311, success: 305, client_error: 6, server_error: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+tags:
+  - name: Usage
+    description: Quota and plan of the account that owns the API key.
+
+webhooks:
+  subscription.activated:
+    post:
+      operationId: webhook_subscription_activated
+      summary: subscription.activated
+      description: "A subscription started (first plan, or a new plan after none)."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: subscription.activated }
+                    data: { $ref: '#/components/schemas/SubscriptionChangedData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  subscription.changed:
+    post:
+      operationId: webhook_subscription_changed
+      summary: subscription.changed
+      description: "The account moved from one plan to another."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: subscription.changed }
+                    data: { $ref: '#/components/schemas/SubscriptionChangedData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  subscription.cancelled:
+    post:
+      operationId: webhook_subscription_cancelled
+      summary: subscription.cancelled
+      description: "The owner cancelled; access continues until `access_until`."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: subscription.cancelled }
+                    data: { $ref: '#/components/schemas/SubscriptionCancelledData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  subscription.expired:
+    post:
+      operationId: webhook_subscription_expired
+      summary: subscription.expired
+      description: "The subscription ended and the account's keys were deactivated."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: subscription.expired }
+                    data: { $ref: '#/components/schemas/SubscriptionData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  subscription.grace_period_started:
+    post:
+      operationId: webhook_subscription_grace_period_started
+      summary: subscription.grace_period_started
+      description: "The period ended without renewal; access continues until `grace_period_ends_at`."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: subscription.grace_period_started }
+                    data: { $ref: '#/components/schemas/SubscriptionGracePeriodData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  subscription.refunded:
+    post:
+      operationId: webhook_subscription_refunded
+      summary: subscription.refunded
+      description: "The payment was refunded and access ended."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: subscription.refunded }
+                    data: { $ref: '#/components/schemas/SubscriptionRefundedData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  subscription.renewal_failed:
+    post:
+      operationId: webhook_subscription_renewal_failed
+      summary: subscription.renewal_failed
+      description: "An automatic renewal charge failed. `next_attempt_at` is null after the last attempt."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: subscription.renewal_failed }
+                    data: { $ref: '#/components/schemas/RenewalFailedData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  subscription.payment_required:
+    post:
+      operationId: webhook_subscription_payment_required
+      summary: subscription.payment_required
+      description: "The renewal cannot be charged automatically; the owner must pay in the dashboard."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: subscription.payment_required }
+                    data: { $ref: '#/components/schemas/PaymentRequiredData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  payment.rejected:
+    post:
+      operationId: webhook_payment_rejected
+      summary: payment.rejected
+      description: "A purchase that was under review ended up rejected."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: payment.rejected }
+                    data: { $ref: '#/components/schemas/PaymentRejectedData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  billing.overage_charged:
+    post:
+      operationId: webhook_billing_overage_charged
+      summary: billing.overage_charged
+      description: "The overage of a closed period was billed."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: billing.overage_charged }
+                    data: { $ref: '#/components/schemas/OverageChargedData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  usage.threshold_reached:
+    post:
+      operationId: webhook_usage_threshold_reached
+      summary: usage.threshold_reached
+      description: "Usage reached the warning threshold (80% by default). Once per period."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: usage.threshold_reached }
+                    data: { $ref: '#/components/schemas/UsageThresholdData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  usage.limit_reached:
+    post:
+      operationId: webhook_usage_limit_reached
+      summary: usage.limit_reached
+      description: "The period quota ran out; requests now get 429. Once per period."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: usage.limit_reached }
+                    data: { $ref: '#/components/schemas/UsageLimitData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  usage.overage_started:
+    post:
+      operationId: webhook_usage_overage_started
+      summary: usage.overage_started
+      description: "The quota ran out and requests continue as paid overage. Once per period."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: usage.overage_started }
+                    data: { $ref: '#/components/schemas/OverageStartedData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  api_key.expiring:
+    post:
+      operationId: webhook_api_key_expiring
+      summary: api_key.expiring
+      description: "An active key expires within the warning window. Once per key and expiry date."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: api_key.expiring }
+                    data: { $ref: '#/components/schemas/ApiKeyExpiringData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+  webhook.test:
+    post:
+      operationId: webhook_webhook_test
+      summary: webhook.test
+      description: "Sent by the Send test button in the dashboard, only to that endpoint."
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebhookSignature'
+        - $ref: '#/components/parameters/WebhookTimestamp'
+        - $ref: '#/components/parameters/WebhookId'
+        - $ref: '#/components/parameters/WebhookEvent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/WebhookEnvelope'
+                - type: object
+                  properties:
+                    event: { const: webhook.test }
+                    data: { $ref: '#/components/schemas/WebhookTestData' }
+      responses:
+        '2XX': { $ref: '#/components/responses/WebhookAccepted' }
+        default: { $ref: '#/components/responses/WebhookRetried' }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY
+      description: |
+        The key shown once when it is created in the dashboard. The header name
+        is configurable (`api-key.header_name`); `X-API-KEY` is the default.
+
+  parameters:
+    WebhookSignature:
+      name: X-Webhook-Signature
+      in: header
+      required: true
+      description: |
+        `sha256=` followed by the hex HMAC-SHA256 of `<X-Webhook-Timestamp>.<raw body>`,
+        keyed with the endpoint's secret (`whsec_…`, used whole). Recompute it over
+        the raw bytes received, never over re-encoded JSON, and compare in
+        constant time.
+      schema: { type: string, pattern: '^sha256=[0-9a-f]{64}$' }
+      example: sha256=5f2b8a0c1e4d7f9a3b6c8e0d2f4a6b8c0e2d4f6a8b0c2e4d6f8a0b2c4e6d8f0a
+    WebhookTimestamp:
+      name: X-Webhook-Timestamp
+      in: header
+      required: true
+      description: Unix time (seconds) of this attempt. Part of the signed content; reject deliveries more than 5 minutes off to stop replays.
+      schema: { type: string, pattern: '^[0-9]+$' }
+      example: '1793276848'
+    WebhookId:
+      name: X-Webhook-Id
+      in: header
+      required: true
+      description: Event id, the same as `id` in the body. Identical on every retry and on a manual redelivery from the dashboard; use it to process each event once.
+      schema: { type: string }
+      example: evt_01jbx8m2k7c9v4t6q3n5p0r8s2
+    WebhookEvent:
+      name: X-Webhook-Event
+      in: header
+      required: true
+      description: Event name, the same as `event` in the body.
+      schema: { type: string }
+      example: subscription.activated
+
+  headers:
+    X-Quota-Limit:
+      description: Requests included in the current period. Absent on plans without a limit.
+      schema: { type: integer, minimum: 1 }
+    X-Quota-Remaining:
+      description: Requests left in the current period, already counting this one. `0` while in overage. Absent on plans without a limit.
+      schema: { type: integer, minimum: 0 }
+    X-Quota-Used:
+      description: Requests counted in the current period, this one included. Goes above the limit while in overage.
+      schema: { type: integer, minimum: 0 }
+    X-Quota-Reset:
+      description: End of the current period as a Unix timestamp (seconds). The counter goes back to zero when the plan renews.
+      schema: { type: integer }
+    X-RateLimit-Limit:
+      description: Requests allowed per minute for this key. Absent when no per-minute limit applies.
+      schema: { type: integer, minimum: 1 }
+    X-RateLimit-Remaining:
+      description: Requests left in the current minute.
+      schema: { type: integer, minimum: 0 }
+    Retry-After:
+      description: Seconds to wait before retrying. Sent with `RATE_LIMITED`.
+      schema: { type: integer, minimum: 0 }
+    X-Plan-Status:
+      description: Present only while the plan is in its grace period.
+      schema: { type: string, enum: [grace-period] }
+    X-Grace-Period-Days-Remaining:
+      description: Days left in the grace period. Sent with `X-Plan-Status`.
+      schema: { type: integer, minimum: 0 }
+
+  schemas:
+    ApiErrorCode:
+      type: string
+      description: |
+        | Code | HTTP | When |
+        |---|---|---|
+        | `MISSING_API_KEY` | 401 | The key header is missing |
+        | `INVALID_API_KEY` | 401 | Unknown, inactive, expired or ownerless key |
+        | `UNAUTHENTICATED` | 401 | No authenticated user reached the plan check |
+        | `FEATURE_NOT_IN_PLAN` | 402 | The plan has none of the route's features |
+        | `ACCOUNT_DISABLED` | 403 | The account is suspended |
+        | `PLAN_INACTIVE` | 403 | No active plan |
+        | `PLAN_EXPIRED` | 403 | Plan expired and grace period over |
+        | `ORIGIN_NOT_ALLOWED` | 403 | Origin or IP not in the key's allowed list |
+        | `API_KEY_SCOPE_DENIED` | 403 | The key may not call the route's feature |
+        | `RATE_LIMITED` | 429 | Over the per-minute limit |
+        | `REQUEST_LIMIT_REACHED` | 429 | Period quota exhausted |
+      enum:
+        - MISSING_API_KEY
+        - INVALID_API_KEY
+        - ACCOUNT_DISABLED
+        - UNAUTHENTICATED
+        - RATE_LIMITED
+        - PLAN_INACTIVE
+        - PLAN_EXPIRED
+        - REQUEST_LIMIT_REACHED
+        - ORIGIN_NOT_ALLOWED
+        - API_KEY_SCOPE_DENIED
+        - FEATURE_NOT_IN_PLAN
+
+    ApiError:
+      type: object
+      required: [success, message, error_code]
+      properties:
+        success:
+          const: false
+        message:
+          type: string
+          description: Human-readable, in English. May change; do not parse it.
+        error_code:
+          $ref: '#/components/schemas/ApiErrorCode'
+        features:
+          type: array
+          items: { type: string }
+          description: Features the route requires. Sent with `FEATURE_NOT_IN_PLAN` and `API_KEY_SCOPE_DENIED`.
+        retry_after:
+          type: integer
+          description: Seconds to wait. Sent with `RATE_LIMITED`.
+
+    Usage:
+      type: object
+      required: [plan, period, requests, overage, rate_limit, api_key]
+      properties:
+        plan:
+          type: object
+          required: [id, name, billing_cycle]
+          properties:
+            id: { type: [string, 'null'], format: uuid }
+            name: { type: [string, 'null'] }
+            billing_cycle:
+              type: [string, 'null']
+              enum: [weekly, monthly, annually, null]
+        period:
+          type: object
+          required: [start, end, status, grace_period_ends_at, trial, cancelled]
+          properties:
+            start: { type: [string, 'null'], format: date-time }
+            end: { type: [string, 'null'], format: date-time }
+            status:
+              type: string
+              enum: [active, grace_period]
+            grace_period_ends_at:
+              type: [string, 'null']
+              format: date-time
+              description: Set only while `status` is `grace_period`.
+            trial: { type: boolean }
+            cancelled:
+              type: boolean
+              description: Renewal was called off. The paid period keeps working until `end`.
+        requests:
+          type: object
+          required: [limit, used, remaining, resets_at]
+          properties:
+            limit:
+              type: [integer, 'null']
+              description: '`null` = no limit.'
+            used: { type: integer, minimum: 0 }
+            remaining:
+              type: [integer, 'null']
+              minimum: 0
+              description: '`null` = no limit. `0` while in overage.'
+            resets_at: { type: [string, 'null'], format: date-time }
+        overage:
+          type: object
+          description: Requests beyond the limit, billed at the end of the period.
+          required: [available, enabled, requests, max_requests, price_per_request, amount]
+          properties:
+            available:
+              type: boolean
+              description: The plan offers overage.
+            enabled:
+              type: boolean
+              description: The account owner turned overage on.
+            requests:
+              type: integer
+              minimum: 0
+              description: Requests beyond the limit so far.
+            max_requests:
+              type: [integer, 'null']
+              minimum: 0
+              description: Requests allowed beyond the limit. `0` = none, `null` = no cap.
+            price_per_request: { type: [number, 'null'] }
+            amount:
+              type: number
+              description: Amount accrued so far, in the account's currency.
+        rate_limit:
+          type: object
+          required: [per_minute]
+          properties:
+            per_minute:
+              type: [integer, 'null']
+              description: '`null` = no per-minute limit.'
+        api_key:
+          type: [object, 'null']
+          description: The key used for this call. The secret is never returned.
+          required: [id, name, expires_at]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: [string, 'null'] }
+            expires_at: { type: [string, 'null'], format: date-time }
+
+    DailyUsage:
+      type: object
+      required: [from, to, timezone, days]
+      properties:
+        from: { type: string, format: date, description: 'First day of the window.' }
+        to: { type: string, format: date, description: 'Last day of the window (today).' }
+        timezone: { type: string, description: 'Time zone the dates are in.' }
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, total, success, client_error, server_error]
+            properties:
+              date: { type: string, format: date }
+              total: { type: integer, minimum: 0, description: 'Every recorded request.' }
+              success: { type: integer, minimum: 0, description: '2xx and 3xx.' }
+              client_error: { type: integer, minimum: 0, description: '4xx, refusals included.' }
+              server_error: { type: integer, minimum: 0, description: '5xx.' }
+
+    WebhookEnvelope:
+      type: object
+      required: [id, event, created_at, data]
+      properties:
+        id: { type: string, description: 'Event id (`evt_` + ULID). Same as `X-Webhook-Id`.', example: evt_01jbx8m2k7c9v4t6q3n5p0r8s2 }
+        event: { type: string, description: Event name. Same as `X-Webhook-Event`. }
+        created_at: { type: string, format: date-time, description: When the event happened. Retries keep it; only the timestamp header changes. }
+        data: { type: object, description: Event-specific payload. }
+    SubscriptionData:
+      type: object
+      required: [subscription_id, plan, start_date, end_date, trial]
+      properties:
+        subscription_id: { type: string, format: uuid }
+        plan: { type: string, description: Plan name. }
+        start_date: { type: [string, 'null'], format: date-time }
+        end_date: { type: [string, 'null'], format: date-time }
+        trial: { type: boolean }
+    SubscriptionChangedData:
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionData'
+        - type: object
+          required: [previous_plan]
+          properties:
+            previous_plan: { type: [string, 'null'], description: 'Null on `subscription.activated`.' }
+    SubscriptionCancelledData:
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionData'
+        - type: object
+          required: [access_until]
+          properties:
+            access_until: { type: string, format: date-time }
+    SubscriptionGracePeriodData:
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionData'
+        - type: object
+          required: [grace_period_ends_at]
+          properties:
+            grace_period_ends_at: { type: string, format: date-time }
+    SubscriptionRefundedData:
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionData'
+        - type: object
+          required: [amount]
+          properties:
+            amount: { type: number, description: Refunded amount. }
+    RenewalFailedData:
+      type: object
+      required: [plan, amount, attempt, next_attempt_at]
+      properties:
+        plan: { type: string }
+        amount: { type: number }
+        attempt: { type: integer, minimum: 1 }
+        next_attempt_at: { type: [string, 'null'], format: date-time, description: Null after the last attempt. }
+    PaymentRequiredData:
+      type: object
+      required: [subscription_id, plan, amount, reason, access_until]
+      properties:
+        subscription_id: { type: string, format: uuid }
+        plan: { type: string }
+        amount: { type: number }
+        reason: { type: string, enum: [no_card, card_out_of_use, pix, cvv_required] }
+        access_until: { type: [string, 'null'], format: date-time, description: End of the grace period. }
+    PaymentRejectedData:
+      type: object
+      required: [plan, payment_id, amount, renewal]
+      properties:
+        plan: { type: string }
+        payment_id: { type: string, description: Payment id at the gateway. }
+        amount: { type: number }
+        renewal: { type: boolean }
+    OverageChargedData:
+      type: object
+      required: [plan, state, amount, requests]
+      properties:
+        plan: { type: [string, 'null'] }
+        state: { type: string, enum: [paid, payment_required, rejected] }
+        amount: { type: number }
+        requests: { type: integer, description: Requests above the limit in the period. }
+    UsageThresholdData:
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionData'
+        - type: object
+          required: [requests_used, requests_limit, threshold_percent]
+          properties:
+            requests_used: { type: integer }
+            requests_limit: { type: integer }
+            threshold_percent: { type: integer }
+    UsageLimitData:
+      allOf:
+        - $ref: '#/components/schemas/SubscriptionData'
+        - type: object
+          required: [requests_used, requests_limit]
+          properties:
+            requests_used: { type: integer }
+            requests_limit: { type: integer }
+    OverageStartedData:
+      type: object
+      required: [subscription_id, plan, requests_limit, price_per_request]
+      properties:
+        subscription_id: { type: string, format: uuid }
+        plan: { type: string }
+        requests_limit: { type: integer }
+        price_per_request: { type: number }
+    ApiKeyExpiringData:
+      type: object
+      required: [api_key_id, name, expires_at, days_left]
+      description: Never carries the key itself.
+      properties:
+        api_key_id: { type: string, format: uuid }
+        name: { type: [string, 'null'] }
+        expires_at: { type: string, format: date-time }
+        days_left: { type: integer, minimum: 0 }
+    WebhookTestData:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+          examples:
+            MISSING_API_KEY:
+              value: { success: false, message: 'API key is missing. Send it in the X-API-KEY header.', error_code: MISSING_API_KEY }
+            INVALID_API_KEY:
+              value: { success: false, message: Invalid API key., error_code: INVALID_API_KEY }
+            UNAUTHENTICATED:
+              value: { success: false, message: Unauthenticated., error_code: UNAUTHENTICATED }
+
+    PaymentRequired:
+      description: The plan does not include the route's feature.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+          examples:
+            FEATURE_NOT_IN_PLAN:
+              value: { success: false, message: 'Your plan does not include any of these features: reports.', error_code: FEATURE_NOT_IN_PLAN, features: [reports] }
+
+    Forbidden:
+      description: Authenticated, but not allowed right now.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+          examples:
+            ACCOUNT_DISABLED:
+              value: { success: false, message: This account is suspended. Please contact support., error_code: ACCOUNT_DISABLED }
+            PLAN_INACTIVE:
+              value: { success: false, message: Your plan has expired or is not active., error_code: PLAN_INACTIVE }
+            PLAN_EXPIRED:
+              value: { success: false, message: Your plan has expired and the grace period has ended., error_code: PLAN_EXPIRED }
+            ORIGIN_NOT_ALLOWED:
+              value: { success: false, message: Request origin or IP is not allowed for this API key., error_code: ORIGIN_NOT_ALLOWED }
+            API_KEY_SCOPE_DENIED:
+              value: { success: false, message: This API key is not allowed to access this resource., error_code: API_KEY_SCOPE_DENIED, features: [reports] }
+
+    TooManyRequests:
+      description: Per-minute limit or period quota exhausted. Neither counts against the quota.
+      headers:
+        Retry-After: { $ref: '#/components/headers/Retry-After' }
+        X-RateLimit-Limit: { $ref: '#/components/headers/X-RateLimit-Limit' }
+        X-RateLimit-Remaining: { $ref: '#/components/headers/X-RateLimit-Remaining' }
+        X-Quota-Limit: { $ref: '#/components/headers/X-Quota-Limit' }
+        X-Quota-Remaining: { $ref: '#/components/headers/X-Quota-Remaining' }
+        X-Quota-Used: { $ref: '#/components/headers/X-Quota-Used' }
+        X-Quota-Reset: { $ref: '#/components/headers/X-Quota-Reset' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+          examples:
+            RATE_LIMITED:
+              value: { success: false, message: Too many requests per minute. Please wait and try again., error_code: RATE_LIMITED, retry_after: 42 }
+            REQUEST_LIMIT_REACHED:
+              value: { success: false, message: Request limit reached for the current billing period., error_code: REQUEST_LIMIT_REACHED }
+    WebhookAccepted:
+      description: Any 2xx marks the delivery as done. Answer within 10 seconds (`api-key.webhooks.timeout`); do the heavy work after answering.
+    WebhookRetried:
+      description: |
+        Anything else (or no answer in time) is retried after 1 min, 5 min,
+        15 min, 1 h and 6 h, with the same `X-Webhook-Id` and a new timestamp
+        and signature. After `api-key.webhooks.disable_after_failures` (20)
+        lost deliveries in a row the endpoint is switched off.

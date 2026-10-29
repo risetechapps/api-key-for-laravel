@@ -66,6 +66,37 @@ class ProfileController extends Controller
         }
     }
 
+    /**
+     * Liga ou desliga os avisos informativos por e-mail (uso em 80%, chave
+     * vencendo, excedente iniciado). Cobrança, segurança e expiração do plano
+     * saem sempre. Fica na conta do dono, que é quem recebe os avisos.
+     */
+    public function updateNotifications(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'usage_notices' => ['required', 'boolean'],
+        ]);
+
+        $user = $this->owner($request);
+        // Sem a coluna carregada (modelo recém-criado), vale o padrão do banco: ligado.
+        $before = $user->usage_notices_enabled !== false;
+
+        $user->forceFill(['usage_notices_enabled' => $data['usage_notices']])->save();
+
+        if ($before !== (bool) $data['usage_notices']) {
+            AuditLogger::record('account.notification_preferences_changed', $user, [
+                'from' => ['usage_notices' => $before],
+                'to' => ['usage_notices' => (bool) $data['usage_notices']],
+            ]);
+        }
+
+        return response()->jsonSuccess(['usage_notices' => (bool) $user->usage_notices_enabled]);
+    }
+
+    /**
+     * @deprecated Desde a 1.1: o painel não usa mais. Use GET /dashboard/api-keys,
+     *             que mostra as origens de cada chave. Sai na próxima versão maior.
+     */
     public function getAllowedOrigins(Request $request): JsonResponse
     {
         try {
@@ -80,6 +111,10 @@ class ProfileController extends Controller
         }
     }
 
+    /**
+     * @deprecated Desde a 1.1: use PUT /dashboard/api-keys/{id}, que valida a
+     *             lista e vale para qualquer chave. Sai na próxima versão maior.
+     */
     public function updateAllowedOrigins(Request $request): JsonResponse
     {
         try {
@@ -101,6 +136,10 @@ class ProfileController extends Controller
         }
     }
 
+    /**
+     * @deprecated Desde a 1.1: use POST /dashboard/api-keys/{id}/regenerate.
+     *             Sai na próxima versão maior.
+     */
     public function regenerateKey(Request $request): JsonResponse
     {
         try {
@@ -113,6 +152,10 @@ class ProfileController extends Controller
             $newKey = bin2hex(random_bytes(64));
 
             $apiKey->update(['key' => $newKey]);
+
+            // Mesmo registro da tela API Keys: o horário da troca é o que separa,
+            // no log, o uso de uma chave vazada do uso legítimo depois dela.
+            AuditLogger::record('api_key.regenerated', auth()->user(), ['api_key_id' => $apiKey->getKey()]);
 
             return response()->jsonSuccess(['key' => $newKey]);
         } catch (\Exception $exception) {

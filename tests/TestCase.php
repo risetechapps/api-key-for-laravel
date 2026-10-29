@@ -39,8 +39,7 @@ abstract class TestCase extends BaseTestCase
             // nas migrations; FormRequest fornece a RulesRegistry e a migration da
             // tabela `form_requests`. Nenhum é auto-descoberto pelo Testbench.
             // Macros de schema do PostgreSQL (createExtensionIfNotExists, usado
-            // pela migration de authentications). Só fazem diferença quando a
-            // suíte roda com DB_CONNECTION=pgsql; em SQLite a migration pula.
+            // pela migration de authentications).
             PostgresqlEnhancedServiceProvider::class,
             CodeGenerateServiceProvider::class,
             FormRequestServiceProvider::class,
@@ -75,12 +74,12 @@ abstract class TestCase extends BaseTestCase
 
     protected function defineEnvironment($app): void
     {
-        // SQLite em memória por padrão: rápido e sem dependência externa. O CI
-        // roda a suíte também com DB_CONNECTION=pgsql, que é o banco de
-        // produção: as migrations têm caminhos por driver, e o do PostgreSQL só
-        // é exercitado assim.
+        // PostgreSQL, o banco de produção. A suíte rodava em SQLite em memória,
+        // que não exercita os caminhos por driver das migrations nem as
+        // consultas como o banco real as executa. Conexão pelas variáveis DB_*
+        // (padrões no phpunit.xml); ver "Testes" no README.
         $app['config']->set('database.default', 'testing');
-        $app['config']->set('database.connections.testing', env('DB_CONNECTION') === 'pgsql' ? [
+        $app['config']->set('database.connections.testing', [
             'driver' => 'pgsql',
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '5432'),
@@ -91,17 +90,7 @@ abstract class TestCase extends BaseTestCase
             'prefix' => '',
             'search_path' => 'public',
             'sslmode' => 'prefer',
-        ] : [
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-            'prefix' => '',
         ]);
-
-        // O pacote code-generate gera o `code` dos models, mas seu factory de
-        // driver não suporta sqlite (só mysql/pgsql/sqlsrv). Nos testes o code não
-        // é essencial (as factories já o definem, e as colunas são nullable), então
-        // desligamos o hard-fail: a criação segue sem code em vez de estourar.
-        $app['config']->set('code-generate.throw_on_error', false);
 
         // Filas rodam de forma síncrona nos testes. Em produção o pacote usa as
         // conexões 'redis'/'logs' (Horizon), que não existem no Testbench; sem

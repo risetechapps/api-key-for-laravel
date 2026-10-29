@@ -135,6 +135,13 @@ router.beforeEach(async (to, from, next) => {
         return next({ name: 'dashboard' });
     }
 
+    // Admin sem 2FA: as rotas de admin respondem 403 até ele ativar. Vai direto
+    // para a tela de segurança, antes de a página de admin abrir e disparar
+    // chamadas que só iam falhar (e sujar o console com erros não tratados).
+    if (to.meta.requiresAdmin && (authStore.user as { two_factor_required?: boolean } | null)?.two_factor_required) {
+        return next({ path: '/dashboard/security', query: { two_factor_required: '1' } });
+    }
+
     if (to.meta.ability && !authStore.can(String(to.meta.ability))) {
         return next({ name: 'admin.users' });
     }

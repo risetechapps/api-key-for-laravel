@@ -37,17 +37,18 @@ class ApiKeyOriginValidatorMiddleware
             return ApiResponse::apiError(ApiError::ORIGIN_NOT_ALLOWED);
         }
 
-        // Sem Origin, vale o IP do cliente — o de $request->ip(), que só segue
+        // O Origin só confere as entradas de domínio, e o IP só as de IP (ver
+        // ApiKey::allowsRequest). O IP é o de $request->ip(), que só segue
         // X-Forwarded-For / CF-Connecting-IP vindos de um proxy listado no
         // TrustProxies. Antes o IP vinha de Device::getClientPublicIp(), que lê
         // esses headers direto de $_SERVER: quem tinha a chave furava a lista de
         // IPs permitidos mandando `X-Forwarded-For: <ip permitido>`.
-        $requestOrigin = $request->header('Origin') ?? $request->ip();
+        $origin = $request->header('Origin');
 
-        if (! $apiKey->isOriginAllowed($requestOrigin)) {
+        if (! $apiKey->allowsRequest($origin, $request->ip())) {
             logglyWarning()->withContext([
                 'ip' => $request->ip(),
-                'origin' => $requestOrigin,
+                'origin' => $origin,
                 'api_key_id' => $apiKey->id,
                 'user_id' => auth()->id(),
                 'url' => $request->url(),

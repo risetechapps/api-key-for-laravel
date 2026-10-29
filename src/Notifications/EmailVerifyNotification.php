@@ -44,6 +44,6 @@ class EmailVerifyNotification extends VerifyEmail implements ShouldQueue
             ->line('Obrigado por se cadastrar. Para ativar sua conta, clique no botão abaixo:')
             ->action('Confirmar E-mail', $url)
             ->line('Se você não se cadastrou, ignore este e-mail.')
-            ->salutation('Atenciosamente, Equipe do Seu Site');
+            ->salutation('Atenciosamente, Equipe '.config('app.name'));
     }
 }

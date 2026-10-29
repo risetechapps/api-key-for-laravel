@@ -10,11 +10,13 @@ use RiseTechApps\ApiKey\Events\PlanUsageThresholdReached;
 use RiseTechApps\ApiKey\Events\RequestLimitReached;
 use RiseTechApps\ApiKey\Http\Response\ApiResponse;
 use RiseTechApps\ApiKey\Jobs\LogApiRequestJob;
+use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Notifications\OverageStartedNotification;
 use RiseTechApps\ApiKey\Services\OverageBillingService;
 use RiseTechApps\ApiKey\Services\WebhookDispatcher;
+use RiseTechApps\ApiKey\Support\Quota;
 use Symfony\Component\HttpFoundation\Response;
 
 class CheckRequestLimitMiddleware
@@ -86,7 +88,7 @@ class CheckRequestLimitMiddleware
             // UPDATE condicional não alterou nenhuma linha.
             $this->logRequest($request, $user, $activePlan, 429);
 
-            return ApiResponse::apiError(ApiError::REQUEST_LIMIT_REACHED);
+            return $this->withQuotaHeaders(ApiResponse::apiError(ApiError::REQUEST_LIMIT_REACHED), $activePlan);
         }
 
         try {
@@ -132,6 +134,19 @@ class CheckRequestLimitMiddleware
         // The counter was already incremented by reserveQuota(); only the log
         // entry is deferred.
         $this->logRequest($request, $user, $activePlan, $status);
+
+        return $this->withQuotaHeaders($response, $activePlan);
+    }
+
+    /**
+     * `X-Quota-*` na resposta, depois da reserva ou da devolução da vaga: o
+     * número já inclui (ou não) esta requisição, igual ao que o painel mostra.
+     */
+    private function withQuotaHeaders(Response $response, ?UserPlan $activePlan): Response
+    {
+        if ($activePlan && config('api-key.request_limit.headers', true)) {
+            $response->headers->add(Quota::headers($activePlan));
+        }
 
         return $response;
     }
@@ -221,7 +236,7 @@ class CheckRequestLimitMiddleware
      *
      * Com excedente (preço no plano e ligado pelo assinante) a cota não para
      * no limite: segue até o menor teto, do plano ou do assinante, e o que
-     * passar do limite é cobrado no fim do período (billing:charge-overage).
+     * passar do limite é cobrado no fim do período (api-key:billing-charge-overage).
      * Sem isso, o limite é o bloqueio, como sempre foi.
      */
     private function hardLimit(UserPlan $activePlan, ?Authentication $user, int $limit): int
@@ -311,12 +326,15 @@ class CheckRequestLimitMiddleware
         // O de $request->ip(): só segue X-Forwarded-For de proxy listado no
         // TrustProxies, o mesmo IP que a validação de origem confere.
         $ip = $request->ip();
+        // Chave que autenticou (AuthenticateApiKey / ApiKeyOriginValidatorMiddleware).
+        $apiKey = $request->attributes->get('api_key_model');
+        $apiKeyId = $apiKey instanceof ApiKey ? (string) $apiKey->getKey() : null;
 
         $queue = config('api-key.request_log.queue');
 
         if ($queue !== null && $queue !== '') {
             try {
-                $job = new LogApiRequestJob((string) $user->getKey(), $planId, $path, $method, $status, $ip)
+                $job = new LogApiRequestJob((string) $user->getKey(), $planId, $path, $method, $status, $ip, $apiKeyId)
                     ->onQueue($queue);
 
                 // Força a conexão (por padrão redis) para o Horizon processar o job.
@@ -341,8 +359,8 @@ class CheckRequestLimitMiddleware
             return;
         }
 
-        dispatch(function () use ($user, $status, $planId, $path, $method, $ip) {
-            $user->requestUsed($status, false, $planId, $path, $method, $ip);
+        dispatch(function () use ($user, $status, $planId, $path, $method, $ip, $apiKeyId) {
+            $user->requestUsed($status, false, $planId, $path, $method, $ip, $apiKeyId);
         })->afterResponse();
     }
 

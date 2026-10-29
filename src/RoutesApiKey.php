@@ -4,6 +4,7 @@ namespace RiseTechApps\ApiKey;
 
 use Illuminate\Support\Facades\Route;
 use RiseTechApps\ApiKey\Gateways\GatewayRegistry;
+use RiseTechApps\ApiKey\Http\Controllers\Api\UsageController;
 use RiseTechApps\ApiKey\Http\Controllers\Authentication\AccountSecurityController;
 use RiseTechApps\ApiKey\Http\Controllers\Authentication\AuthController;
 use RiseTechApps\ApiKey\Http\Controllers\Authentication\ProfileController;
@@ -39,6 +40,13 @@ class RoutesApiKey
         }
 
         Route::group($options, function () {
+
+            // API do cliente, autenticada pela API key. Sem `check.limit.plan`:
+            // consultar o uso não consome a cota (ver UsageController).
+            Route::middleware(['api.key', 'api.key.rate', 'check.active.plan', 'api.key.origin', 'language:en'])->group(function () {
+                Route::get('/usage', [UsageController::class, 'show'])->name('api-key.usage');
+                Route::get('/usage/daily', [UsageController::class, 'daily'])->name('api-key.usage.daily');
+            });
 
             // Tudo que é público e dispara e-mail ou confere senha entra no
             // limite: sem ele, /forgot-password e /email/resend serviam para
@@ -103,6 +111,7 @@ class RoutesApiKey
                 });
 
                 Route::get('/dashboard/api-keys', [ApiKeyController::class, 'index']);
+                Route::get('/dashboard/api-keys/revoked', [ApiKeyController::class, 'revoked']);
                 Route::post('/dashboard/api-keys', [ApiKeyController::class, 'store']);
                 Route::put('/dashboard/api-keys/{id}', [ApiKeyController::class, 'update'])->whereUuid('id');
                 Route::post('/dashboard/api-keys/{id}/regenerate', [ApiKeyController::class, 'regenerate'])->whereUuid('id');
@@ -121,6 +130,8 @@ class RoutesApiKey
                     Route::get('/dashboard/billing/overage', [OverageController::class, 'show']);
                     Route::get('/dashboard/billing/renewal', [OverageController::class, 'renewal']);
                     Route::put('/dashboard/billing/overage', [OverageController::class, 'update']);
+                    // Os avisos vão para o dono, então só ele escolhe.
+                    Route::put('/dashboard/profile/notifications', [ProfileController::class, 'updateNotifications']);
 
                     Route::get('/dashboard/receipts', [ReceiptController::class, 'index']);
                     Route::get('/dashboard/receipts/{id}', [ReceiptController::class, 'show'])->whereUuid('id');
@@ -144,6 +155,7 @@ class RoutesApiKey
                 // atribuir trabalho; liberada a atendentes.
                 Route::get('/dashboard/team/members', [TeamController::class, 'members'])->middleware('team.role:agent');
 
+                // Obsoletas desde a 1.1 (chave principal; o painel usa /dashboard/api-keys).
                 Route::get('/dashboard/profile/allowed', [ProfileController::class, 'getAllowedOrigins']);
                 Route::post('/dashboard/profile/allowed', [ProfileController::class, 'updateAllowedOrigins']);
                 Route::post('/dashboard/profile/regenerate-key', [ProfileController::class, 'regenerateKey']);

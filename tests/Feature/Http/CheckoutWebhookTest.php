@@ -35,8 +35,10 @@ afterEach(function () {
  * Assina a notificação como o Mercado Pago assina: HMAC-SHA256 sobre
  * `id:<data_id>;request-id:<x-request-id>;ts:<ts>;`.
  */
-function signedHeaders(string $dataId, string $requestId = 'req-1', string $ts = '1700000000'): array
+function signedHeaders(string $dataId, string $requestId = 'req-1', ?string $ts = null): array
 {
+    // Agora, por padrão: a tolerância de replay vem ligada (300s).
+    $ts ??= (string) time();
     $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$requestId};ts:{$ts};", WEBHOOK_SECRET);
 
     return [
@@ -361,10 +363,25 @@ describe('Notificacao que nao vira pagamento', function () {
 });
 
 describe('Validade temporal da assinatura', function () {
-    it('aceita ts antigo com a tolerancia desligada, que e o padrao', function () {
+    it('recusa ts antigo com a tolerancia padrao', function () {
+        $this->postJson(
+            '/api/v1/dashboard/checkout/webhook',
+            ['type' => 'payment', 'data' => ['id' => '1']],
+            signedHeaders('1', 'req-1', '1700000000')
+        )->assertStatus(400);
+
+        expect($this->gateway->requests)->toBeEmpty();
+    });
+
+    it('aceita ts antigo com a tolerancia desligada', function () {
+        config(['api-key.mercadopago.webhook_tolerance_seconds' => 0]);
         $this->gateway->pushResponse(['id' => 1, 'status' => 'pending']);
 
-        notifyPayment('1')->assertStatus(200);
+        $this->postJson(
+            '/api/v1/dashboard/checkout/webhook',
+            ['type' => 'payment', 'data' => ['id' => '1']],
+            signedHeaders('1', 'req-1', '1700000000')
+        )->assertStatus(200);
     });
 
     it('recusa ts fora da tolerancia mesmo com HMAC valido', function () {

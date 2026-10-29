@@ -1,6 +1,6 @@
 <template>
     <span :class="['inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white overflow-hidden ring-2 ring-white dark:ring-slate-900', sizes[size]]" :style="src ? undefined : { background: gradient }">
-        <img v-if="src" :src="src" :alt="name" class="h-full w-full object-cover" />
+        <img v-if="src" :src="src" :alt="name ?? undefined" class="h-full w-full object-cover" />
         <span v-else>{{ initials }}</span>
     </span>
 </template>

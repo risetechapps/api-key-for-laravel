@@ -4,6 +4,7 @@ namespace RiseTechApps\ApiKey\Listeners;
 
 use Illuminate\Events\Dispatcher;
 use Illuminate\Support\Facades\Cache;
+use RiseTechApps\ApiKey\Events\ApiKeyExpiring;
 use RiseTechApps\ApiKey\Events\PaymentRejected;
 use RiseTechApps\ApiKey\Events\PlanCancelled;
 use RiseTechApps\ApiKey\Events\PlanChanged;
@@ -31,6 +32,7 @@ class DispatchAccountWebhooks
             PaymentRejected::class => 'onPaymentRejected',
             PlanUsageThresholdReached::class => 'onThreshold',
             RequestLimitReached::class => 'onLimit',
+            ApiKeyExpiring::class => 'onApiKeyExpiring',
         ];
     }
 
@@ -106,6 +108,17 @@ class DispatchAccountWebhooks
                 'requests_limit' => $e->requestsLimit,
             ]);
         }
+    }
+
+    /** O segredo nunca vai no webhook: só o que identifica a chave. */
+    public function onApiKeyExpiring(ApiKeyExpiring $e): void
+    {
+        WebhookDispatcher::dispatch($e->user, 'api_key.expiring', [
+            'api_key_id' => $e->apiKey->getKey(),
+            'name' => $e->apiKey->name,
+            'expires_at' => $e->apiKey->expires_at?->toIso8601String(),
+            'days_left' => $e->daysLeft,
+        ]);
     }
 
     private function once(string $kind, UserPlan $userPlan): bool

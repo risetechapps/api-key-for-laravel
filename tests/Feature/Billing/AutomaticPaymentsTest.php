@@ -172,7 +172,7 @@ describe('Renewal with automatic payments', function () {
         expect(PendingPayment::where('payment_id', 'ORD01TEST')->exists())->toBeTrue()
             ->and(UserPlan::where('payment_id', 'ORD01TEST')->exists())->toBeFalse();
 
-        $ts = '1700000000';
+        $ts = (string) time();
         $hash = hash_hmac('sha256', 'id:ord01test;request-id:req-1;ts:'.$ts.';', 'automatic-secret');
 
         $this->withHeaders(['x-signature' => "ts={$ts},v1={$hash}", 'x-request-id' => 'req-1'])
@@ -220,7 +220,7 @@ describe('Overage with automatic payments', function () {
         $userPlan = apSubscription(['end_date' => now()->subDay(), 'requests_used' => 130]);
         Http::fake(['*/v1/orders' => Http::response(apOrder('processed', "ov-{$userPlan->getKey()}", 3.0, id: 'ORD01OVER'), 201)]);
 
-        $this->artisan('billing:charge-overage')->assertSuccessful();
+        $this->artisan('api-key:billing-charge-overage')->assertSuccessful();
 
         $userPlan->refresh();
         expect($userPlan->overage_payment_id)->toBe('ORD01OVER')
@@ -322,7 +322,7 @@ describe('Payment profile', function () {
         $card->update(['mp_payment_profile_status' => 'PENDING']);
         Http::fake(['*/v1/customers/cust-1/payment-profiles/prof-1' => Http::response(['id' => 'prof-1', 'status' => 'READY'])]);
 
-        $ts = '1700000000';
+        $ts = (string) time();
         $hash = hash_hmac('sha256', 'id:prof-1;request-id:req-2;ts:'.$ts.';', 'automatic-secret');
 
         $this->withHeaders(['x-signature' => "ts={$ts},v1={$hash}", 'x-request-id' => 'req-2'])

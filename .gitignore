@@ -1,6 +1,11 @@
 node_modules/
 .env
 /vendor/
+
+# Pacote, não aplicação: quem instala resolve as dependências pelo próprio
+# composer.json, e o CI roda `composer update` (prefer-lowest e prefer-stable).
+# Um lock versionado aqui não é lido por ninguém e só envelhece.
+/composer.lock
 .phpunit.cache/
 /.phpunit.result.cache
 

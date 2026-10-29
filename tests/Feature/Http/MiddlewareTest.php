@@ -209,6 +209,45 @@ describe('Api Key Origin Validator Middleware', function () {
 
         $response->assertStatus(403);
     });
+
+    it('does not let an Origin header carrying an allowed IP through the IP list', function () {
+        // A brecha: a lista só tem o IP do servidor do cliente, e quem tem a
+        // chave manda `Origin: http://<esse IP>` de qualquer lugar.
+        $apiKey = ApiKey::factory()->create([
+            'authentication_id' => $this->user->id,
+            'active' => true,
+            'allowed_origins' => ['203.0.113.5'],
+        ]);
+        UserPlan::factory()->create(['authentication_id' => $this->user->id, 'plan_id' => $this->plan->id, 'active' => true, 'end_date' => now()->addDay()]);
+
+        foreach (['http://203.0.113.5', '203.0.113.5', 'https://203.0.113.5:8443'] as $origin) {
+            $this->withHeaders(['X-API-KEY' => $apiKey->plainKey, 'Origin' => $origin])
+                ->getJson('/api/v1/test-endpoint')
+                ->assertStatus(403)
+                ->assertJsonPath('error_code', 'ORIGIN_NOT_ALLOWED');
+        }
+    });
+
+    it('checks the connection IP against IP entries, whatever the Origin header says', function () {
+        $apiKey = ApiKey::factory()->create([
+            'authentication_id' => $this->user->id,
+            'active' => true,
+            'allowed_origins' => ['203.0.113.0/24'],
+        ]);
+        UserPlan::factory()->create(['authentication_id' => $this->user->id, 'plan_id' => $this->plan->id, 'active' => true, 'end_date' => now()->addDay()]);
+
+        // Servidor do cliente que manda um Origin qualquer: antes era recusado,
+        // porque o Origin tomava o lugar do IP na conferência.
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])
+            ->withHeaders(['X-API-KEY' => $apiKey->plainKey, 'Origin' => 'https://dashboard.example.com'])
+            ->getJson('/api/v1/test-endpoint')
+            ->assertOk();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])
+            ->withHeaders(['X-API-KEY' => $apiKey->plainKey])
+            ->getJson('/api/v1/test-endpoint')
+            ->assertStatus(403);
+    });
 });
 
 describe('Internal token bypass', function () {

@@ -6,12 +6,15 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
+use RiseTechApps\ApiKey\Notifications\Concerns\InformationalNotice;
 
 /**
  * A conta passou do limite do plano e as requisições agora são excedente.
  */
 class OverageStartedNotification extends Notification
 {
+    use InformationalNotice;
+
     public function __construct(
         public readonly Plan $plan,
         public readonly UserPlan $userPlan,

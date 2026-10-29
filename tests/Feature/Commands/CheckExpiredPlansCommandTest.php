@@ -101,16 +101,55 @@ describe('Check Expired Plans Command', function () {
             ->assertSuccessful();
     });
 
-    it('grace-only option notifies about plans entering grace period', function () {
-        // Create plan that expires today
-        UserPlan::factory()->create([
+    it('grace-only notifies a plan that expired in the last day and was not renewed', function () {
+        $userPlan = UserPlan::factory()->create([
             'authentication_id' => $this->user->id,
             'plan_id' => $this->plan->id,
             'active' => true,
-            'end_date' => now()->toDateString(),
+            'end_date' => now()->subHours(2),
         ]);
 
         $this->artisan(CheckExpiredPlans::class, ['--grace-only' => true])
+            ->expectsOutput('Notified 1 plan(s) entering grace period.')
             ->assertSuccessful();
+
+        Event::assertDispatched(PlanGracePeriodStarted::class, function ($e) use ($userPlan) {
+            // Fim da carência contado do vencimento, não da hora em que o
+            // comando rodou.
+            return $e->userPlan->is($userPlan)
+                && $e->gracePeriodDays === 3
+                && $e->gracePeriodEndDate->getTimestamp() === $userPlan->fresh()->end_date->addDays(3)->getTimestamp();
+        });
+    });
+
+    it('grace-only leaves out plans that have not expired yet, expired long ago or were renewed', function () {
+        // Vence hoje à tarde: a renovação ainda pode acontecer.
+        UserPlan::factory()->create(['authentication_id' => $this->user->id, 'plan_id' => $this->plan->id, 'active' => true, 'end_date' => now()->addHours(6)]);
+        // Venceu há dias: já foi avisado na época.
+        UserPlan::factory()->create(['authentication_id' => $this->user->id, 'plan_id' => $this->plan->id, 'active' => true, 'end_date' => now()->subDays(2)]);
+        // Renovada: a renovação desativa a assinatura antiga.
+        UserPlan::factory()->create(['authentication_id' => $this->user->id, 'plan_id' => $this->plan->id, 'active' => false, 'end_date' => now()->subHours(2)]);
+
+        $this->artisan(CheckExpiredPlans::class, ['--grace-only' => true])->assertSuccessful();
+
+        Event::assertNotDispatched(PlanGracePeriodStarted::class);
+    });
+
+    it('grace-only notifies each plan once, even if run again', function () {
+        UserPlan::factory()->create(['authentication_id' => $this->user->id, 'plan_id' => $this->plan->id, 'active' => true, 'end_date' => now()->subHour()]);
+
+        $this->artisan(CheckExpiredPlans::class, ['--grace-only' => true]);
+        $this->artisan(CheckExpiredPlans::class, ['--grace-only' => true]);
+
+        Event::assertDispatchedTimes(PlanGracePeriodStarted::class, 1);
+    });
+
+    it('grace-only does nothing when there is no grace period', function () {
+        config(['api-key.grace_period_days' => 0]);
+        UserPlan::factory()->create(['authentication_id' => $this->user->id, 'plan_id' => $this->plan->id, 'active' => true, 'end_date' => now()->subHour()]);
+
+        $this->artisan(CheckExpiredPlans::class, ['--grace-only' => true])->assertSuccessful();
+
+        Event::assertNotDispatched(PlanGracePeriodStarted::class);
     });
 });

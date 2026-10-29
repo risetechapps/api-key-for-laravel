@@ -3,13 +3,19 @@
 namespace RiseTechApps\ApiKey\Console\Commands\Billing;
 
 use Illuminate\Console\Command;
+use RiseTechApps\ApiKey\Console\Concerns\WarnsDeprecatedAlias;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Services\OverageBillingService;
 use Throwable;
 
 class ChargeOverageCommand extends Command
 {
-    protected $signature = 'billing:charge-overage {--dry-run : List what would be charged without charging}';
+    use WarnsDeprecatedAlias;
+
+    protected $signature = 'api-key:billing-charge-overage {--dry-run : List what would be charged without charging}';
+
+    /** Nome até a 1.0; sai na próxima versão maior. */
+    protected $aliases = ['billing:charge-overage'];
 
     protected $description = 'Charge requests over the plan limit for periods that have ended';
 
@@ -20,6 +26,8 @@ class ChargeOverageCommand extends Command
      */
     public function handle(OverageBillingService $service): int
     {
+        $this->warnIfDeprecatedAlias();
+
         $count = 0;
 
         UserPlan::where('end_date', '<', now())

@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
+use RiseTechApps\ApiKey\Models\AuditLog\AuditLog;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
 uses(RefreshDatabase::class);
@@ -171,4 +172,13 @@ describe('Regenerating the API key', function () {
     it('reports when the user has no key to regenerate', function () {
         $this->postJson('/api/v1/dashboard/profile/regenerate-key')->assertStatus(410);
     });
+});
+
+it('regenerar pela rota antiga do perfil fica na auditoria, como na tela API Keys', function () {
+    $key = ApiKey::factory()->create(['authentication_id' => $this->user->getKey()]);
+
+    $this->postJson('/api/v1/dashboard/profile/regenerate-key')->assertOk();
+
+    $log = AuditLog::where('action', 'api_key.regenerated')->sole();
+    expect($log->context)->toBe(['api_key_id' => $key->getKey()]);
 });

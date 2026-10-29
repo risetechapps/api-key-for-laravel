@@ -17,10 +17,12 @@ use RiseTechApps\ApiKey\Console\Commands\Billing\ProcessRenewalsCommand;
 use RiseTechApps\ApiKey\Console\Commands\CheckExpiredPlans;
 use RiseTechApps\ApiKey\Console\Commands\CheckInstallationCommand;
 use RiseTechApps\ApiKey\Console\Commands\MakeAdminCommand;
+use RiseTechApps\ApiKey\Console\Commands\NotifyExpiringApiKeysCommand;
 use RiseTechApps\ApiKey\Console\Commands\PruneRequestLogsCommand;
 use RiseTechApps\ApiKey\Console\Commands\ReconcilePendingPaymentsCommand;
 use RiseTechApps\ApiKey\Console\Commands\RetryValidationRefundsCommand;
 use RiseTechApps\ApiKey\Console\Commands\RotateApiKeysCommand;
+use RiseTechApps\ApiKey\Events\ApiKeyExpiring;
 use RiseTechApps\ApiKey\Events\PaymentRejected;
 use RiseTechApps\ApiKey\Events\PlanCancelled;
 use RiseTechApps\ApiKey\Events\PlanChanged;
@@ -41,6 +43,7 @@ use RiseTechApps\ApiKey\Http\Middlewares\EnsureUserIsEnabled;
 use RiseTechApps\ApiKey\Http\Middlewares\LanguageMiddleware;
 use RiseTechApps\ApiKey\Http\Middlewares\TeamRoute;
 use RiseTechApps\ApiKey\Listeners\DispatchAccountWebhooks;
+use RiseTechApps\ApiKey\Listeners\SendApiKeyExpiringNotification;
 use RiseTechApps\ApiKey\Listeners\SendGracePeriodNotification;
 use RiseTechApps\ApiKey\Listeners\SendPaymentRejectedNotification;
 use RiseTechApps\ApiKey\Listeners\SendPlanActivatedNotification;
@@ -159,18 +162,47 @@ class ApiKeyServiceProvider extends ServiceProvider
         });
 
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
-            $schedule->command('billing:process-renewals')
+            $schedule->command('api-key:billing-process-renewals')
                 ->dailyAt('08:00')
                 ->withoutOverlapping()
                 ->onOneServer()
                 ->appendOutputTo(storage_path('logs/renewals.log'));
 
             // Uma hora depois das renovações, com o período anterior já fechado.
-            $schedule->command('billing:charge-overage')
+            $schedule->command('api-key:billing-charge-overage')
                 ->dailyAt('09:00')
                 ->withoutOverlapping()
                 ->onOneServer()
                 ->appendOutputTo(storage_path('logs/overage.log'));
+
+            // Aviso de carência depois das renovações (08:00) e do excedente
+            // (09:00): o que venceu nas últimas 24h e segue ativo não foi
+            // renovado. Sem isto o evento PlanGracePeriodStarted nunca saía.
+            $schedule->command('api-key:check-expired-plans', ['--grace-only'])
+                ->dailyAt('10:00')
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->appendOutputTo(storage_path('logs/expired-plans.log'));
+
+            // Encerramento ao fim da carência, de hora em hora. Antes só o
+            // middleware encerrava, e só quando o cliente fazia uma
+            // requisição: quem parou de chamar a API nunca recebia o aviso de
+            // expiração e ficava com as chaves ativas.
+            $schedule->command('api-key:check-expired-plans')
+                ->hourly()
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->appendOutputTo(storage_path('logs/expired-plans.log'));
+
+            if ((int) config('api-key.api_keys.expiry_warning_days', 7) > 0) {
+                // Antes do expediente: o aviso chega com tempo de trocar a
+                // chave no mesmo dia.
+                $schedule->command('api-key:notify-expiring')
+                    ->dailyAt('07:00')
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->appendOutputTo(storage_path('logs/expiring-keys.log'));
+            }
 
             if (config('api-key.request_log.prune_enabled', true)) {
                 // Off-peak: the batched delete competes with the writes that the
@@ -256,6 +288,7 @@ class ApiKeyServiceProvider extends ServiceProvider
                 CheckExpiredPlans::class,
                 CheckInstallationCommand::class,
                 MakeAdminCommand::class,
+                NotifyExpiringApiKeysCommand::class,
                 ProcessRenewalsCommand::class,
                 ChargeOverageCommand::class,
                 PruneRequestLogsCommand::class,
@@ -338,6 +371,7 @@ class ApiKeyServiceProvider extends ServiceProvider
     protected function registerEventListeners(): void
     {
         Event::listen(PlanGracePeriodStarted::class, SendGracePeriodNotification::class);
+        Event::listen(ApiKeyExpiring::class, SendApiKeyExpiringNotification::class);
         Event::listen(PlanExpired::class, SendPlanExpiredNotification::class);
         Event::listen(PlanCancelled::class, SendPlanCancelledNotification::class);
         Event::listen(PlanRefunded::class, SendPlanRefundedNotification::class);

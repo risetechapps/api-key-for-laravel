@@ -47,7 +47,9 @@ class DeliverWebhookJob implements ShouldQueue
         $delivery->increment('attempts');
 
         // Tentar de novo não muda o destino: falha na hora, sem novas tentativas.
-        if (! WebhookUrlGuard::isAllowed($endpoint->url)) {
+        $addresses = WebhookUrlGuard::allowedAddresses($endpoint->url);
+
+        if ($addresses === null) {
             $delivery->update(['error' => 'URL not allowed (private network or invalid scheme)']);
             $this->fail(new RuntimeException('Webhook URL not allowed'));
 
@@ -58,8 +60,14 @@ class DeliverWebhookJob implements ShouldQueue
         $timestamp = (string) time();
         $signature = hash_hmac('sha256', $timestamp.'.'.$body, $endpoint->secret);
 
+        // Conecta nos IPs que o guard conferiu, sem nova resolução de DNS: entre
+        // a checagem e a conexão o nome poderia passar a apontar para a rede
+        // interna (DNS rebinding).
+        $resolve = WebhookUrlGuard::curlResolve($endpoint->url, $addresses);
+
         try {
             $response = Http::withoutRedirecting()
+                ->when($resolve !== [], fn ($http) => $http->withOptions(['curl' => [CURLOPT_RESOLVE => $resolve]]))
                 ->timeout((int) config('api-key.webhooks.timeout', 10))
                 ->withHeaders([
                     'Content-Type' => 'application/json',

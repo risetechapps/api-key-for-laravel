@@ -14,9 +14,9 @@ class ApiKeyFactory extends Factory
     {
         return [
             'authentication_id' => Authentication::factory(),
-            // codeGenerate() cria a coluna com 4 caracteres; o PostgreSQL recusa
-            // um UUID ali (o SQLite ignora o tamanho e aceitava).
-            'code' => strtoupper($this->faker->unique()->bothify('****')),
+            // Sem `code`: o code-generate gera o sequencial, como em produção.
+            // Um valor aleatório como "3E45" quebrava a sequência dele (ver
+            // AuthenticationFactory).
             // Plain key, exactly as production passes it: the model's saving hook
             // is what hashes it and derives the lookup hash. Pre-hashing here meant
             // the value was bcrypted twice and plainKey held a hash, not a key.

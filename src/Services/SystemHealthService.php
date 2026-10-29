@@ -49,11 +49,23 @@ class SystemHealthService
      * @var array<string, array{label: string, every: int}>
      */
     public const COMMANDS = [
-        'billing:process-renewals' => ['label' => 'Renovações', 'every' => 1440],
-        'billing:charge-overage' => ['label' => 'Cobrança de excedente', 'every' => 1440],
+        'api-key:billing-process-renewals' => ['label' => 'Renovações', 'every' => 1440],
+        'api-key:billing-charge-overage' => ['label' => 'Cobrança de excedente', 'every' => 1440],
         'api-key:reconcile-payments' => ['label' => 'Reconciliação de pagamentos', 'every' => 15],
         'api-key:retry-validation-refunds' => ['label' => 'Estornos de validação', 'every' => 1440],
         'api-key:prune-logs' => ['label' => 'Limpeza do log de requisições', 'every' => 1440],
+    ];
+
+    /**
+     * Nomes antigos (até a 1.0) => atuais. Rodar pelo nome antigo conta para o
+     * atual, e o registro gravado com o nome antigo vale até a primeira
+     * execução com o nome novo.
+     *
+     * @var array<string, string>
+     */
+    public const RENAMED_COMMANDS = [
+        'billing:process-renewals' => 'api-key:billing-process-renewals',
+        'billing:charge-overage' => 'api-key:billing-charge-overage',
     ];
 
     public static function recordWebhook(string $gateway): void
@@ -67,6 +79,8 @@ class SystemHealthService
 
     public static function recordCommand(string $command, int $exitCode): void
     {
+        $command = self::RENAMED_COMMANDS[$command] ?? $command;
+
         if (! isset(self::COMMANDS[$command])) {
             return;
         }
@@ -147,6 +161,10 @@ class SystemHealthService
 
         foreach (self::COMMANDS as $command => $meta) {
             $last = $this->cached("api-key:health:command:{$command}");
+
+            if (! is_array($last) && ($legacy = array_search($command, self::RENAMED_COMMANDS, true)) !== false) {
+                $last = $this->cached("api-key:health:command:{$legacy}");
+            }
 
             if (! is_array($last) || empty($last['at'])) {
                 $checks[] = $this->check('Rotinas', $meta['label'], 'warning', "Sem registro de execução de {$command}. Confira se o agendador (schedule:run) está no cron.");

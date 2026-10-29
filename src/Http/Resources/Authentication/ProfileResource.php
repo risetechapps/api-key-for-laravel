@@ -63,6 +63,12 @@ class ProfileResource extends JsonResource
                 'email_verified' => ! is_null($this->email_verified_at),
                 'email_verified_at' => $this->email_verified_at?->toIso8601String(),
             ],
+
+            // Avisos informativos por e-mail (os de cobrança, segurança e
+            // expiração não são opcionais).
+            'notifications' => [
+                'usage_notices' => $this->usage_notices_enabled !== false,
+            ],
             'role' => $this->role ?? 'user',
 
             // Relationships

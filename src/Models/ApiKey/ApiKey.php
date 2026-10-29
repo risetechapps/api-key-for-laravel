@@ -14,6 +14,7 @@ use RiseTechApps\ApiKey\Events\ApiKeyStatusChanged;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\CodeGenerate\Traits\HasCodeGenerate;
 use RiseTechApps\ToUpper\Traits\HasToUpper;
+use Symfony\Component\HttpFoundation\IpUtils;
 
 /**
  * @property string $id
@@ -322,10 +323,22 @@ class ApiKey extends Model
     }
 
     /**
-     * Check if a given origin is allowed for this API key.
-     * Uses caching to improve performance for repeated checks.
+     * Se a requisição passa pela lista `allowed_origins` da chave.
+     *
+     * A lista mistura dois tipos de entrada, e cada um só é conferido contra a
+     * sua própria fonte:
+     *   - domínio ("app.example.com", "*.example.com", "app.example.*"):
+     *     contra o header `Origin`, que só o navegador garante;
+     *   - IP, CIDR ou prefixo ("203.0.113.5", "10.0.0.0/8", "192.168.*"):
+     *     contra o IP da conexão (`$request->ip()`, que só segue
+     *     X-Forwarded-For de proxy listado no TrustProxies).
+     *
+     * Passa se qualquer um dos dois casar. Antes as duas fontes eram
+     * comparadas contra a lista inteira: `Origin: http://203.0.113.5` casava
+     * a entrada de IP, e quem tinha a chave furava a lista de IPs de qualquer
+     * lugar só mandando esse header. Lista vazia libera tudo.
      */
-    public function isOriginAllowed(string $origin): bool
+    public function allowsRequest(?string $origin, ?string $ip): bool
     {
         $allowed = $this->allowed_origins;
 
@@ -333,33 +346,94 @@ class ApiKey extends Model
             return true;
         }
 
-        $normalizedOrigin = strtolower(parse_url($origin, PHP_URL_HOST) ?? $origin);
+        $ipEntries = array_values(array_filter($allowed, fn ($entry) => self::isIpEntry((string) $entry)));
+        $hostEntries = array_values(array_diff($allowed, $ipEntries));
+
+        if ($origin !== null && $origin !== '' && $hostEntries !== [] && $this->hostMatches($origin, $hostEntries)) {
+            return true;
+        }
+
+        return $ip !== null && $ip !== '' && $ipEntries !== [] && self::ipMatches($ip, $ipEntries);
+    }
+
+    /**
+     * Entrada de IP: endereço, CIDR ou prefixo IPv4 com curinga ("192.168.*").
+     */
+    public static function isIpEntry(string $entry): bool
+    {
+        $entry = trim($entry);
+
+        if (filter_var($entry, FILTER_VALIDATE_IP)) {
+            return true;
+        }
+
+        if (str_contains($entry, '/')) {
+            [$address, $bits] = explode('/', $entry, 2);
+
+            return filter_var($address, FILTER_VALIDATE_IP) && ctype_digit($bits);
+        }
+
+        return (bool) preg_match('/^[0-9]{1,3}(\.[0-9]{1,3}){0,3}\.\*$/', $entry);
+    }
+
+    /** @param  list<string>  $entries */
+    private static function ipMatches(string $ip, array $entries): bool
+    {
+        foreach ($entries as $entry) {
+            $entry = trim($entry);
+
+            if (str_ends_with($entry, '*')) {
+                if (self::matchesTrailingWildcard($ip, rtrim($entry, '*'))) {
+                    return true;
+                }
+
+                continue;
+            }
+
+            // Exato e CIDR, v4 e v6 ("::1" e "0:0:0:0:0:0:0:1" são o mesmo).
+            if (IpUtils::checkIp($ip, $entry)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Domínio do header Origin contra as entradas de domínio. Um Origin cujo
+     * host é um IP nunca casa: IP só é conferido pela conexão.
+     *
+     * @param  list<string>  $entries
+     */
+    private function hostMatches(string $origin, array $entries): bool
+    {
+        $host = strtolower(parse_url($origin, PHP_URL_HOST) ?? $origin);
+
+        if (filter_var(trim($host, '[]'), FILTER_VALIDATE_IP)) {
+            return false;
+        }
 
         $version = Cache::get('api_key_origin_version:'.$this->id, 1);
-        $cacheKey = 'api_key_origin:'.$this->id.':v'.$version.':'.md5($normalizedOrigin);
+        $cacheKey = 'api_key_origin_host:'.$this->id.':v'.$version.':'.md5($host);
 
-        $cacheTtl = config('api-key.cache_ttl.origin', 60);
+        return Cache::remember($cacheKey, config('api-key.cache_ttl.origin', 60), function () use ($host, $entries) {
+            foreach ($entries as $entry) {
+                $entry = strtolower(trim($entry));
 
-        return Cache::remember($cacheKey, $cacheTtl, function () use ($normalizedOrigin, $allowed) {
-            foreach ($allowed as $allowedOrigin) {
-                $allowedOrigin = strtolower($allowedOrigin);
-
-                if ($allowedOrigin === $normalizedOrigin) {
+                if ($entry === $host) {
                     return true;
                 }
 
                 // Curinga à direita: "app.example.*" casa "app.example.com".
-                if (str_ends_with($allowedOrigin, '*')
-                    && self::matchesTrailingWildcard($normalizedOrigin, rtrim($allowedOrigin, '*'))) {
+                if (str_ends_with($entry, '*') && self::matchesTrailingWildcard($host, rtrim($entry, '*'))) {
                     return true;
                 }
 
-                // Curinga de subdomínio "*.example.com": casa qualquer subdomínio
-                // (sub.example.com) e o domínio base (example.com).
-                if (str_starts_with($allowedOrigin, '*.')) {
-                    $base = substr($allowedOrigin, 2);
+                // "*.example.com": qualquer subdomínio e o domínio base.
+                if (str_starts_with($entry, '*.')) {
+                    $base = substr($entry, 2);
 
-                    if ($normalizedOrigin === $base || str_ends_with($normalizedOrigin, '.'.$base)) {
+                    if ($host === $base || str_ends_with($host, '.'.$base)) {
                         return true;
                     }
                 }

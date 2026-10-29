@@ -3,16 +3,22 @@
 namespace RiseTechApps\ApiKey\Console\Commands\Billing;
 
 use Illuminate\Console\Command;
+use RiseTechApps\ApiKey\Console\Concerns\WarnsDeprecatedAlias;
 use RiseTechApps\ApiKey\Jobs\ProcessPlanRenewalJob;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 
 class ProcessRenewalsCommand extends Command
 {
-    protected $signature = 'billing:process-renewals
+    use WarnsDeprecatedAlias;
+
+    protected $signature = 'api-key:billing-process-renewals
                             {--dry-run : List due plans without charging}
                             {--sync : Charge inline instead of dispatching to the queue}';
 
     protected $description = 'Process automatic plan renewals for subscriptions expiring today';
+
+    /** Nome até a 1.0; sai na próxima versão maior. */
+    protected $aliases = ['billing:process-renewals'];
 
     /**
      * Dispatches one job per due subscription.
@@ -25,6 +31,8 @@ class ProcessRenewalsCommand extends Command
      */
     public function handle(): int
     {
+        $this->warnIfDeprecatedAlias();
+
         $queue = config('api-key.billing.queue');
         $dryRun = $this->option('dry-run');
         $sync = $this->option('sync');

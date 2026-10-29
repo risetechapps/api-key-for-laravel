@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use RiseTechApps\ApiKey\Facades\FeatureRegistry;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
+use RiseTechApps\ApiKey\Models\AuditLog\AuditLog;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Services\AuditLogger;
 
@@ -26,6 +27,33 @@ class ApiKeyController extends Controller
         $keys = $this->owner($request)->apiKeys()->get()->map(fn (ApiKey $key) => $this->present($key));
 
         return response()->jsonSuccess($keys->values()->all());
+    }
+
+    /**
+     * Chaves já excluídas, para filtrar o histórico de requisições por elas
+     * (ex.: investigar o que uma chave vazada fez). Vem da auditoria, que
+     * guarda id e nome na exclusão: o log não tem o nome e varrê-lo atrás dos
+     * ids seria caro.
+     */
+    public function revoked(Request $request): JsonResponse
+    {
+        $user = $this->owner($request);
+
+        $keys = AuditLog::where('subject_id', $user->getKey())
+            ->where('action', 'api_key.revoked')
+            ->latest('created_at')
+            ->limit(50)
+            ->get()
+            ->map(fn (AuditLog $log) => [
+                'id' => $log->context['api_key_id'] ?? null,
+                'name' => $log->context['name'] ?? null,
+                'revoked_at' => $log->created_at?->toIso8601String(),
+            ])
+            ->filter(fn (array $key) => is_string($key['id']))
+            ->unique('id')
+            ->values();
+
+        return response()->jsonSuccess($keys->all());
     }
 
     public function store(Request $request): JsonResponse

@@ -13,9 +13,9 @@ class PlanFactory extends Factory
     public function definition(): array
     {
         return [
-            // codeGenerate() cria a coluna com 4 caracteres; o PostgreSQL recusa
-            // um UUID ali (o SQLite ignora o tamanho e aceitava).
-            'code' => strtoupper($this->faker->unique()->bothify('****')),
+            // Sem `code`: o code-generate gera o sequencial, como em produção.
+            // Um valor aleatório como "3E45" quebrava a sequência dele (ver
+            // AuthenticationFactory).
             'name' => $this->faker->words(2, true),
             'description' => $this->faker->sentence(),
             'request_limit' => $this->faker->numberBetween(1000, 100000),

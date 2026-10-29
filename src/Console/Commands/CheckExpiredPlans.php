@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use RiseTechApps\ApiKey\Events\PlanExpired;
 use RiseTechApps\ApiKey\Events\PlanGracePeriodStarted;
@@ -19,15 +20,35 @@ class CheckExpiredPlans extends Command
         $graceDays = Config::get('api-key.grace_period_days', 3);
 
         if ($this->option('grace-only')) {
-            // Only notify about plans entering grace period today.
-            // Chunked, and with a sargable range instead of whereDate(), which
-            // wraps the column in a function and defeats the index.
+            if ($graceDays <= 0) {
+                $this->info('Grace period is disabled (grace_period_days = 0); nothing to notify.');
+
+                return self::SUCCESS;
+            }
+
+            // Venceu nas últimas 24h e continua ativa: não foi renovada. A
+            // renovação (08:00) substitui a assinatura por uma nova e desativa
+            // esta, então rodar depois dela é o que separa "renovou" de
+            // "entrou em carência". Antes a janela era o dia de hoje, inteiro:
+            // avisava de manhã quem só vencia à tarde e ainda ia ser renovado.
+            // Range sargable e em lotes, como antes.
+            $notified = 0;
+
             UserPlan::where('active', true)
-                ->whereBetween('end_date', [now()->startOfDay(), now()->endOfDay()])
+                ->where('end_date', '>=', now()->subDay())
+                ->where('end_date', '<', now())
                 ->with(['authentication', 'plan'])
-                ->chunkById(200, function ($plans) use ($graceDays) {
+                ->chunkById(200, function ($plans) use ($graceDays, &$notified) {
                     foreach ($plans as $userPlan) {
                         if (! $userPlan->authentication || ! $userPlan->plan) {
+                            continue;
+                        }
+
+                        // Uma vez por assinatura: o agendamento é diário, mas
+                        // uma execução manual a mais não repete o e-mail.
+                        $graceEnds = $userPlan->end_date->copy()->addDays($graceDays);
+
+                        if (! Cache::add('api-key:grace-notified:'.$userPlan->getKey(), true, $graceEnds->copy()->addDay())) {
                             continue;
                         }
 
@@ -36,14 +57,18 @@ class CheckExpiredPlans extends Command
                             $userPlan,
                             $userPlan->plan,
                             $graceDays,
-                            now()->addDays($graceDays)
+                            $graceEnds
                         );
+
+                        $notified++;
 
                         $this->info(
                             "Plan grace period started: {$userPlan->plan->name} for user {$userPlan->authentication->email}"
                         );
                     }
                 });
+
+            $this->info("Notified {$notified} plan(s) entering grace period.");
 
             return self::SUCCESS;
         }

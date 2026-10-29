@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use RiseTechApps\ApiKey\Events\PlanCancelled;
 use RiseTechApps\ApiKey\Events\PlanRefunded;
 use RiseTechApps\ApiKey\Http\Request\Dashboard\Signature\SignatureRequest;
@@ -17,6 +16,7 @@ use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
 use RiseTechApps\ApiKey\Services\RefundPolicy;
 use RiseTechApps\ApiKey\Services\RefundService;
+use RiseTechApps\ApiKey\Support\UsageHistory;
 
 class SignatureController extends Controller
 {
@@ -121,7 +121,7 @@ class SignatureController extends Controller
      * Deliberately not a revocation. The period already paid for runs to its
      * end_date and the API key keeps working until then — cancelling on day 2 of
      * 30 must not cost the subscriber the other 28. All this does is stop the
-     * next charge: `billing:process-renewals` skips cancelled subscriptions, and
+     * next charge: `api-key:billing-process-renewals` skips cancelled subscriptions, and
      * the plan lapses on its own through the usual expiry path.
      *
      * Until this existed there was no way out at all. A subscriber with a saved
@@ -319,8 +319,18 @@ class SignatureController extends Controller
      */
     public function log(Request $request): JsonResponse
     {
+        // Fora do try: o 422 não pode virar o erro genérico. E um id que não é
+        // UUID quebraria a consulta no PostgreSQL (coluna uuid).
+        $request->validate(['api_key_id' => ['nullable', 'uuid']]);
+
         try {
-            $query = auth()->user()->requestLog()->latest('requested_at');
+            // Só o nome da chave: o resto (hash, origens) não tem o que fazer no log.
+            $query = auth()->user()->requestLog()->with('apiKey:id,name')->latest('requested_at');
+
+            // Dentro do requestLog() da conta, um id de chave alheio só não acha nada.
+            if ($apiKeyId = $request->query('api_key_id')) {
+                $query->where('api_key_id', $apiKeyId);
+            }
 
             if ($from = $request->date('from')) {
                 $query->where('requested_at', '>=', $from->startOfDay());
@@ -407,10 +417,7 @@ class SignatureController extends Controller
             // this endpoint on a timer for the counters alone and has no reason to
             // re-aggregate the whole window every few seconds.
             if ($request->has('days')) {
-                $payload['series'] = $this->dailySeries(
-                    $user,
-                    max(1, min($request->integer('days', 30), 90))
-                );
+                $payload['series'] = UsageHistory::daily($user, $request->integer('days', 30));
             }
 
             return response()->jsonSuccess($payload);
@@ -419,58 +426,5 @@ class SignatureController extends Controller
 
             return response()->jsonGone(__('api-key::messages.error_loading_request_log'));
         }
-    }
-
-    /**
-     * Daily request counts for the dashboard chart.
-     *
-     * Aggregated in the database over a bounded window. The dashboard used to
-     * download the entire request log and count the rows in the browser, which
-     * cost one full-table read per page load and could not survive a log of any
-     * real size.
-     *
-     * @return array<int, array{date: string, total: int}>
-     */
-    private function dailySeries($user, int $days): array
-    {
-        $since = now()->subDays($days - 1)->startOfDay();
-
-        $counts = Cache::remember(
-            "api_key_stats_series:{$user->getKey()}:{$days}:".now()->toDateString(),
-            config('api-key.cache_ttl.stats', 30),
-            fn () => $user->requestLog()
-                ->where('requested_at', '>=', $since)
-                ->selectRaw($this->dayExpression().' as day, COUNT(*) as total')
-                ->groupBy('day')
-                ->pluck('total', 'day')
-                ->all()
-        );
-
-        // Emit every day in the window, including the empty ones, so the chart
-        // does not have to reconstruct gaps.
-        $series = [];
-
-        for ($i = 0; $i < $days; $i++) {
-            $date = $since->copy()->addDays($i)->toDateString();
-            $series[] = [
-                'date' => $date,
-                'total' => (int) ($counts[$date] ?? 0),
-            ];
-        }
-
-        return $series;
-    }
-
-    /**
-     * Portable "truncate timestamp to day" expression.
-     * Postgres has no DATE() function for timestamps; SQLite has no CAST to date.
-     */
-    private function dayExpression(): string
-    {
-        return match (DB::connection()->getDriverName()) {
-            'pgsql' => 'CAST(requested_at AS date)',
-            'sqlite' => "strftime('%Y-%m-%d', requested_at)",
-            default => 'DATE(requested_at)',
-        };
     }
 }

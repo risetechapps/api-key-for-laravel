@@ -45,6 +45,7 @@ use RiseTechApps\ToUpper\Traits\HasToUpper;
  * @property Carbon|null $trial_used_at
  * @property bool $overage_enabled
  * @property string|null $overage_spend_cap
+ * @property bool $usage_notices_enabled avisos informativos por e-mail (ver Notifications\Concerns\InformationalNotice)
  * @property string|null $two_factor_secret
  * @property array<int, string>|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -116,6 +117,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
         'trial_used_at' => 'datetime',
         'overage_enabled' => 'boolean',
         'overage_spend_cap' => 'decimal:2',
+        'usage_notices_enabled' => 'boolean',
         'two_factor_secret' => 'encrypted',
         'two_factor_recovery_codes' => 'encrypted:array',
         'two_factor_confirmed_at' => 'datetime',
@@ -478,6 +480,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
      *                                 porque este método roda depois da resposta, onde
      *                                 depender do helper request() é frágil.
      * @param  string|null  $method  Método HTTP da requisição.
+     * @param  string|null  $apiKeyId  Chave que autenticou; sem ela, a do request atual.
      */
     public function requestUsed(
         int $status = 0,
@@ -485,7 +488,8 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
         ?string $planId = null,
         ?string $endpoint = null,
         ?string $method = null,
-        ?string $ip = null
+        ?string $ip = null,
+        ?string $apiKeyId = null
     ): void {
         $activePlanId = $planId ?? UserPlan::where('authentication_id', $this->id)
             ->where('active', true)
@@ -503,6 +507,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
             'method' => $method ?? request()->method(),
             'response_code' => $status,
             'ip' => $ip ?? request()->ip(),
+            'api_key_id' => $apiKeyId ?? $this->currentRequestApiKeyId(),
         ]);
 
         if (! $countUsage) {
@@ -511,5 +516,13 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
 
         // Atomic increment using update to avoid race conditions
         UserPlan::where('id', $activePlanId)->increment('requests_used');
+    }
+
+    /** Chave que autenticou o request atual, quando houver (fora de HTTP, null). */
+    private function currentRequestApiKeyId(): ?string
+    {
+        $apiKey = request()->attributes->get('api_key_model');
+
+        return $apiKey instanceof ApiKey ? (string) $apiKey->getKey() : null;
     }
 }

@@ -108,7 +108,9 @@ const people = computed(() => (team.value ? [team.value.owner, ...team.value.mem
 const canInvite = computed(() => !!team.value && team.value.used < team.value.limit);
 
 /** Admin convida e gerencia atendentes; admins, só o dono (a regra vale no servidor). */
-const assignableRoles = computed(() => (auth.teamCan('owner') ? { agent: 'Atendente', admin: 'Administrador' } : { agent: 'Atendente' }));
+// Tipo explícito: inferido, os dois ramos viram uma união em que `admin` pode
+// ser undefined, e o `options` do Select (Record<string, string>) recusa.
+const assignableRoles = computed<Record<string, string>>(() => (auth.teamCan('owner') ? { agent: 'Atendente', admin: 'Administrador' } : { agent: 'Atendente' }));
 const canManage = (role: string) => auth.teamCan('owner') || role === 'agent';
 
 function initials(name: string) {

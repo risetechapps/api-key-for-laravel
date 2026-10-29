@@ -79,7 +79,7 @@
                     </div>
                 </Field>
 
-                <TextInput v-model="form.origins" label="Origens permitidas" placeholder="app.exemplo.com, 203.0.113.10" hint="Separe por vírgula. Vazio: qualquer origem." :error="form.errors.allowed_origins" />
+                <TextInput v-model="form.origins" label="Origens permitidas" placeholder="app.exemplo.com, 203.0.113.10, 10.0.0.0/8" hint="Separe por vírgula. Domínio libera o site no navegador (header Origin); IP ou faixa CIDR libera o servidor com esse endereço. Vazio: qualquer origem." :error="form.errors.allowed_origins" />
                 <div class="grid gap-4 sm:grid-cols-2">
                     <TextInput v-model="form.rate" type="number" min="1" label="Limite por minuto" hint="Vazio: o do plano." :error="form.errors.rate_limit_per_minute" />
                     <TextInput v-model="form.expires_at" type="date" label="Expira em" hint="Opcional." :error="form.errors.expires_at" />

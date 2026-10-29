@@ -24,7 +24,7 @@
                                     <div class="mt-2 flex flex-wrap gap-1.5">
                                         <Badge :tone="hook.active ? 'success' : 'danger'" dot>{{ hook.active ? 'Ativo' : hook.disabled_at ? 'Desativado após falhas' : 'Desativado' }}</Badge>
                                         <template v-if="hook.events?.length">
-                                            <Badge v-for="e in hook.events" :key="e" tone="neutral">{{ e }}</Badge>
+                                            <Badge v-for="e in hook.events" :key="e" tone="neutral" :title="describe(e)">{{ e }}</Badge>
                                         </template>
                                         <Badge v-else tone="brand">Todos os eventos</Badge>
                                     </div>
@@ -47,15 +47,20 @@
             </div>
 
             <Card title="Verificando a assinatura" subtitle="Cada entrega é assinada com o segredo do webhook" class="h-fit lg:sticky lg:top-24">
+                <!-- O texto fica num <span>: no <li> flex, cada trecho e cada <code> virava
+                     um item separado, com gap entre eles. -->
                 <ol class="space-y-3 text-sm text-slate-600 dark:text-slate-400">
-                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">1</span>Junte o header <code class="text-xs">X-Webhook-Timestamp</code>, um ponto e o corpo cru.</li>
-                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">2</span>Calcule o HMAC-SHA256 com o segredo e compare com <code class="text-xs">X-Webhook-Signature</code>, sem o prefixo <code class="text-xs">sha256=</code>.</li>
-                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">3</span>Recuse timestamps com mais de 5 minutos e responda 2xx. Outras respostas são reenviadas com espera crescente.</li>
+                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">1</span><span class="min-w-0 leading-relaxed">Junte o header <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">X-Webhook-Timestamp</code>, um ponto e o corpo cru, exatamente como chegou.</span></li>
+                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">2</span><span class="min-w-0 leading-relaxed">Calcule o HMAC-SHA256 com o segredo (<code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">whsec_…</code>, inteiro) e compare com <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">X-Webhook-Signature</code>, que chega como <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">sha256=&lt;hex&gt;</code>. Compare em tempo constante.</span></li>
+                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">3</span><span class="min-w-0 leading-relaxed">Recuse timestamps com mais de 5 minutos e responda 2xx em até 10 segundos. Outras respostas são reenviadas com espera crescente.</span></li>
+                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">4</span><span class="min-w-0 leading-relaxed">Ignore um <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">X-Webhook-Id</code> já processado: novas tentativas e reenvios mandam o mesmo id.</span></li>
                 </ol>
                 <pre class="mt-4 overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-[11px] leading-relaxed text-slate-300"><span class="text-slate-500">// PHP</span>
-$expected = hash_hmac('sha256',
+$expected = 'sha256=' . hash_hmac('sha256',
     $timestamp . '.' . $body, $secret);
-hash_equals($expected, $signature);</pre>
+
+hash_equals($expected, $signature)
+    && abs(time() - (int) $timestamp) &lt;= 300;</pre>
             </Card>
         </div>
 
@@ -67,8 +72,11 @@ hash_equals($expected, $signature);</pre>
                     <div class="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                         <Switch v-model="form.allEvents" label="Todos os eventos" description="Inclui os eventos que forem criados depois." />
                         <div v-if="!form.allEvents" class="grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2 dark:border-slate-800">
-                            <Checkbox v-for="e in availableEvents" :key="e" :model-value="form.events.includes(e)" @update:model-value="(v) => toggleEvent(e, v)">
-                                <code class="text-xs">{{ e }}</code>
+                            <Checkbox v-for="e in availableEvents" :key="e.name" :model-value="form.events.includes(e.name)" @update:model-value="(v) => toggleEvent(e.name, v)">
+                                <span class="flex flex-col">
+                                    <span v-if="e.description">{{ e.description }}</span>
+                                    <code :class="e.description ? 'text-[11px] text-slate-500 dark:text-slate-400' : 'text-xs'">{{ e.name }}</code>
+                                </span>
                             </Checkbox>
                         </div>
                     </div>
@@ -116,7 +124,7 @@ import { Alert, Badge, Button, Card, Checkbox, CopyField, DataTable, Drawer, Dro
 import type { Column, DropdownItem } from '@/ui';
 
 const endpoints = ref<any[]>([]);
-const availableEvents = ref<string[]>([]);
+const availableEvents = ref<{ name: string; description: string | null }[]>([]);
 const loading = ref(true);
 const testing = ref<string | null>(null);
 
@@ -155,7 +163,10 @@ async function load() {
     try {
         const r = await axios.get('/dashboard/webhooks');
         endpoints.value = r.data?.data?.endpoints ?? [];
-        availableEvents.value = r.data?.data?.available_events ?? [];
+        // events_catalog traz a descrição; available_events (só nomes) é o
+        // formato antigo, mantido para quem já consome a rota.
+        availableEvents.value = r.data?.data?.events_catalog
+            ?? (r.data?.data?.available_events ?? []).map((name: string) => ({ name, description: null }));
     } catch (err) {
         toast.error('Não foi possível carregar os webhooks', { description: errorMessage(err) });
     } finally {
@@ -170,6 +181,10 @@ function actions(hook: any): DropdownItem[] {
         { divider: true },
         { label: 'Excluir', icon: PhTrash, danger: true, onClick: () => remove(hook) },
     ];
+}
+
+function describe(name: string): string | undefined {
+    return availableEvents.value.find((e) => e.name === name)?.description ?? undefined;
 }
 
 function toggleEvent(event: string, on: boolean) {

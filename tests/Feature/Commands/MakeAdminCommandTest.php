@@ -5,11 +5,11 @@ use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
 uses(RefreshDatabase::class);
 
-describe('admin:make', function () {
+describe('api-key:admin-make', function () {
     it('grants the admin role', function () {
         $user = Authentication::factory()->create(['email' => 'dono@example.com', 'role' => 'user']);
 
-        $this->artisan('admin:make', ['email' => 'dono@example.com'])->assertSuccessful();
+        $this->artisan('api-key:admin-make', ['email' => 'dono@example.com'])->assertSuccessful();
 
         expect($user->fresh()->role)->toBe('admin');
     });
@@ -18,13 +18,13 @@ describe('admin:make', function () {
         // Quem digita o e-mail no terminal não sabe como ele foi gravado.
         $user = Authentication::factory()->create(['email' => 'dono@example.com', 'role' => 'user']);
 
-        $this->artisan('admin:make', ['email' => 'DONO@Example.COM'])->assertSuccessful();
+        $this->artisan('api-key:admin-make', ['email' => 'DONO@Example.COM'])->assertSuccessful();
 
         expect($user->fresh()->role)->toBe('admin');
     });
 
     it('fails when nobody has that e-mail', function () {
-        $this->artisan('admin:make', ['email' => 'ninguem@example.com'])->assertFailed();
+        $this->artisan('api-key:admin-make', ['email' => 'ninguem@example.com'])->assertFailed();
     });
 
     it('promotes nobody else', function () {
@@ -32,7 +32,7 @@ describe('admin:make', function () {
         $target = Authentication::factory()->create(['email' => 'dono@example.com', 'role' => 'user']);
         $other = Authentication::factory()->create(['email' => 'outro@example.com', 'role' => 'user']);
 
-        $this->artisan('admin:make', ['email' => 'dono@example.com'])->assertSuccessful();
+        $this->artisan('api-key:admin-make', ['email' => 'dono@example.com'])->assertSuccessful();
 
         expect($target->fresh()->role)->toBe('admin')
             ->and($other->fresh()->role)->toBe('user');
@@ -41,7 +41,7 @@ describe('admin:make', function () {
     it('is idempotent on a user who is already admin', function () {
         $user = Authentication::factory()->create(['email' => 'chefe@example.com', 'role' => 'admin']);
 
-        $this->artisan('admin:make', ['email' => 'chefe@example.com'])->assertSuccessful();
+        $this->artisan('api-key:admin-make', ['email' => 'chefe@example.com'])->assertSuccessful();
 
         expect($user->fresh()->role)->toBe('admin');
     });

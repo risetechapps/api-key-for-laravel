@@ -40,7 +40,7 @@ afterEach(function () {
 
 function pendingSignedHeaders(string $dataId): array
 {
-    $ts = '1700000000';
+    $ts = (string) time();
     $requestId = 'req-pending';
     $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$requestId};ts:{$ts};", PENDING_WEBHOOK_SECRET);
 

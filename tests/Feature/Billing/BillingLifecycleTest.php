@@ -163,7 +163,7 @@ describe('Renewal retries', function () {
         Queue::fake();
         subscription(['end_date' => now()->subDay(), 'renewal_attempts' => 1, 'next_renewal_attempt_at' => now()->subMinute()]);
 
-        $this->artisan('billing:process-renewals')->assertSuccessful();
+        $this->artisan('api-key:billing-process-renewals')->assertSuccessful();
 
         Queue::assertPushed(ProcessPlanRenewalJob::class, 1);
     });
@@ -391,8 +391,8 @@ describe('Overage', function () {
         $userPlan = subscription(['end_date' => now()->subDay(), 'requests_used' => 130]);
         $this->gateway->pushResponse(['id' => 8001, 'status' => 'approved']);
 
-        $this->artisan('billing:charge-overage')->assertSuccessful();
-        $this->artisan('billing:charge-overage')->assertSuccessful();
+        $this->artisan('api-key:billing-charge-overage')->assertSuccessful();
+        $this->artisan('api-key:billing-charge-overage')->assertSuccessful();
 
         $userPlan->refresh();
         expect($userPlan->overage_requests)->toBe(30)
@@ -408,7 +408,7 @@ describe('Overage', function () {
         config(['api-key.mercadopago.pix.enabled' => true]);
         $userPlan = subscription(['end_date' => now()->subDay(), 'requests_used' => 130]);
 
-        $this->artisan('billing:charge-overage')->assertSuccessful();
+        $this->artisan('api-key:billing-charge-overage')->assertSuccessful();
 
         expect($this->gateway->requests)->toBe([]);
         Notification::assertSentTo($this->user, OverageChargeNotification::class, fn ($n) => $n->state === 'payment_required');
@@ -450,7 +450,7 @@ describe('Overage', function () {
         subscription(['end_date' => now()->subDay(), 'requests_used' => 130]);
         $this->gateway->pushFailure(['message' => "security_code_id can't be null", 'cause' => [['code' => 3031]]]);
 
-        $this->artisan('billing:charge-overage')->assertSuccessful();
+        $this->artisan('api-key:billing-charge-overage')->assertSuccessful();
 
         Notification::assertSentTo($this->user, OverageChargeNotification::class, fn ($n) => $n->state === 'payment_required');
     });
@@ -525,7 +525,7 @@ describe('Overage', function () {
         savedCard();
         $userPlan = subscription(['end_date' => now()->subDay(), 'requests_used' => 105]);
 
-        $this->artisan('billing:charge-overage')->assertSuccessful();
+        $this->artisan('api-key:billing-charge-overage')->assertSuccessful();
 
         expect($userPlan->fresh()->overage_billed_at)->not->toBeNull()
             ->and($this->gateway->requests)->toBe([]);

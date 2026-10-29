@@ -175,6 +175,20 @@ describe('Outbound webhooks', function () {
             ->and(WebhookUrlGuard::isAllowed('https://8.8.8.8/x'))->toBeTrue();
     });
 
+    it('pins delivery to the addresses the guard checked', function () {
+        config(['api-key.webhooks.block_private_networks' => true]);
+
+        // IP literal não tem o que fixar; recusada não chega a conectar.
+        expect(WebhookUrlGuard::allowedAddresses('https://8.8.8.8/x'))->toBe([])
+            ->and(WebhookUrlGuard::allowedAddresses('https://10.0.0.8/x'))->toBeNull();
+
+        expect(WebhookUrlGuard::curlResolve('https://hooks.example.com/api', ['93.184.216.34', '2606:2800:220:1::1']))
+            ->toBe(['hooks.example.com:443:93.184.216.34,[2606:2800:220:1::1]'])
+            ->and(WebhookUrlGuard::curlResolve('http://hooks.example.com:8080/api', ['93.184.216.34']))
+            ->toBe(['hooks.example.com:8080:93.184.216.34'])
+            ->and(WebhookUrlGuard::curlResolve('https://hooks.example.com/api', []))->toBe([]);
+    });
+
     it('delivers a signed event when the subscription changes', function () {
         Http::fake(['hooks.example.com/*' => Http::response('ok', 200)]);
 
