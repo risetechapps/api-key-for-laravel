@@ -28,9 +28,18 @@ describe('Reading coupons', function () {
         $this->getJson('/api/v1/dashboard/coupons')->assertStatus(401);
     });
 
-    it('lists coupons for a signed-in user', function () {
-        Coupon::factory()->count(3)->create();
+    it('hides coupons from customers', function () {
+        // Listar entregaria todo cupom, inclusive o de 100%, a quem tem conta.
+        $coupon = Coupon::factory()->create(['code' => 'PROMO10']);
         $this->actingAs($this->user, 'sanctum');
+
+        $this->getJson('/api/v1/dashboard/coupons')->assertForbidden();
+        $this->getJson("/api/v1/dashboard/coupons/{$coupon->getKey()}")->assertForbidden();
+    });
+
+    it('lists coupons for the panel staff', function () {
+        Coupon::factory()->count(3)->create();
+        $this->actingAs($this->admin, 'sanctum');
 
         expect($this->getJson('/api/v1/dashboard/coupons')->assertStatus(200)->json('data'))
             ->toHaveCount(3);
@@ -38,7 +47,7 @@ describe('Reading coupons', function () {
 
     it('reads a single coupon', function () {
         $coupon = Coupon::factory()->create(['code' => 'PROMO10']);
-        $this->actingAs($this->user, 'sanctum');
+        $this->actingAs($this->admin, 'sanctum');
 
         $this->getJson("/api/v1/dashboard/coupons/{$coupon->getKey()}")
             ->assertStatus(200)
@@ -46,7 +55,7 @@ describe('Reading coupons', function () {
     });
 
     it('404s a coupon that does not exist', function () {
-        $this->actingAs($this->user, 'sanctum');
+        $this->actingAs($this->admin, 'sanctum');
 
         $this->getJson('/api/v1/dashboard/coupons/'.Str::uuid())->assertStatus(404);
     });

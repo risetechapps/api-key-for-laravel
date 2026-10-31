@@ -59,7 +59,7 @@ class ApiKeyController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = $this->owner($request);
-        $data = $this->validated($request, creating: true);
+        $data = $this->validated($request, $user, creating: true);
 
         $max = (int) config('api-key.api_keys.max_per_user', 5);
 
@@ -86,7 +86,7 @@ class ApiKeyController extends Controller
         $user = $this->owner($request);
         $key = $user->apiKeys()->findOrFail($id);
 
-        $key->update($this->validated($request, creating: false));
+        $key->update($this->validated($request, $user, creating: false));
 
         AuditLogger::record('api_key.updated', $user, ['api_key_id' => $key->getKey()]);
 
@@ -129,19 +129,24 @@ class ApiKeyController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function validated(Request $request, bool $creating): array
+    private function validated(Request $request, Authentication $user, bool $creating): array
     {
         $features = FeatureRegistry::keys();
+
+        // A chave só aperta o limite do plano. O middleware também corta, mas
+        // recusar aqui evita a chave prometer o que não vai entregar.
+        $planLimit = $user->activePlan->plan->rate_limit_per_minute
+            ?? config('api-key.rate_limit.per_minute');
 
         return $request->validate([
             'name' => [$creating ? 'required' : 'sometimes', 'string', 'max:100'],
             // null = todas as features do plano.
             'scopes' => ['sometimes', 'nullable', 'array'],
             'scopes.*' => ['string', Rule::in($features)],
-            'allowed_origins' => ['sometimes', 'nullable', 'array'],
+            'allowed_origins' => ['sometimes', 'nullable', 'array', 'max:'.ApiKey::MAX_ALLOWED_ORIGINS],
             'allowed_origins.*' => ['string', 'max:255'],
             'expires_at' => ['sometimes', 'nullable', 'date', 'after:now'],
-            'rate_limit_per_minute' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'rate_limit_per_minute' => ['sometimes', 'nullable', 'integer', 'min:1', ...($planLimit ? ['max:'.(int) $planLimit] : [])],
         ]);
     }
 

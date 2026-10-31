@@ -216,7 +216,7 @@ describe('Gestão da equipe', function () {
 
         // Login recusado mesmo com a senha certa.
         $ana->forceFill(['password' => 'senha-forte-1'])->save();
-        $this->postJson('/api/v1/login', ['email' => $ana->email, 'password' => 'senha-forte-1'])->assertStatus(410);
+        $this->postJson('/api/v1/login', ['email' => $ana->email, 'password' => 'senha-forte-1'])->assertStatus(422);
 
         // A equipe mostra o id, sem o e-mail fictício.
         Sanctum::actingAs($this->owner);

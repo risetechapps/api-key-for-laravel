@@ -156,6 +156,96 @@ describe('Notificacao IPN, sem assinatura', function () {
         expect($this->gateway->requests)->toBeEmpty();
     });
 
+    it('nao consulta o mesmo pagamento de novo dentro de um minuto', function () {
+        // IPN falso repetido com o mesmo id gastaria uma consulta ao MP por aviso.
+        $this->gateway->fallbackResponse(['id' => 1, 'status' => 'rejected', 'external_reference' => 'x|y']);
+
+        ipnNotification('170917444983')->assertStatus(200);
+        ipnNotification('170917444983')->assertStatus(200);
+
+        expect($this->gateway->requests)->toHaveCount(1);
+    });
+
+    it('consulta de novo o pagamento que ainda estava pendente', function () {
+        // pending -> approved em segundos é o caminho normal. Com a marca no
+        // pending, o aviso da aprovação respondia 'ok' sem consultar e o
+        // Mercado Pago não reentregava: a assinatura esperava a reconciliação.
+        $reference = $this->user->getKey().'|'.$this->plan->getKey();
+        $this->gateway->pushResponse(['id' => 170917444983, 'status' => 'pending', 'external_reference' => $reference, 'transaction_amount' => 100.00]);
+        $this->gateway->pushResponse(['id' => 170917444983, 'status' => 'approved', 'external_reference' => $reference, 'transaction_amount' => 100.00]);
+
+        ipnNotification('170917444983')->assertStatus(200);
+        expect($this->user->fresh()->hasActivePlan())->toBeFalse();
+
+        ipnNotification('170917444983')->assertStatus(200);
+
+        expect($this->gateway->requests)->toHaveCount(2)
+            ->and($this->user->fresh()->hasActivePlan())->toBeTrue();
+    });
+
+    it('consulta de novo a reentrega de um IPN cuja consulta falhou', function () {
+        $this->gateway->pushFailure(['message' => 'unavailable'], 500);
+        $this->gateway->pushResponse(['id' => 1, 'status' => 'pending', 'external_reference' => 'x|y']);
+
+        ipnNotification('170917444983')->assertStatus(503);
+        ipnNotification('170917444983')->assertStatus(200);
+
+        expect($this->gateway->requests)->toHaveCount(2);
+    });
+
+    it('pede reentrega quando as consultas por IPN passam do teto', function () {
+        config(['api-key.mercadopago.ipn_lookups_per_minute' => 2]);
+        $this->gateway->fallbackResponse(['id' => 1, 'status' => 'pending', 'external_reference' => 'x|y']);
+
+        ipnNotification('1001')->assertStatus(200);
+        ipnNotification('1002')->assertStatus(200);
+        ipnNotification('1003')->assertStatus(503);
+
+        expect($this->gateway->requests)->toHaveCount(2);
+
+        // O webhook assinado não entra no teto.
+        notifyPayment('1004')->assertStatus(200);
+        expect($this->gateway->requests)->toHaveCount(3);
+    });
+
+    it('nao deixa um IP sozinho esgotar o teto dos IPNs', function () {
+        config([
+            'api-key.mercadopago.ipn_lookups_per_minute' => 10,
+            'api-key.payment.unsigned_notification_lookups_per_ip_per_minute' => 2,
+        ]);
+        $this->gateway->fallbackResponse(['id' => 1, 'status' => 'pending', 'external_reference' => 'x|y']);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7']);
+        ipnNotification('2001')->assertStatus(200);
+        ipnNotification('2002')->assertStatus(200);
+        ipnNotification('2003')->assertStatus(503);
+
+        // Outro IP ainda tem saldo no teto geral.
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.8']);
+        ipnNotification('2004')->assertStatus(200);
+
+        expect($this->gateway->requests)->toHaveCount(3);
+    });
+
+    it('deixa passar IPN de IP confiavel mesmo com o teto esgotado', function () {
+        config([
+            'api-key.mercadopago.ipn_lookups_per_minute' => 1,
+            'api-key.payment.notification_trusted_ips' => ['203.0.113.0/24'],
+        ]);
+        $this->gateway->fallbackResponse(['id' => 1, 'status' => 'pending', 'external_reference' => 'x|y']);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7']);
+        ipnNotification('3001')->assertStatus(200);
+        ipnNotification('3002')->assertStatus(503);
+
+        // O IP do gateway passa durante o flood, e o pagamento ainda é consultado.
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10']);
+        ipnNotification('3003')->assertStatus(200);
+        ipnNotification('3004')->assertStatus(200);
+
+        expect($this->gateway->requests)->toHaveCount(3);
+    });
+
     it('nao aceita assinatura invalida so porque ha forma de IPN', function () {
         // Assinatura presente e errada continua sendo recusa: a presenca do
         // header e o que escolhe o caminho da validacao.

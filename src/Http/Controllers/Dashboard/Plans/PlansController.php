@@ -12,6 +12,7 @@ use RiseTechApps\ApiKey\Http\Request\Dashboard\Plans\UpdatePlanRequest;
 use RiseTechApps\ApiKey\Http\Resources\Dashboard\Plans\PlansResource;
 use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Repositories\Plan\PlanRepository;
+use RiseTechApps\ApiKey\Support\AdminRoles;
 use RiseTechApps\ApiKey\Traits\HandlesUniqueViolation;
 
 class PlansController extends Controller
@@ -39,7 +40,7 @@ class PlansController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_plans'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_plans'));
         }
     }
 
@@ -61,11 +62,11 @@ class PlansController extends Controller
 
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_creating_plan'));
+            return response()->jsonInternal(__('api-key::messages.error_creating_plan'));
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_creating_plan'));
+            return response()->jsonInternal(__('api-key::messages.error_creating_plan'));
 
         }
     }
@@ -74,18 +75,21 @@ class PlansController extends Controller
     {
         try {
 
-            $plan = Plan::find($plan);
+            // Plano inativo saiu da vitrine: só a equipe do painel ainda o vê.
+            $plan = Plan::query()
+                ->when(! AdminRoles::isStaff($request->user()), fn ($q) => $q->where('is_active', true))
+                ->find($plan);
 
             if (! is_null($plan)) {
                 return response()->jsonSuccess(PlansResource::make($plan));
             }
 
-            return response()->jsonGone(__('api-key::messages.error_loading_plan'));
+            return response()->jsonNotFound(__('api-key::messages.error_loading_plan'));
 
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_plan'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_plan'));
         }
     }
 
@@ -114,7 +118,7 @@ class PlansController extends Controller
                 return response()->jsonSuccess();
             }
 
-            return response()->jsonGone(__('api-key::messages.error_updating_plan'));
+            return response()->jsonNotFound(__('api-key::messages.error_updating_plan'));
 
         } catch (QueryException $e) {
             if ($response = $this->uniqueViolationResponse($e, 'name', __('api-key::messages.plan_name_taken'))) {
@@ -123,11 +127,11 @@ class PlansController extends Controller
 
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_updating_plan'));
+            return response()->jsonInternal(__('api-key::messages.error_updating_plan'));
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_updating_plan'));
+            return response()->jsonInternal(__('api-key::messages.error_updating_plan'));
         }
     }
 
@@ -147,12 +151,12 @@ class PlansController extends Controller
                 return response()->jsonSuccess();
             }
 
-            return response()->jsonGone(__('api-key::messages.error_deleting_plan'));
+            return response()->jsonNotFound(__('api-key::messages.error_deleting_plan'));
         } catch (\Exception $e) {
 
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_deleting_plan'));
+            return response()->jsonInternal(__('api-key::messages.error_deleting_plan'));
         }
     }
 

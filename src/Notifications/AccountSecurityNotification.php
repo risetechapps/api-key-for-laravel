@@ -9,7 +9,7 @@ use Illuminate\Notifications\Notification;
 
 /**
  * Aviso de alteração de segurança: senha trocada, e-mail trocado, 2FA ligado
- * ou desligado.
+ * ou desligado, ou bloqueado por tentativas de código.
  *
  * É o que dá ao dono a chance de reagir quando não foi ele. Por isso, na troca
  * de e-mail, vai para o endereço ANTIGO.
@@ -25,6 +25,8 @@ class AccountSecurityNotification extends Notification implements ShouldQueue
     public const TWO_FACTOR_ENABLED = 'two_factor_enabled';
 
     public const TWO_FACTOR_DISABLED = 'two_factor_disabled';
+
+    public const TWO_FACTOR_LOCKED = 'two_factor_locked';
 
     public function __construct(public readonly string $event, public readonly array $context = [])
     {
@@ -55,6 +57,7 @@ class AccountSecurityNotification extends Notification implements ShouldQueue
             self::EMAIL_CHANGED => ['O e-mail da sua conta foi alterado', 'O e-mail de acesso da sua conta foi trocado para **'.($this->context['new_email'] ?? '').'**. Este endereço não recebe mais avisos da conta.'],
             self::TWO_FACTOR_ENABLED => ['Verificação em duas etapas ativada', 'A verificação em duas etapas foi ativada. A partir de agora o login pede também o código do aplicativo autenticador.'],
             self::TWO_FACTOR_DISABLED => ['Verificação em duas etapas desativada', 'A verificação em duas etapas foi desativada. O login volta a pedir só a senha.'],
+            self::TWO_FACTOR_LOCKED => ['Muitas tentativas de código na sua conta', 'Alguém entrou com a sua senha e errou o código da verificação em duas etapas várias vezes. Por segurança, o login da conta ficou bloqueado por alguns minutos.'],
             default => ['Alteração na sua conta', 'Houve uma alteração de segurança na sua conta.'],
         };
 

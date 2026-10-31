@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -78,6 +79,12 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
     use HasAddress, HasApiTokens, HasCodeGenerate, MustVerifyEmail;
     use HasFactory, HasToUpper, HasUuids, Notifiable, SoftDeletes;
     use HasMediaSuite;
+
+    /** Índice único em LOWER(email): o árbitro quando dois cadastros chegam juntos. */
+    public const EMAIL_UNIQUE_INDEX = 'authentications_email_lower_unique';
+
+    /** Índice único no CPF só com os dígitos, ignorando vazio. */
+    public const CPF_UNIQUE_INDEX = 'authentications_cpf_digits_unique';
 
     protected $fillable = [
         'code',
@@ -151,6 +158,25 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
      * Null conta como habilitada: é o default da coluna, e contas criadas antes
      * de o status ser checado não têm valor gravado.
      */
+    /** A exceção é o índice recusando um e-mail que já tem conta? */
+    public static function isEmailTaken(\Throwable $e): bool
+    {
+        return self::violates($e, self::EMAIL_UNIQUE_INDEX);
+    }
+
+    /** A exceção é o índice recusando um CPF que já tem conta? */
+    public static function isCpfTaken(\Throwable $e): bool
+    {
+        return self::violates($e, self::CPF_UNIQUE_INDEX);
+    }
+
+    private static function violates(\Throwable $e, string $index): bool
+    {
+        return $e instanceof QueryException
+            && (string) $e->getCode() === '23505'
+            && str_contains($e->getMessage(), $index);
+    }
+
     public function isEnabled(): bool
     {
         return $this->status === null || $this->status === AuthService::$ENABLE;

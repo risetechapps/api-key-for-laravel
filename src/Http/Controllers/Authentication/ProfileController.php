@@ -5,12 +5,15 @@ namespace RiseTechApps\ApiKey\Http\Controllers\Authentication;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use RiseTechApps\ApiKey\Http\Request\Authentication\ProfileRequest;
 use RiseTechApps\ApiKey\Http\Resources\Authentication\ProfileResource;
+use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Services\AccountService;
 use RiseTechApps\ApiKey\Services\AuditLogger;
 use RiseTechApps\ApiKey\Services\AuthService;
+use RiseTechApps\ApiKey\Services\SecondFactorService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -19,12 +22,13 @@ class ProfileController extends Controller
     public function __construct(
         private readonly AccountService $accountService,
         private readonly AuthService $authService,
+        private readonly SecondFactorService $secondFactor,
     ) {}
 
     public function show(Request $request): JsonResponse
     {
         if (! $request->user()) {
-            return response()->jsonGone();
+            return response()->jsonUnauthorized();
         }
 
         try {
@@ -34,7 +38,7 @@ class ProfileController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_profile'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_profile'));
         }
     }
 
@@ -48,21 +52,31 @@ class ProfileController extends Controller
             $addressData = $data['address'] ?? null;
             unset($data['address']);
 
-            $user->update($data);
+            // Perfil e endereço juntos, ou nada: uma recusa do índice no meio
+            // não deixa metade gravada.
+            DB::transaction(function () use ($user, $data, $addressData) {
+                $user->update($data);
 
-            if ($addressData) {
-                if ($user->address) {
-                    $user->address->update($addressData);
-                } else {
-                    $user->address()->create(array_merge($addressData, ['type' => 'DEFAULT']));
+                if ($addressData) {
+                    if ($user->address) {
+                        $user->address->update($addressData);
+                    } else {
+                        $user->address()->create(array_merge($addressData, ['type' => 'DEFAULT']));
+                    }
                 }
-            }
+            });
 
             return response()->jsonSuccess();
         } catch (Throwable $exception) {
+            // Mesmo CPF gravado ao mesmo tempo por outra conta, ou já gravado
+            // com máscara antes da normalização: o índice é quem recusa.
+            if (Authentication::isCpfTaken($exception)) {
+                return response()->jsonValidation(['cpf' => [__('api-key::messages.cpf_taken')]], __('api-key::messages.cpf_taken'));
+            }
+
             report($exception);
 
-            return response()->jsonGone(__('api-key::messages.error_updating_profile'));
+            return response()->jsonInternal(__('api-key::messages.error_updating_profile'));
         }
     }
 
@@ -107,7 +121,7 @@ class ProfileController extends Controller
         } catch (\Exception $exception) {
             report($exception);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_allowed_origins'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_allowed_origins'));
         }
     }
 
@@ -117,22 +131,30 @@ class ProfileController extends Controller
      */
     public function updateAllowedOrigins(Request $request): JsonResponse
     {
+        // As mesmas regras do PUT /dashboard/api-keys/{id}: a rota é antiga,
+        // mas grava no mesmo campo que a origem confere a cada requisição.
+        $field = $request->has('allowed') ? 'allowed' : 'allowed_origins';
+        $validated = $request->validate([
+            $field => ['present', 'nullable', 'array', 'max:'.ApiKey::MAX_ALLOWED_ORIGINS],
+            $field.'.*' => ['string', 'max:255'],
+        ]);
+
         try {
             $apiKey = auth()->user()->apiKey;
 
             if (! $apiKey) {
-                return response()->jsonGone(__('api-key::messages.api_key_not_found'));
+                return response()->jsonNotFound(__('api-key::messages.api_key_not_found'));
             }
 
             $apiKey->update([
-                'allowed_origins' => $request->get('allowed') ?? $request->get('allowed_origins'),
+                'allowed_origins' => $validated[$field] === null ? null : array_values($validated[$field]),
             ]);
 
             return response()->jsonSuccess();
         } catch (\Exception $exception) {
             report($exception);
 
-            return response()->jsonGone(__('api-key::messages.error_updating_allowed_origins'));
+            return response()->jsonInternal(__('api-key::messages.error_updating_allowed_origins'));
         }
     }
 
@@ -146,7 +168,7 @@ class ProfileController extends Controller
             $apiKey = auth()->user()->apiKey;
 
             if (! $apiKey) {
-                return response()->jsonGone(__('api-key::messages.api_key_not_found'));
+                return response()->jsonNotFound(__('api-key::messages.api_key_not_found'));
             }
 
             $newKey = bin2hex(random_bytes(64));
@@ -161,7 +183,7 @@ class ProfileController extends Controller
         } catch (\Exception $exception) {
             report($exception);
 
-            return response()->jsonGone(__('api-key::messages.error_regenerating_api_key'));
+            return response()->jsonInternal(__('api-key::messages.error_regenerating_api_key'));
         }
     }
 
@@ -185,7 +207,8 @@ class ProfileController extends Controller
 
     /**
      * Exclui a própria conta. Pede a senha de novo: um token de sessão roubado
-     * não deve bastar para apagar a conta de alguém.
+     * não deve bastar para apagar a conta de alguém. Com 2FA, pede também o
+     * código.
      */
     public function destroy(Request $request): JsonResponse
     {
@@ -203,12 +226,16 @@ class ProfileController extends Controller
             return response()->jsonError(__('api-key::messages.account_delete_admin'));
         }
 
+        if ($refusal = $this->secondFactor->confirm($request, $user)) {
+            return $refusal;
+        }
+
         try {
             $this->accountService->delete($user);
         } catch (Throwable $exception) {
             report($exception);
 
-            return response()->jsonGone(__('api-key::messages.account_delete_failed'));
+            return response()->jsonInternal(__('api-key::messages.account_delete_failed'));
         }
 
         AuditLogger::record('account.deleted', $user);

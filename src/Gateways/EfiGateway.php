@@ -387,6 +387,15 @@ class EfiGateway extends AbstractCardGateway
     }
 
     /**
+     * A Efí manda só um token de notificação, sem assinatura; quem prova é
+     * a consulta dele na API.
+     */
+    public function webhooksAuthenticated(): bool
+    {
+        return false;
+    }
+
+    /**
      * Chave aleatória (EVP) dá para conferir na lista da conta. E-mail, CPF ou
      * telefone a Efí só confere na primeira cobrança.
      */

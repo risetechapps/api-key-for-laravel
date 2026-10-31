@@ -203,6 +203,6 @@ describe('Sem o pacote de monitoramento', function () {
 
         $this->actingAs($this->admin, 'sanctum');
 
-        $this->getJson('/api/v1/dashboard/admin/logs')->assertStatus(410);
+        $this->getJson('/api/v1/dashboard/admin/logs')->assertStatus(503);
     });
 });

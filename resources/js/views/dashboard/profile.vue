@@ -106,7 +106,7 @@
                                     <h3 class="font-semibold text-red-600 dark:text-red-400">Excluir conta</h3>
                                     <p class="mt-1 max-w-xl text-sm text-slate-500 dark:text-slate-400">Encerra a assinatura na hora, sem estorno, invalida as API keys e apaga seus dados pessoais. O registro dos pagamentos é mantido, sem seus dados, por obrigação legal. Não dá para desfazer.</p>
                                 </div>
-                                <Button variant="danger" :icon="PhTrash" @click="deleteAccount">Excluir conta</Button>
+                                <Button variant="danger" :icon="PhTrash" @click="openRemoval">Excluir conta</Button>
                             </div>
                         </Card>
 
@@ -115,6 +115,18 @@
                 </template>
             </Tabs>
         </template>
+
+        <!-- Excluir conta: senha e, com 2FA, um código -->
+        <Modal v-model="removal.open" title="Excluir sua conta?" description="A assinatura é encerrada sem estorno e as API keys deixam de funcionar.">
+            <form id="delete-account" class="space-y-4" @submit.prevent="deleteAccount">
+                <TextInput v-model="removal.password" type="password" label="Sua senha" placeholder="••••••••" autocomplete="current-password" :error="removal.errors.password" />
+                <TextInput v-if="user?.two_factor_enabled" v-model="removal.code" label="Código do aplicativo ou de recuperação" placeholder="000 000" autocomplete="one-time-code" mono :error="removal.errors.code" />
+            </form>
+            <template #footer>
+                <Button variant="ghost" @click="removal.open = false">Cancelar</Button>
+                <Button type="submit" form="delete-account" variant="danger" :loading="removal.loading">Excluir definitivamente</Button>
+            </template>
+        </Modal>
     </div>
 </template>
 
@@ -130,7 +142,7 @@ import {
 import { useAuthStore } from '@/stores/auth';
 import appConfig from '@/api-key.config';
 import type { ProfileCard, ProfileTab } from '@/api-key.config';
-import { Alert, Avatar, Badge, Button, Card, PageHeader, Select, Skeleton, Spinner, Switch, Tabs, TextInput, errorMessage, prompt, toast } from '@/ui';
+import { Alert, Avatar, Badge, Button, Card, Modal, PageHeader, Select, Skeleton, Spinner, Switch, Tabs, TextInput, errorMessage, toast } from '@/ui';
 import type { TabItem } from '@/ui';
 
 const authStore = useAuthStore();
@@ -379,22 +391,31 @@ async function exportData() {
     }
 }
 
+const removal = reactive({ open: false, password: '', code: '', loading: false, errors: {} as Record<string, string> });
+
+function openRemoval() {
+    Object.assign(removal, { open: true, password: '', code: '', errors: {} });
+}
+
 async function deleteAccount() {
-    const result = await prompt({
-        title: 'Excluir sua conta?',
-        description: 'A assinatura é encerrada sem estorno e as API keys deixam de funcionar. Digite sua senha para confirmar.',
-        tone: 'danger',
-        confirmText: 'Excluir definitivamente',
-        input: { type: 'password', label: 'Sua senha' },
-        onConfirm: async (password) => {
-            try {
-                await axios.delete('/dashboard/profile', { data: { password } });
-            } catch (err: any) {
-                throw new Error(err?.response?.status === 429 ? 'Muitas tentativas. Aguarde alguns minutos.' : errorMessage(err));
-            }
-        },
-    });
-    if (result === null) return;
+    removal.loading = true;
+    removal.errors = {};
+    // Seis dígitos é o código do aplicativo; o resto, código de recuperação.
+    const code = removal.code.replace(/\s/g, '');
+    const factor = user.value?.two_factor_enabled ? (/^\d{6}$/.test(code) ? { code } : { recovery_code: code }) : {};
+    try {
+        await axios.delete('/dashboard/profile', { data: { password: removal.password, ...factor } });
+    } catch (err: any) {
+        const errors = err?.response?.data?.errors || {};
+        removal.errors = { password: errors.password?.[0] ?? '', code: errors.code?.[0] ?? errors.recovery_code?.[0] ?? '' };
+        if (!removal.errors.password && !removal.errors.code) {
+            removal.errors.password = err?.response?.status === 429 ? 'Muitas tentativas. Aguarde alguns minutos.' : errorMessage(err);
+        }
+        return;
+    } finally {
+        removal.loading = false;
+    }
+    removal.open = false;
     authStore.clearAuth();
     toast.success('Conta excluída');
     router.push('/');

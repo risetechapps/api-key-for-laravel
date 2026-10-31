@@ -307,6 +307,56 @@ describe('Pagar.me webhook', function () {
         expect(UserPlan::where('payment_id', 'or_TEST1')->exists())->toBeFalse()
             ->and($pending->fresh()->settled_at)->toBeNull();
     });
+
+    it('caps the API lookups that unauthenticated notifications trigger', function () {
+        // Sem usuário e senha, qualquer um manda o aviso, e cada aviso falso
+        // gastaria uma consulta à API do Pagar.me.
+        config(['api-key.payment.unsigned_notification_lookups_per_minute' => 2]);
+        Http::fake(['api.pagar.me/core/v5/orders/*' => Http::response([], 404)]);
+
+        foreach (['or_A', 'or_B'] as $id) {
+            $this->postJson('/api/v1/dashboard/checkout/webhook/pagarme', ['type' => 'order.paid', 'data' => ['id' => $id]])->assertOk();
+        }
+
+        $this->postJson('/api/v1/dashboard/checkout/webhook/pagarme', ['type' => 'order.paid', 'data' => ['id' => 'or_C']])
+            ->assertStatus(503);
+
+        Http::assertSentCount(2);
+    });
+
+    it('lets notifications from a trusted IP through a full budget', function () {
+        config([
+            'api-key.payment.unsigned_notification_lookups_per_minute' => 1,
+            'api-key.payment.notification_trusted_ips' => ['203.0.113.10'],
+        ]);
+        Http::fake(['api.pagar.me/core/v5/orders/*' => Http::response([], 404)]);
+
+        $this->postJson('/api/v1/dashboard/checkout/webhook/pagarme', ['type' => 'order.paid', 'data' => ['id' => 'or_A']])->assertOk();
+        $this->postJson('/api/v1/dashboard/checkout/webhook/pagarme', ['type' => 'order.paid', 'data' => ['id' => 'or_B']])->assertStatus(503);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->postJson('/api/v1/dashboard/checkout/webhook/pagarme', ['type' => 'order.paid', 'data' => ['id' => 'or_C']])
+            ->assertOk();
+
+        Http::assertSentCount(2);
+    });
+
+    it('does not cap notifications that prove their origin', function () {
+        config([
+            'api-key.payment.unsigned_notification_lookups_per_minute' => 1,
+            'api-key.pagarme.webhook_user' => 'hook',
+            'api-key.pagarme.webhook_password' => 's3cret',
+        ]);
+        Http::fake(['api.pagar.me/core/v5/orders/*' => Http::response([], 404)]);
+
+        foreach (['or_A', 'or_B', 'or_C'] as $id) {
+            $this->withHeaders(['Authorization' => 'Basic '.base64_encode('hook:s3cret')])
+                ->postJson('/api/v1/dashboard/checkout/webhook/pagarme', ['type' => 'order.paid', 'data' => ['id' => $id]])
+                ->assertOk();
+        }
+
+        Http::assertSentCount(3);
+    });
 });
 
 describe('Pagar.me renewal', function () {

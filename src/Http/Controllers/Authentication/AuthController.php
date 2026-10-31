@@ -56,13 +56,19 @@ class AuthController extends Controller
                 'api_key' => $user->apiKey?->plainKey,
             ]);
         } catch (Throwable $exception) {
+            // Dois cadastros com o mesmo e-mail ao mesmo tempo: a validação
+            // deixou os dois passarem, e o índice recusou o segundo.
+            if (Authentication::isEmailTaken($exception)) {
+                return response()->jsonValidation(['email' => [__('api-key::messages.email_taken')]], __('api-key::messages.email_taken'));
+            }
+
             logglyError()->withContext([
                 'error' => $exception->getMessage(),
                 'ip' => $request->ip(),
             ])->log('Registration failed');
             report($exception);
 
-            return response()->jsonGone(__('api-key::messages.registration_failed'));
+            return response()->jsonInternal(__('api-key::messages.registration_failed'));
         }
     }
 
@@ -129,7 +135,7 @@ class AuthController extends Controller
                 ? 'Login failed: incorrect credentials'
                 : 'Login failed: user not found');
 
-            return response()->jsonGone(__('api-key::messages.incorrect_credentials'));
+            return response()->jsonError(__('api-key::messages.incorrect_credentials'));
         }
 
         // Daqui em diante a senha está certa: contar que a conta está suspensa
@@ -148,7 +154,7 @@ class AuthController extends Controller
             logglyInfo()->withContext($context)->log('Login failed: email not verified');
             $user->sendEmailVerificationNotification();
 
-            return response()->jsonGone(__('api-key::messages.account_not_verified'));
+            return response()->jsonForbidden(__('api-key::messages.account_not_verified'));
         }
 
         // Com 2FA a senha não basta: devolve um desafio, trocado por token em
@@ -224,7 +230,7 @@ class AuthController extends Controller
 
         logglyWarning()->withContext(['email' => $email, 'status' => $status, 'ip' => $request->ip()])->log('Password reset failed');
 
-        return response()->jsonGone(__('api-key::messages.password_reset_invalid'));
+        return response()->jsonError(__('api-key::messages.password_reset_invalid'));
     }
 
     /**
@@ -264,7 +270,7 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         if (! $request->user()) {
-            return response()->jsonGone();
+            return response()->jsonUnauthorized();
         }
 
         $user = $request->user()->load(['activePlan.plan', 'apiKey']);

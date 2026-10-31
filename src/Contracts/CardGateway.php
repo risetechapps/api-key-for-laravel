@@ -101,4 +101,11 @@ interface CardGateway
      * @throws \RuntimeException Consulta da notificação falhou; vale pedir reentrega.
      */
     public function webhookPaymentIds(Request $request): array;
+
+    /**
+     * Se a notificação prova que veio do gateway (assinatura ou credencial).
+     * Sem prova, cada aviso, inclusive falso, gasta uma consulta à API, e o
+     * pacote põe um teto nelas (`payment.unsigned_notification_lookups_per_minute`).
+     */
+    public function webhooksAuthenticated(): bool;
 }

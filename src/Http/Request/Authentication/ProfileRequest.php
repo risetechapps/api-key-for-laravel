@@ -15,6 +15,17 @@ class ProfileRequest extends FormRequest
         parent::__construct($query, $request, $attributes, $cookies, $files, $server, $content);
     }
 
+    /**
+     * CPF só com os dígitos, como o painel já manda: "529.982.247-25" e
+     * "52998224725" são o mesmo CPF, e o `unique` compara o texto.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('cpf'))) {
+            $this->merge(['cpf' => preg_replace('/\D/', '', $this->input('cpf'))]);
+        }
+    }
+
     public function rules(): array
     {
         $userId = optional($this->user())->getKey();

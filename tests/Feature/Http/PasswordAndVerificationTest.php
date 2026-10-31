@@ -102,7 +102,7 @@ describe('Reset password', function () {
             'email' => 'ana@example.com',
             'password' => 'new-password-123',
             'password_confirmation' => 'new-password-123',
-        ])->assertStatus(410)
+        ])->assertStatus(422)
             ->assertJson(['message' => __('api-key::messages.password_reset_invalid')]);
 
         expect(Hash::check('password', $user->fresh()->password))->toBeTrue();
@@ -148,7 +148,7 @@ describe('Login', function () {
         Authentication::factory()->create(['email' => 'ana@example.com']);
 
         $this->postJson('/api/v1/login', ['email' => 'ghost@example.com', 'password' => 'whatever'])
-            ->assertStatus(410)
+            ->assertStatus(422)
             ->assertJson(['message' => __('api-key::messages.incorrect_credentials')]);
     });
 
@@ -156,7 +156,7 @@ describe('Login', function () {
         $user = Authentication::factory()->unverified()->create(['email' => 'ana@example.com']);
 
         $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'wrong-password'])
-            ->assertStatus(410)
+            ->assertStatus(422)
             ->assertJson(['message' => __('api-key::messages.incorrect_credentials')]);
 
         Notification::assertNotSentTo($user, EmailVerifyNotification::class);

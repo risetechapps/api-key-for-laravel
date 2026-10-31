@@ -74,9 +74,30 @@ return [
         'events' => [],
     ],
 
+    'sessions' => [
+        // Validade, em dias, de cada login no painel (token Sanctum), contada
+        // do login. Vencido, o painel pede login de novo. Tokens antigos, de
+        // antes desta opção, continuam sem validade até sair ou ser revogados
+        // na tela de sessões. 0 = sem validade.
+        'lifetime_days' => env('API_KEY_SESSION_LIFETIME_DAYS', 30),
+    ],
+
     'two_factor' => [
         // Rotas de admin exigem verificação em duas etapas ativa.
         'required_for_admins' => env('API_KEY_2FA_REQUIRED_FOR_ADMINS', true),
+
+        // Códigos errados no login, por conta, antes de bloquear a 2FA dela
+        // por `lockout_minutes`. Soma tentativas de qualquer IP; o dono recebe
+        // um e-mail ao bloquear. 0 desliga.
+        'max_attempts' => env('API_KEY_2FA_MAX_ATTEMPTS', 10),
+        'lockout_minutes' => env('API_KEY_2FA_LOCKOUT_MINUTES', 15),
+    ],
+
+    'coupons' => [
+        // Quantas vezes a mesma conta usa o mesmo cupom. Vazio ou 0 = sem
+        // limite por conta (vale só o `max_uses` do cupom). Conta só os usos
+        // feitos a partir da 1.1.1, quando o pacote passou a registrá-los.
+        'max_uses_per_user' => env('API_KEY_COUPON_MAX_USES_PER_USER', 1),
     ],
 
     'api_keys' => [
@@ -374,6 +395,27 @@ return [
     ],
 
     /*
+    | Teste e reenvio de webhook pelo painel. Cada chamada enfileira uma
+    | entrega para a URL que o cliente cadastrou. Contado por usuário.
+    */
+    'webhook_test_throttle' => [
+        'enabled' => env('API_KEY_WEBHOOK_TEST_THROTTLE_ENABLED', true),
+        'attempts' => env('API_KEY_WEBHOOK_TEST_THROTTLE_ATTEMPTS', 10),
+        'decay_minutes' => env('API_KEY_WEBHOOK_TEST_THROTTLE_DECAY', 1),
+    ],
+
+    /*
+    | Exportação dos dados da conta (`GET /dashboard/profile/export`). Cada
+    | chamada lê a conta inteira, logs de requisição inclusive. Contado por
+    | usuário.
+    */
+    'export_throttle' => [
+        'enabled' => env('API_KEY_EXPORT_THROTTLE_ENABLED', true),
+        'attempts' => env('API_KEY_EXPORT_THROTTLE_ATTEMPTS', 5),
+        'decay_minutes' => env('API_KEY_EXPORT_THROTTLE_DECAY', 60),
+    ],
+
+    /*
     |--------------------------------------------------------------------------
     | API Key Header Configuration
     |--------------------------------------------------------------------------
@@ -462,6 +504,25 @@ return [
         // mais cadastro novo (o cadastro vai para a Stone), então fica de fora
         // por padrão; quem já tem conta pode ativar pelo .env.
         'hidden_gateways' => ['pagarme'],
+
+        // Consultas por minuto, por gateway, que notificações sem assinatura
+        // disparam (Efí, e Pagar.me sem usuário e senha do webhook). Qualquer
+        // um consegue mandar uma, e cada uma vira consulta à API do gateway.
+        // Acima do teto, 503 e o gateway reentrega depois. 0 desliga.
+        'unsigned_notification_lookups_per_minute' => env('API_KEY_UNSIGNED_NOTIFICATION_LOOKUPS_PER_MINUTE', 60),
+
+        // Teto próprio de cada IP, dentro dos tetos acima (o deste bloco e o
+        // `mercadopago.ipn_lookups_per_minute`): um IP sozinho não esgota o
+        // teto geral e barra os avisos verdadeiros. Confere `$request->ip()`:
+        // atrás de proxy ou load balancer, configure o TrustProxies do Laravel,
+        // senão todo aviso parece vir do mesmo IP. 0 desliga.
+        'unsigned_notification_lookups_per_ip_per_minute' => env('API_KEY_UNSIGNED_NOTIFICATION_LOOKUPS_PER_IP_PER_MINUTE', 20),
+
+        // IPs ou faixas (CIDR) dos gateways, separados por vírgula. Aviso
+        // vindo deles não entra em teto nenhum, e passa mesmo durante um flood
+        // de avisos falsos. Só pula o teto: o pagamento ainda é consultado na
+        // API do gateway antes de valer. Vazio = nenhum.
+        'notification_trusted_ips' => array_filter(explode(',', (string) env('API_KEY_NOTIFICATION_TRUSTED_IPS', ''))),
     ],
 
     /*
@@ -588,6 +649,17 @@ return [
         | webhooks configurados no painel.
         */
         'accept_ipn' => env('MP_ACCEPT_IPN', true),
+
+        /*
+        | Quantas consultas à API do Mercado Pago o IPN sem assinatura dispara
+        | por minuto. Como qualquer um consegue mandar um IPN, sem teto cada
+        | aviso falso gastaria o limite de requisições da sua conta no MP.
+        | Passou do teto, o pacote responde 503 e o Mercado Pago reentrega mais
+        | tarde. O mesmo pagamento também não é consultado de novo por IPN
+        | dentro de um minuto. O webhook assinado não entra nesta conta.
+        | 0 desliga o teto.
+        */
+        'ipn_lookups_per_minute' => env('MP_IPN_LOOKUPS_PER_MINUTE', 60),
 
         /*
         | Idade máxima, em segundos, do `ts` de um webhook assinado. Acima disso

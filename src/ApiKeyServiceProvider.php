@@ -204,6 +204,15 @@ class ApiKeyServiceProvider extends ServiceProvider
                     ->appendOutputTo(storage_path('logs/expiring-keys.log'));
             }
 
+            if ((int) config('api-key.sessions.lifetime_days', 30) > 0) {
+                // Login vencido não serve para nada; sem limpeza, a tabela de
+                // tokens só cresce.
+                $schedule->command('sanctum:prune-expired --hours=24')
+                    ->dailyAt('03:15')
+                    ->withoutOverlapping()
+                    ->onOneServer();
+            }
+
             if (config('api-key.request_log.prune_enabled', true)) {
                 // Off-peak: the batched delete competes with the writes that the
                 // request path is still doing against this table.

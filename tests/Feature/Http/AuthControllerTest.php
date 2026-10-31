@@ -137,7 +137,7 @@ describe('Login', function () {
             'password' => 'wrongpassword',
         ]);
 
-        $response->assertStatus(410)
+        $response->assertStatus(422)
             ->assertJson(['message' => __('api-key::messages.incorrect_credentials')]);
     });
 
@@ -152,7 +152,7 @@ describe('Login', function () {
             'password' => 'password123',
         ]);
 
-        $response->assertStatus(410)
+        $response->assertForbidden()
             ->assertJson(['message' => __('api-key::messages.account_not_verified')]);
 
         Notification::assertSentTo($user, EmailVerifyNotification::class);

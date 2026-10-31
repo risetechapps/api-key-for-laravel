@@ -32,7 +32,7 @@ class CouponsController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_coupons'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_coupons'));
         }
     }
 
@@ -51,11 +51,11 @@ class CouponsController extends Controller
 
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_creating_coupon'));
+            return response()->jsonInternal(__('api-key::messages.error_creating_coupon'));
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_creating_coupon'));
+            return response()->jsonInternal(__('api-key::messages.error_creating_coupon'));
 
         }
     }
@@ -67,7 +67,7 @@ class CouponsController extends Controller
         } catch (\Exception $exception) {
             report($exception);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_coupon'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_coupon'));
         }
     }
 
@@ -85,11 +85,11 @@ class CouponsController extends Controller
 
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_updating_coupon'));
+            return response()->jsonInternal(__('api-key::messages.error_updating_coupon'));
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_updating_coupon'));
+            return response()->jsonInternal(__('api-key::messages.error_updating_coupon'));
         }
     }
 
@@ -107,7 +107,7 @@ class CouponsController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_deleting_coupon'));
+            return response()->jsonInternal(__('api-key::messages.error_deleting_coupon'));
         }
     }
 }

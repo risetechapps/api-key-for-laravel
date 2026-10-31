@@ -4,8 +4,9 @@
 
 | Versão | Suporte |
 |---|---|
-| 1.1.x | ✅ |
-| 1.0.x | ❌ atualize para a 1.1 ([guia](UPGRADE.md)) |
+| 1.2.x | ✅ |
+| 1.1.x | ❌ atualize para a 1.2 ([guia](UPGRADE.md)) |
+| 1.0.x | ❌ atualize para a 1.2 ([guia](UPGRADE.md)) |
 
 Correções saem em uma versão de patch da linha suportada.
 

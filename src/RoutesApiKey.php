@@ -97,7 +97,10 @@ class RoutesApiKey
 
                 Route::get('/dashboard/profile', [ProfileController::class, 'show'])->middleware('team.self');
                 Route::put('/dashboard/profile', [ProfileController::class, 'update'])->middleware('team.self');
-                Route::get('/dashboard/profile/export', [ProfileController::class, 'export'])->middleware('team.self');
+                // A exportação lê tudo da conta, logs inclusive: sem freio, uma
+                // sessão roubada (ou um script) pesaria no banco à vontade.
+                Route::get('/dashboard/profile/export', [ProfileController::class, 'export'])
+                    ->middleware([...self::throttle('export_throttle', 5, 60, 'export'), 'team.self']);
                 // Tudo que confere a senha atual divide um contador por usuário,
                 // senão uma sessão roubada serviria para adivinhar a senha.
                 Route::middleware([...self::throttle('auth_throttle', 5, 1, 'account'), 'team.self'])->group(function () {
@@ -122,9 +125,13 @@ class RoutesApiKey
                 Route::put('/dashboard/webhooks/{id}', [WebhookController::class, 'update'])->whereUuid('id');
                 Route::delete('/dashboard/webhooks/{id}', [WebhookController::class, 'destroy'])->whereUuid('id');
                 Route::post('/dashboard/webhooks/{id}/rotate-secret', [WebhookController::class, 'rotateSecret'])->whereUuid('id');
-                Route::post('/dashboard/webhooks/{id}/test', [WebhookController::class, 'test'])->whereUuid('id');
                 Route::get('/dashboard/webhooks/{id}/deliveries', [WebhookController::class, 'deliveries'])->whereUuid('id');
-                Route::post('/dashboard/webhooks/{id}/deliveries/{deliveryId}/redeliver', [WebhookController::class, 'redeliver'])->whereUuid(['id', 'deliveryId']);
+                // Cada chamada enfileira uma entrega para a URL do cliente: sem
+                // freio, viraria um disparador de requisições.
+                Route::middleware(self::throttle('webhook_test_throttle', 10, 1, 'webhook-test'))->group(function () {
+                    Route::post('/dashboard/webhooks/{id}/test', [WebhookController::class, 'test'])->whereUuid('id');
+                    Route::post('/dashboard/webhooks/{id}/deliveries/{deliveryId}/redeliver', [WebhookController::class, 'redeliver'])->whereUuid(['id', 'deliveryId']);
+                });
 
                 Route::middleware('team.role:owner')->group(function () {
                     Route::get('/dashboard/billing/overage', [OverageController::class, 'show']);
@@ -161,12 +168,14 @@ class RoutesApiKey
                 Route::post('/dashboard/profile/regenerate-key', [ProfileController::class, 'regenerateKey']);
 
                 Route::get('/dashboard/plans/{plan}', [PlansController::class, 'show'])->whereUuid('plan');
-                Route::get('/dashboard/coupons', [CouponsController::class, 'index']);
-                Route::get('/dashboard/coupons/{coupon}', [CouponsController::class, 'show'])->whereUuid('coupon');
 
                 // Equipe do painel. O parâmetro do middleware é a permissão exigida
                 // (ver AdminRoles); sem parâmetro vale `manage`, só do admin.
                 Route::middleware(['admin:view'])->group(function () {
+                    // Cupom é segredo comercial: o cliente só valida o código que
+                    // já tem (POST /dashboard/checkout/coupon), nunca lista.
+                    Route::get('/dashboard/coupons', [CouponsController::class, 'index']);
+                    Route::get('/dashboard/coupons/{coupon}', [CouponsController::class, 'show'])->whereUuid('coupon');
                     Route::get('/dashboard/admin/plans', [AdminController::class, 'plans']);
                     Route::get('/dashboard/admin/users', [AdminController::class, 'users']);
                     Route::get('/dashboard/admin/users/{id}', [AdminUserController::class, 'show'])->whereUuid('id');

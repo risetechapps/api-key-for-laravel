@@ -5,7 +5,9 @@ use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
+use RiseTechApps\ApiKey\Http\Controllers\Authentication\TwoFactorController;
 use RiseTechApps\ApiKey\Models\ApiKey\ApiKey;
 use RiseTechApps\ApiKey\Models\AuditLog\AuditLog;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
@@ -13,6 +15,7 @@ use RiseTechApps\ApiKey\Models\Plan\Plan;
 use RiseTechApps\ApiKey\Models\UserPlan\UserPlan;
 use RiseTechApps\ApiKey\Models\Webhook\WebhookDelivery;
 use RiseTechApps\ApiKey\Models\Webhook\WebhookEndpoint;
+use RiseTechApps\ApiKey\Notifications\AccountSecurityNotification;
 use RiseTechApps\ApiKey\Services\WebhookDispatcher;
 use RiseTechApps\ApiKey\Support\Totp;
 use RiseTechApps\ApiKey\Support\WebhookUrlGuard;
@@ -62,6 +65,20 @@ describe('Multiple API keys', function () {
         $this->deleteJson("/api/v1/dashboard/api-keys/{$second['id']}")->assertOk();
 
         $this->withHeaders(['X-API-KEY' => $second['key']])->getJson('/api/v1/test-endpoint')->assertUnauthorized();
+    });
+
+    it('kills the old secret the moment the key is regenerated', function () {
+        // A regeneração mantém o id; o cache de validação não pode seguir
+        // aceitando o segredo antigo até expirar.
+        Sanctum::actingAs($this->user);
+        $created = $this->postJson('/api/v1/dashboard/api-keys', ['name' => 'Produção'])->json('data');
+
+        $this->withHeaders(['X-API-KEY' => $created['key']])->getJson('/api/v1/test-endpoint')->assertOk();
+
+        $new = $this->postJson("/api/v1/dashboard/api-keys/{$created['id']}/regenerate")->assertOk()->json('data.key');
+
+        $this->withHeaders(['X-API-KEY' => $created['key']])->getJson('/api/v1/test-endpoint')->assertUnauthorized();
+        $this->withHeaders(['X-API-KEY' => $new])->getJson('/api/v1/test-endpoint')->assertOk();
     });
 
     it('caps keys per account', function () {
@@ -136,6 +153,40 @@ describe('Per-minute rate limit', function () {
         $this->withHeaders(['X-API-KEY' => $key->plainKey])->getJson('/api/v1/test-endpoint')->assertStatus(429);
     });
 
+    it('never lets a key go above the plan limit', function () {
+        $this->plan->update(['rate_limit_per_minute' => 1]);
+        $key = ApiKey::factory()->create([
+            'authentication_id' => $this->user->getKey(),
+            'active' => true,
+            'rate_limit_per_minute' => 1_000_000,
+        ]);
+
+        $this->withHeaders(['X-API-KEY' => $key->plainKey])->getJson('/api/v1/test-endpoint')
+            ->assertOk()->assertHeader('X-RateLimit-Limit', '1');
+        $this->withHeaders(['X-API-KEY' => $key->plainKey])->getJson('/api/v1/test-endpoint')->assertStatus(429);
+    });
+
+    it('counts the plan limit for the whole account, not per key', function () {
+        // Com um contador por chave, cinco chaves davam cinco vezes o plano.
+        $this->plan->update(['rate_limit_per_minute' => 2]);
+        $first = ApiKey::factory()->create(['authentication_id' => $this->user->getKey(), 'active' => true]);
+        $second = ApiKey::factory()->create(['authentication_id' => $this->user->getKey(), 'active' => true]);
+
+        $this->withHeaders(['X-API-KEY' => $first->plainKey])->getJson('/api/v1/test-endpoint')->assertOk();
+        $this->withHeaders(['X-API-KEY' => $second->plainKey])->getJson('/api/v1/test-endpoint')->assertOk();
+        $this->withHeaders(['X-API-KEY' => $second->plainKey])->getJson('/api/v1/test-endpoint')->assertStatus(429);
+        $this->withHeaders(['X-API-KEY' => $first->plainKey])->getJson('/api/v1/test-endpoint')->assertStatus(429);
+    });
+
+    it('refuses a key limit above the plan in the panel', function () {
+        $this->plan->update(['rate_limit_per_minute' => 60]);
+        Sanctum::actingAs($this->user);
+
+        $this->postJson('/api/v1/dashboard/api-keys', ['name' => 'B', 'rate_limit_per_minute' => 61])
+            ->assertUnprocessable()->assertJsonValidationErrors('rate_limit_per_minute');
+        $this->postJson('/api/v1/dashboard/api-keys', ['name' => 'B', 'rate_limit_per_minute' => 60])->assertOk();
+    });
+
     it('does not limit when nothing is configured', function () {
         $key = ApiKey::factory()->create(['authentication_id' => $this->user->getKey(), 'active' => true]);
 
@@ -173,6 +224,32 @@ describe('Outbound webhooks', function () {
 
         expect(WebhookUrlGuard::isAllowed('https://10.0.0.8/x'))->toBeFalse()
             ->and(WebhookUrlGuard::isAllowed('https://8.8.8.8/x'))->toBeTrue();
+    });
+
+    it('refuses ranges the PHP filter lets through', function () {
+        config(['api-key.webhooks.block_private_networks' => true]);
+
+        // CGNAT, NAT64 (embute 127.0.0.1), 6to4, faixa de teste, multicast,
+        // SIIT (embute 10.0.0.1) e site-local.
+        foreach (['100.64.0.1', '[64:ff9b::7f00:1]', '[2002:7f00:1::1]', '198.18.0.1', '224.0.0.1', '[2001:db8::1]', '[::ffff:0:a00:1]', '[fec0::1]'] as $host) {
+            expect(WebhookUrlGuard::isAllowed("https://{$host}/x"))->toBeFalse($host);
+        }
+
+        expect(WebhookUrlGuard::isAllowed('https://[2606:4700:4700::1111]/x'))->toBeTrue();
+    });
+
+    it('throttles test and redelivery requests', function () {
+        // As rotas leem a config no boot: vale o padrão, 10 por minuto.
+        Queue::fake();
+        Sanctum::actingAs($this->user);
+
+        $id = $this->postJson('/api/v1/dashboard/webhooks', ['url' => 'https://hooks.example.com/api'])->json('data.id');
+
+        foreach (range(1, 10) as $_) {
+            $this->postJson("/api/v1/dashboard/webhooks/{$id}/test")->assertOk();
+        }
+
+        $this->postJson("/api/v1/dashboard/webhooks/{$id}/test")->assertStatus(429);
     });
 
     it('pins delivery to the addresses the guard checked', function () {
@@ -315,6 +392,45 @@ describe('Two-factor authentication', function () {
         $this->postJson('/api/v1/login/two-factor', ['challenge' => $challenge, 'recovery_code' => 'AAAAA-BBBBB'])->assertStatus(422);
     });
 
+    it('locks the code step per account, whatever the IP', function () {
+        // O throttle da rota é por IP: com muitos IPs, quem tem a senha
+        // adivinharia o código. O contador da conta soma todos.
+        Notification::fake();
+        config(['api-key.two_factor.max_attempts' => 2]);
+        $secret = enableTwoFactor($this->user);
+        $challenge = $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'password'])->json('data.challenge');
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.1'])
+            ->postJson('/api/v1/login/two-factor', ['challenge' => $challenge, 'code' => '000000'])->assertStatus(422);
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.2'])
+            ->postJson('/api/v1/login/two-factor', ['challenge' => $challenge, 'code' => '000000'])->assertStatus(422);
+
+        // Bloqueada: nem o código certo passa, e não gasta o código.
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.3'])
+            ->postJson('/api/v1/login/two-factor', ['challenge' => $challenge, 'code' => Totp::code($secret)])
+            ->assertStatus(429)
+            ->assertHeader('Retry-After');
+
+        Notification::assertSentTo($this->user, AccountSecurityNotification::class,
+            fn ($n) => $n->event === AccountSecurityNotification::TWO_FACTOR_LOCKED);
+        Notification::assertSentToTimes($this->user, AccountSecurityNotification::class, 1);
+        expect(AuditLog::where('action', 'account.two_factor_locked')->count())->toBe(1);
+
+        $this->travel(16)->minutes();
+
+        $this->postJson('/api/v1/login/two-factor', ['challenge' => TwoFactorController::challengeFor($this->user), 'code' => Totp::code($secret)])->assertOk();
+    });
+
+    it('starts the count over after a successful code', function () {
+        config(['api-key.two_factor.max_attempts' => 2]);
+        $secret = enableTwoFactor($this->user);
+        $challenge = $this->postJson('/api/v1/login', ['email' => 'ana@example.com', 'password' => 'password'])->json('data.challenge');
+
+        $this->postJson('/api/v1/login/two-factor', ['challenge' => $challenge, 'code' => '000000'])->assertStatus(422);
+        $this->postJson('/api/v1/login/two-factor', ['challenge' => $challenge, 'code' => Totp::code($secret)])->assertOk();
+        $this->postJson('/api/v1/login/two-factor', ['challenge' => $challenge, 'code' => '000000'])->assertStatus(422);
+    });
+
     it('rejects a forged or expired challenge', function () {
         enableTwoFactor($this->user);
 
@@ -339,13 +455,110 @@ describe('Two-factor authentication', function () {
         $this->getJson('/api/v1/dashboard/admin/users')->assertOk();
     });
 
-    it('disables with the password', function () {
+    it('disables with the password and a code from the app', function () {
+        $secret = enableTwoFactor($this->user);
+        Sanctum::actingAs($this->user);
+
+        $this->deleteJson('/api/v1/dashboard/two-factor', ['password' => 'password', 'code' => Totp::code($secret)])->assertOk();
+
+        expect($this->user->fresh()->two_factor_confirmed_at)->toBeNull();
+    });
+
+    it('disables with a recovery code', function () {
         enableTwoFactor($this->user);
+        Sanctum::actingAs($this->user);
+
+        $this->deleteJson('/api/v1/dashboard/two-factor', ['password' => 'password', 'recovery_code' => 'aaaaa-bbbbb'])->assertOk();
+
+        expect($this->user->fresh()->two_factor_confirmed_at)->toBeNull();
+    });
+
+    it('does not disable with the password alone', function () {
+        // Senha vazada é justamente o caso que a 2FA cobre.
+        enableTwoFactor($this->user);
+        Sanctum::actingAs($this->user);
+
+        $this->deleteJson('/api/v1/dashboard/two-factor', ['password' => 'password'])->assertUnprocessable();
+        $this->deleteJson('/api/v1/dashboard/two-factor', ['password' => 'password', 'code' => '000000'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('code');
+
+        expect($this->user->fresh()->two_factor_confirmed_at)->not->toBeNull();
+    });
+
+    it('regenerates recovery codes only with a second factor', function () {
+        // Códigos novos entram no login sem o aplicativo: só a senha não basta.
+        $secret = enableTwoFactor($this->user);
+        Sanctum::actingAs($this->user);
+
+        $this->postJson('/api/v1/dashboard/two-factor/recovery-codes', ['password' => 'password'])->assertUnprocessable();
+        $this->postJson('/api/v1/dashboard/two-factor/recovery-codes', ['password' => 'password', 'code' => '000000'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('code');
+
+        expect($this->user->fresh()->two_factor_recovery_codes)->toBe([hash('sha256', 'AAAAA-BBBBB')]);
+
+        $codes = $this->postJson('/api/v1/dashboard/two-factor/recovery-codes', ['password' => 'password', 'code' => Totp::code($secret)])
+            ->assertOk()
+            ->json('data.recovery_codes');
+
+        expect($codes)->toHaveCount(8)
+            ->and($this->user->fresh()->two_factor_recovery_codes)->not->toContain(hash('sha256', 'AAAAA-BBBBB'));
+    });
+
+    it('regenerates recovery codes with a recovery code, which is spent', function () {
+        enableTwoFactor($this->user);
+        Sanctum::actingAs($this->user);
+
+        $codes = $this->postJson('/api/v1/dashboard/two-factor/recovery-codes', ['password' => 'password', 'recovery_code' => 'AAAAA-BBBBB'])
+            ->assertOk()
+            ->json('data.recovery_codes');
+
+        expect($this->user->fresh()->two_factor_recovery_codes)->toBe(array_map(fn ($c) => hash('sha256', $c), $codes));
+    });
+
+    it('counts wrong codes in the panel toward the account lockout', function () {
+        // Com a sessão e a senha, o painel não pode servir para adivinhar o
+        // código fora do contador do login.
+        Notification::fake();
+        config(['api-key.two_factor.max_attempts' => 2]);
+        $secret = enableTwoFactor($this->user);
+        Sanctum::actingAs($this->user);
+
+        $this->deleteJson('/api/v1/dashboard/two-factor', ['password' => 'password', 'code' => '000000'])->assertUnprocessable();
+        $this->postJson('/api/v1/dashboard/two-factor/recovery-codes', ['password' => 'password', 'code' => '000000'])->assertUnprocessable();
+
+        $this->deleteJson('/api/v1/dashboard/two-factor', ['password' => 'password', 'code' => Totp::code($secret)])
+            ->assertStatus(429)
+            ->assertHeader('Retry-After');
+
+        $challenge = TwoFactorController::challengeFor($this->user);
+        $this->postJson('/api/v1/login/two-factor', ['challenge' => $challenge, 'code' => Totp::code($secret)])->assertStatus(429);
+
+        Notification::assertSentTo($this->user, AccountSecurityNotification::class,
+            fn ($n) => $n->event === AccountSecurityNotification::TWO_FACTOR_LOCKED);
+        expect($this->user->fresh()->two_factor_confirmed_at)->not->toBeNull();
+    });
+
+    it('does not count a wrong password toward the code lockout', function () {
+        config(['api-key.two_factor.max_attempts' => 1]);
+        $secret = enableTwoFactor($this->user);
+        Sanctum::actingAs($this->user);
+
+        $this->deleteJson('/api/v1/dashboard/two-factor', ['password' => 'wrong', 'code' => '000000'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('password');
+
+        $this->deleteJson('/api/v1/dashboard/two-factor', ['password' => 'password', 'code' => Totp::code($secret)])->assertOk();
+    });
+
+    it('cancels an unconfirmed setup with the password alone', function () {
+        $this->user->forceFill(['two_factor_secret' => Totp::generateSecret()])->save();
         Sanctum::actingAs($this->user);
 
         $this->deleteJson('/api/v1/dashboard/two-factor', ['password' => 'password'])->assertOk();
 
-        expect($this->user->fresh()->two_factor_confirmed_at)->toBeNull();
+        expect($this->user->fresh()->two_factor_secret)->toBeNull();
     });
 });
 

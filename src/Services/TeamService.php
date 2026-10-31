@@ -2,6 +2,7 @@
 
 namespace RiseTechApps\ApiKey\Services;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -169,7 +170,40 @@ class TeamService
             throw ValidationException::withMessages(['email' => __('api-key::messages.team_email_taken')]);
         }
 
-        $member = DB::transaction(function () use ($invitation, $password, $name) {
+        try {
+            $member = $this->createMember($invitation, $password, $name);
+        } catch (QueryException $e) {
+            // Mesmo e-mail cadastrado ao mesmo tempo por outro caminho.
+            if (Authentication::isEmailTaken($e)) {
+                throw ValidationException::withMessages(['email' => __('api-key::messages.team_email_taken')]);
+            }
+
+            throw $e;
+        }
+
+        $invitation->refresh();
+
+        AuditLogger::record('team.member_joined', $invitation->account, ['email' => $member->email, 'role' => $member->team_role], $member);
+
+        return $member;
+    }
+
+    private function createMember(TeamInvitation $invitation, string $password, ?string $name): Authentication
+    {
+        return DB::transaction(function () use ($invitation, $password, $name) {
+            // Marca o convite antes de criar a conta, e só se ninguém marcou:
+            // dois aceites ao mesmo tempo passariam os dois pelo isUsable() lá
+            // em cima e virariam dois membros.
+            $claimed = TeamInvitation::query()
+                ->whereKey($invitation->getKey())
+                ->whereNull('accepted_at')
+                ->where('expires_at', '>', now())
+                ->update(['accepted_at' => now()]);
+
+            if ($claimed === 0) {
+                throw ValidationException::withMessages(['token' => __('api-key::messages.team_invitation_invalid')]);
+            }
+
             $member = new Authentication;
             $member->forceFill([
                 'name' => trim((string) ($name ?: $invitation->name)),
@@ -183,14 +217,8 @@ class TeamService
                 'email_verified_at' => now(),
             ])->save();
 
-            $invitation->update(['accepted_at' => now()]);
-
             return $member;
         });
-
-        AuditLogger::record('team.member_joined', $invitation->account, ['email' => $member->email, 'role' => $member->team_role], $member);
-
-        return $member;
     }
 
     public function updateRole(Authentication $owner, Authentication $actor, Authentication $member, string $role): void

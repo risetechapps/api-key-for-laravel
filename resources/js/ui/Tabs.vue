@@ -118,6 +118,7 @@ function onKeydown(event: KeyboardEvent) {
     if (next === undefined) return;
     event.preventDefault();
     const tab = props.tabs[(next + props.tabs.length) % props.tabs.length];
+    if (!tab) return;
     select(tab.key);
     nextTick(() => tabEls.get(tab.key)?.focus());
 }

@@ -3,6 +3,7 @@
 namespace RiseTechApps\ApiKey\Http\Controllers\Authentication;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,13 +17,17 @@ use RiseTechApps\ApiKey\Notifications\AccountSecurityNotification;
 use RiseTechApps\ApiKey\Notifications\EmailChangeNotification;
 use RiseTechApps\ApiKey\Services\AuditLogger;
 use RiseTechApps\ApiKey\Services\AuthService;
+use RiseTechApps\ApiKey\Services\SecondFactorService;
 
 /**
  * Senha, e-mail e sessões da própria conta.
  */
 class AccountSecurityController extends Controller
 {
-    public function __construct(private readonly AuthService $authService) {}
+    public function __construct(
+        private readonly AuthService $authService,
+        private readonly SecondFactorService $secondFactor,
+    ) {}
 
     /**
      * Troca a senha de quem está logado.
@@ -42,6 +47,11 @@ class AccountSecurityController extends Controller
 
         if (! $this->authService->passwordMatches($user, $data['current_password'])) {
             return response()->jsonError(__('api-key::messages.password_incorrect'));
+        }
+
+        // Com 2FA, senha vazada mais sessão roubada não trocam a senha do dono.
+        if ($refusal = $this->secondFactor->confirm($request, $user)) {
+            return $refusal;
         }
 
         $user->forceFill(['password' => Hash::make($data['password'])])->save();
@@ -82,6 +92,13 @@ class AccountSecurityController extends Controller
 
         if ($this->emailTaken($email, $user)) {
             return response()->jsonError(__('api-key::messages.email_taken'));
+        }
+
+        // Por último, para não gastar o código numa recusa que viria de
+        // qualquer jeito. Com 2FA, senha e sessão não levam o e-mail (e, com
+        // ele, a recuperação da conta) para outro dono.
+        if ($refusal = $this->secondFactor->confirm($request, $user)) {
+            return $refusal;
         }
 
         $user->forceFill(['pending_email' => $email])->save();
@@ -125,13 +142,24 @@ class AccountSecurityController extends Controller
 
         $oldEmail = $user->email;
 
-        DB::transaction(function () use ($user, $pending) {
-            $user->forceFill([
-                'email' => $pending,
-                'pending_email' => null,
-                'email_verified_at' => now(),
-            ])->save();
-        });
+        try {
+            DB::transaction(function () use ($user, $pending) {
+                $user->forceFill([
+                    'email' => $pending,
+                    'pending_email' => null,
+                    'email_verified_at' => now(),
+                ])->save();
+            });
+        } catch (QueryException $e) {
+            // Cadastro com o mesmo endereço entre a checagem acima e aqui.
+            if (! Authentication::isEmailTaken($e)) {
+                throw $e;
+            }
+
+            $user->refresh()->forceFill(['pending_email' => null])->save();
+
+            return redirect('/login?error=email_taken');
+        }
 
         Notification::route('mail', $oldEmail)->notify(
             AccountSecurityNotification::make(AccountSecurityNotification::EMAIL_CHANGED, ['new_email' => $pending])
@@ -150,7 +178,9 @@ class AccountSecurityController extends Controller
         $user = $this->owner($request);
         $currentId = $this->currentTokenId($request);
 
+        // Vencida não entra mais, então não é sessão aberta.
         $sessions = $user->tokens()
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->orderByDesc('last_used_at')
             ->orderByDesc('created_at')
             ->get()
@@ -163,6 +193,7 @@ class AccountSecurityController extends Controller
                     'user_agent' => $device['user_agent'] ?? null,
                     'created_at' => $token->getAttribute('created_at')?->toIso8601String(),
                     'last_used_at' => $token->getAttribute('last_used_at')?->toIso8601String(),
+                    'expires_at' => $token->getAttribute('expires_at')?->toIso8601String(),
                     'current' => $token->getKey() === $currentId,
                 ];
             })

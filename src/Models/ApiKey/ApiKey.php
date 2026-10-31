@@ -35,6 +35,9 @@ class ApiKey extends Model
 {
     use HasCodeGenerate, HasFactory, HasToUpper, HasUuids;
 
+    /** Quantas origens uma chave aceita. Cada uma é conferida a cada requisição. */
+    public const MAX_ALLOWED_ORIGINS = 50;
+
     /**
      * The plain key value (only set during creation, not stored in DB).
      * This is returned to the user once after creation.
@@ -224,13 +227,16 @@ class ApiKey extends Model
         $cachedId = Cache::get($cacheKey);
 
         if ($cachedId) {
-            $cachedApiKey = self::usableScope(self::where('id', $cachedId))->first();
+            // O lookup_hash amarra o cache ao segredo atual: a regeneração
+            // mantém o id, e só o id deixaria o segredo antigo valendo até o
+            // cache expirar.
+            $cachedApiKey = self::usableScope(self::where('id', $cachedId)->where('lookup_hash', $digest))->first();
 
             if ($cachedApiKey) {
                 return $cachedApiKey;
             }
 
-            // Key was revoked or expired since it was cached.
+            // Key was revoked, expired or regenerated since it was cached.
             Cache::forget($cacheKey);
         }
 

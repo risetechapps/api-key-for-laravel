@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 use RiseTechApps\ApiKey\Http\Resources\Authentication\AuthenticationMeResource;
@@ -14,6 +13,7 @@ use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 use RiseTechApps\ApiKey\Notifications\AccountSecurityNotification;
 use RiseTechApps\ApiKey\Services\AuditLogger;
 use RiseTechApps\ApiKey\Services\AuthService;
+use RiseTechApps\ApiKey\Services\SecondFactorService;
 use RiseTechApps\ApiKey\Support\Totp;
 
 /**
@@ -25,7 +25,10 @@ class TwoFactorController extends Controller
     /** Validade do desafio entre a senha e o código. */
     private const CHALLENGE_MINUTES = 5;
 
-    public function __construct(private readonly AuthService $authService) {}
+    public function __construct(
+        private readonly AuthService $authService,
+        private readonly SecondFactorService $secondFactor,
+    ) {}
 
     /**
      * Desafio emitido pelo login quando a conta tem 2FA. Cifrado e com prazo:
@@ -50,15 +53,23 @@ class TwoFactorController extends Controller
 
         $user = $this->userFromChallenge($data['challenge']);
 
+        // 410 de propósito: o desafio venceu, e o login.vue volta para a senha.
         if (! $user || ! $user->two_factor_confirmed_at || ! $user->isEnabled()) {
             return response()->jsonGone(__('api-key::messages.two_factor_challenge_invalid'));
         }
 
-        if (! $this->passesSecondFactor($user, $data['code'] ?? null, $data['recovery_code'] ?? null)) {
+        if ($locked = $this->secondFactor->lockedOut($user)) {
+            return $locked;
+        }
+
+        if (! $this->secondFactor->passes($user, $data['code'] ?? null, $data['recovery_code'] ?? null)) {
             AuditLogger::record('account.two_factor_failed', $user, [], $user);
+            $this->secondFactor->countFailure($user, $user);
 
             return response()->jsonError(__('api-key::messages.two_factor_code_invalid'));
         }
+
+        $this->secondFactor->clearFailures($user);
 
         $result = $this->authService->issueToken($user, $request);
 
@@ -120,13 +131,17 @@ class TwoFactorController extends Controller
         return response()->jsonSuccess(['recovery_codes' => $codes]);
     }
 
+    /**
+     * Pede a senha e um segundo fator: com só a senha, quem a descobriu
+     * desligaria a própria proteção feita contra senha vazada. Configuração
+     * ainda não confirmada sai só com a senha, que ali não há segundo fator.
+     */
     public function disable(Request $request): JsonResponse
     {
-        $request->validate(['password' => 'required|string']);
         $user = $this->owner($request);
 
-        if (! $this->authService->passwordMatches($user, (string) $request->input('password'))) {
-            return response()->jsonError(__('api-key::messages.password_incorrect'));
+        if ($refusal = $this->checkPasswordAndFactor($request, $user)) {
+            return $refusal;
         }
 
         $user->forceFill([
@@ -141,17 +156,20 @@ class TwoFactorController extends Controller
         return response()->jsonSuccess(['message' => __('api-key::messages.two_factor_disabled')]);
     }
 
+    /**
+     * Pede a senha e um segundo fator, como o disable(): códigos novos entram
+     * no login sem o aplicativo, então só a senha não pode bastar.
+     */
     public function regenerateRecoveryCodes(Request $request): JsonResponse
     {
-        $request->validate(['password' => 'required|string']);
         $user = $this->owner($request);
-
-        if (! $this->authService->passwordMatches($user, (string) $request->input('password'))) {
-            return response()->jsonError(__('api-key::messages.password_incorrect'));
-        }
 
         if (! $user->two_factor_confirmed_at) {
             return response()->jsonError(__('api-key::messages.two_factor_not_enabled'));
+        }
+
+        if ($refusal = $this->checkPasswordAndFactor($request, $user)) {
+            return $refusal;
         }
 
         $codes = $this->newRecoveryCodes();
@@ -162,28 +180,16 @@ class TwoFactorController extends Controller
         return response()->jsonSuccess(['recovery_codes' => $codes]);
     }
 
-    /**
-     * Código do aplicativo, ou um código de recuperação (que deixa de valer
-     * ao ser usado). O mesmo código do aplicativo não passa duas vezes.
-     */
-    private function passesSecondFactor(Authentication $user, ?string $code, ?string $recovery): bool
+    /** Senha e, com a 2FA confirmada, um segundo fator (ver SecondFactorService). */
+    private function checkPasswordAndFactor(Request $request, Authentication $user): ?JsonResponse
     {
-        if ($code) {
-            $step = Totp::verify((string) $user->two_factor_secret, $code);
+        $data = $request->validate(['password' => 'required|string']);
 
-            return $step !== null && Cache::add("api-key:2fa-used:{$user->getKey()}:{$step}", true, 120);
+        if (! $this->authService->passwordMatches($user, (string) $data['password'])) {
+            return response()->jsonValidation(['password' => [__('api-key::messages.password_incorrect')]], __('api-key::messages.password_incorrect'));
         }
 
-        $hash = hash('sha256', strtoupper(trim((string) $recovery)));
-        $codes = $user->two_factor_recovery_codes ?? [];
-
-        if (! in_array($hash, $codes, true)) {
-            return false;
-        }
-
-        $user->forceFill(['two_factor_recovery_codes' => array_values(array_diff($codes, [$hash]))])->save();
-
-        return true;
+        return $this->secondFactor->confirm($request, $user);
     }
 
     /** @return list<string> */

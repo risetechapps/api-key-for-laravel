@@ -189,6 +189,21 @@ describe('Data export', function () {
             ->and($data['api_key'])->not->toHaveKey('key')
             ->and($response->streamedContent())->not->toContain('password');
     });
+
+    it('is throttled per user', function () {
+        Sanctum::actingAs($this->user);
+
+        foreach (range(1, 5) as $ignored) {
+            $this->get('/api/v1/dashboard/profile/export')->assertOk();
+        }
+
+        $this->get('/api/v1/dashboard/profile/export')->assertStatus(429);
+
+        // O contador é do usuário: outra conta exporta normalmente.
+        Sanctum::actingAs(Authentication::factory()->create());
+
+        $this->get('/api/v1/dashboard/profile/export')->assertOk();
+    });
 });
 
 describe('Account deletion', function () {

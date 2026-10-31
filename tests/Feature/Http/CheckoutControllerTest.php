@@ -174,6 +174,59 @@ describe('Checkout, before the gateway', function () {
         expect($this->gateway->requests)->toBeEmpty()
             ->and($this->user->fresh()->hasActivePlan())->toBeTrue();
     });
+
+    it('lets the same account use a coupon only once', function () {
+        // Sem limite por conta, um cupom de 100% renovava a assinatura de
+        // graça até acabar o max_uses.
+        $coupon = Coupon::factory()->create(['type' => 'percentage', 'value' => 100, 'max_uses' => 10]);
+
+        $this->postJson('/api/v1/dashboard/checkout/process', [
+            'plan_id' => $this->plan->getKey(),
+            'coupon_code' => $coupon->code,
+            ...cardPayload(),
+        ])->assertStatus(200);
+
+        $this->postJson('/api/v1/dashboard/checkout/coupon', [
+            'code' => $coupon->code,
+            'plan_id' => $this->plan->getKey(),
+        ])->assertStatus(422)->assertJsonPath('message', __('api-key::messages.coupon_already_used'));
+
+        expect($coupon->fresh()->uses)->toBe(1);
+    });
+
+    it('refuses the purchase instead of charging full price when the coupon claim fails', function () {
+        // A tela mostrou o preço com desconto. Cupom já usado (outra aba) ou
+        // esgotado entre a validação e o pagamento não pode virar cobrança cheia.
+        $coupon = Coupon::factory()->create(['type' => 'percentage', 'value' => 100, 'max_uses' => 10]);
+
+        $this->postJson('/api/v1/dashboard/checkout/process', [
+            'plan_id' => $this->plan->getKey(),
+            'coupon_code' => $coupon->code,
+            ...cardPayload(),
+        ])->assertStatus(200);
+
+        $this->postJson('/api/v1/dashboard/checkout/process', [
+            'plan_id' => $this->plan->getKey(),
+            'coupon_code' => $coupon->code,
+            ...cardPayload(),
+        ])->assertStatus(422)->assertJsonPath('message', __('api-key::messages.coupon_already_used'));
+
+        $exhausted = Coupon::factory()->create(['type' => 'percentage', 'value' => 10, 'max_uses' => 1, 'uses' => 1]);
+
+        $this->postJson('/api/v1/dashboard/checkout/process', [
+            'plan_id' => $this->plan->getKey(),
+            'coupon_code' => $exhausted->code,
+            ...cardPayload(),
+        ])->assertStatus(422)->assertJsonPath('message', __('api-key::messages.coupon_invalid_or_expired'));
+
+        $this->postJson('/api/v1/dashboard/checkout/process', [
+            'plan_id' => $this->plan->getKey(),
+            'coupon_code' => 'NAOEXISTE',
+            ...cardPayload(),
+        ])->assertStatus(422);
+
+        expect($this->gateway->requests)->toBeEmpty();
+    });
 });
 
 describe('Checkout, at the gateway', function () {

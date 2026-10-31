@@ -85,6 +85,18 @@ describe('Gateway registry', function () {
             ->and(GatewayRegistry::forPaymentId('ORD01JQ4S4KY8HWQ6NA5PXB65B3D3'))->toBeNull();
     });
 
+    it('says which notifications prove their origin', function () {
+        // As que não provam passam pelo teto de consultas por minuto.
+        expect((new StripeGateway)->webhooksAuthenticated())->toBeTrue()
+            ->and((new PagbankGateway)->webhooksAuthenticated())->toBeTrue()
+            ->and((new EfiGateway)->webhooksAuthenticated())->toBeFalse()
+            ->and((new PagarmeGateway)->webhooksAuthenticated())->toBeFalse();
+
+        config(['api-key.pagarme.webhook_user' => 'hook', 'api-key.pagarme.webhook_password' => 's3cret']);
+
+        expect((new PagarmeGateway)->webhooksAuthenticated())->toBeTrue();
+    });
+
     it('does not take a PagBank order for a Mercado Pago order', function () {
         expect(AutomaticPaymentService::isOrderId('ORD01JQ4S4KY8HWQ6NA5PXB65B3D3'))->toBeTrue()
             ->and(AutomaticPaymentService::isOrderId('ORDE_1A2B3C'))->toBeFalse();

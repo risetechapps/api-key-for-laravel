@@ -53,7 +53,7 @@ class LogController extends Controller
         ]);
 
         if (! $this->tableExists()) {
-            return response()->jsonGone(__('api-key::messages.monitoring_unavailable'));
+            return response()->jsonBase(false, __('api-key::messages.monitoring_unavailable'), null, 503);
         }
 
         $query = $this->baseQuery();
@@ -109,7 +109,7 @@ class LogController extends Controller
     public function show(Request $request, string $id): JsonResponse
     {
         if (! $this->tableExists()) {
-            return response()->jsonGone(__('api-key::messages.monitoring_unavailable'));
+            return response()->jsonBase(false, __('api-key::messages.monitoring_unavailable'), null, 503);
         }
 
         $log = $this->baseQuery()->where('uuid', $id)->first();

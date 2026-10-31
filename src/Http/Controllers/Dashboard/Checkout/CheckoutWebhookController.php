@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 use MercadoPago\Client\Payment\PaymentClient;
 use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
@@ -13,6 +15,7 @@ use RiseTechApps\ApiKey\Gateways\GatewayRegistry;
 use RiseTechApps\ApiKey\Services\AutomaticPaymentService;
 use RiseTechApps\ApiKey\Services\PaymentOutcomeService;
 use RiseTechApps\ApiKey\Services\SystemHealthService;
+use Symfony\Component\HttpFoundation\IpUtils;
 
 /**
  * Notificações dos gateways: webhook assinado e IPN do Mercado Pago, e o
@@ -25,6 +28,9 @@ use RiseTechApps\ApiKey\Services\SystemHealthService;
  */
 class CheckoutWebhookController extends Controller
 {
+    /** Status de pagamento que não mudam mais em segundos (ver ipnLookupRefusal). */
+    private const FINAL_STATUSES = ['approved', 'rejected', 'cancelled', 'refunded', 'charged_back'];
+
     public function __construct(
         protected readonly PaymentOutcomeService $paymentOutcome,
     ) {}
@@ -110,6 +116,10 @@ class CheckoutWebhookController extends Controller
             return response()->json(['message' => 'ok']);
         }
 
+        if ($signature === '' && ($refusal = $this->ipnLookupRefusal($request, (string) $paymentId))) {
+            return $refusal;
+        }
+
         MercadoPagoConfig::setAccessToken(config('api-key.mercadopago.access_token'));
         $client = new PaymentClient;
 
@@ -143,6 +153,14 @@ class CheckoutWebhookController extends Controller
         // é motivo para pedir reentrega.
         $this->paymentOutcome->apply($payment);
 
+        // Só depois de aplicado: se a consulta ou o serviço falhar, a
+        // reentrega do Mercado Pago precisa consultar de novo. E só com status
+        // final: de pending para approved em segundos é o caminho normal, e o
+        // aviso seguinte precisa ser consultado.
+        if ($signature === '' && in_array($payment->status ?? null, self::FINAL_STATUSES, true)) {
+            Cache::put('api-key:mp-ipn:'.$paymentId, true, 60);
+        }
+
         return response()->json(['message' => 'ok']);
     }
 
@@ -160,6 +178,11 @@ class CheckoutWebhookController extends Controller
 
         if (! $driver) {
             return response()->json(['message' => 'not found'], 404);
+        }
+
+        // Antes de webhookPaymentIds(): a Efí já consulta a API ali dentro.
+        if (! $driver->webhooksAuthenticated() && ($refusal = $this->unsignedLookupRefusal($request, $gateway))) {
+            return $refusal;
         }
 
         try {
@@ -336,6 +359,94 @@ class CheckoutWebhookController extends Controller
         $hasResource = $request->input('resource') !== null || $request->query('id') !== null;
 
         return $hasTopic && $hasResource;
+    }
+
+    /**
+     * Freio das consultas que o IPN sem assinatura dispara. Ver
+     * `api-key.mercadopago.ipn_lookups_per_minute`.
+     *
+     * O mesmo pagamento já aplicado, com status final, há menos de um minuto
+     * responde 'ok' sem consultar: o Mercado Pago repete o aviso e manda o
+     * webhook assinado junto. A marca só é gravada depois do apply(), então
+     * uma consulta que falhou não bloqueia a reentrega, e pagamento ainda
+     * pendente não é marcado, para a aprovação logo depois não se perder.
+     */
+    private function ipnLookupRefusal(Request $request, string $paymentId): ?JsonResponse
+    {
+        if (Cache::has('api-key:mp-ipn:'.$paymentId)) {
+            return response()->json(['message' => 'ok']);
+        }
+
+        return $this->lookupBudgetRefusal(
+            $request,
+            'api-key:mp-ipn-lookups',
+            (int) config('api-key.mercadopago.ipn_lookups_per_minute', 60),
+            ['gateway' => 'mercadopago', 'payment_id' => $paymentId],
+        );
+    }
+
+    /**
+     * Teto das consultas que uma notificação sem prova de origem dispara nos
+     * outros gateways (Efí, Pagar.me sem usuário e senha). Mesmo motivo do
+     * ipnLookupRefusal(): sem ele, avisos falsos gastariam o limite da conta
+     * no gateway.
+     */
+    private function unsignedLookupRefusal(Request $request, string $gateway): ?JsonResponse
+    {
+        return $this->lookupBudgetRefusal(
+            $request,
+            'api-key:gateway-unsigned-lookups:'.$gateway,
+            (int) config('api-key.payment.unsigned_notification_lookups_per_minute', 60),
+            ['gateway' => $gateway],
+        );
+    }
+
+    /**
+     * Gasta uma consulta do teto `$perMinute`, ou devolve 503 para o gateway
+     * reentregar depois, em vez de perder o aviso.
+     *
+     * Um teto só, para todo mundo, deixaria um flood de avisos falsos barrar
+     * os verdadeiros enquanto durasse. Por isso:
+     *   - IP em `payment.notification_trusted_ips` (os IPs do gateway) não
+     *     entra no teto: o aviso verdadeiro passa durante o flood;
+     *   - cada IP tem um teto próprio (`unsigned_notification_lookups_per_ip_per_minute`),
+     *     e só o que passa dele gasta o teto geral: um IP sozinho não esgota
+     *     o geral.
+     * A consulta à API continua valendo para todos: o IP confiável só pula o
+     * teto, não aprova nada.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    private function lookupBudgetRefusal(Request $request, string $key, int $perMinute, array $context): ?JsonResponse
+    {
+        if ($perMinute <= 0) {
+            return null;
+        }
+
+        $ip = (string) $request->ip();
+        $trusted = array_values(array_filter(array_map('trim', (array) config('api-key.payment.notification_trusted_ips', []))));
+
+        if ($trusted !== [] && $ip !== '' && IpUtils::checkIp($ip, $trusted)) {
+            return null;
+        }
+
+        $perIp = max(0, (int) config('api-key.payment.unsigned_notification_lookups_per_ip_per_minute', 20));
+        $ipKey = $key.':ip:'.$ip;
+
+        if (($perIp > 0 && RateLimiter::tooManyAttempts($ipKey, $perIp)) || RateLimiter::tooManyAttempts($key, $perMinute)) {
+            logglyWarning()->withContext($context + ['ip' => $ip])
+                ->log('Unsigned notification lookup budget exhausted, asking for redelivery');
+
+            return response()->json(['message' => 'retry'], 503);
+        }
+
+        if ($perIp > 0) {
+            RateLimiter::hit($ipKey, 60);
+        }
+
+        RateLimiter::hit($key, 60);
+
+        return null;
     }
 
     private function extractSignaturePart(string $signature, string $key): string

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\NewAccessToken;
 use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
 class AuthService
@@ -85,7 +86,7 @@ class AuthService
      */
     public function issueToken(Authentication $user, ?Request $request = null): array
     {
-        $token = $user->createToken($user->email);
+        $token = $this->newToken($user);
 
         // A tela de sessões mostra de onde cada login veio. A coluna `device`
         // existia desde a criação do pacote e nunca era preenchida.
@@ -104,6 +105,17 @@ class AuthService
         ];
     }
 
+    /**
+     * Token do painel com validade (`sessions.lifetime_days`). Sem ela, um
+     * token vazado valia até alguém revogá-lo à mão na tela de sessões.
+     */
+    private function newToken(Authentication $user): NewAccessToken
+    {
+        $days = (int) config('api-key.sessions.lifetime_days', 30);
+
+        return $user->createToken($user->email, ['*'], $days > 0 ? now()->addDays($days) : null);
+    }
+
     private static function dummyHash(): string
     {
         static $hash = null;
@@ -116,7 +128,7 @@ class AuthService
      */
     private function buildLoginResponse(Authentication $user): array
     {
-        $token = $user->createToken($user->email);
+        $token = $this->newToken($user);
 
         return [
             'user' => $user,

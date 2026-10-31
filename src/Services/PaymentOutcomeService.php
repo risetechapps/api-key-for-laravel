@@ -66,7 +66,7 @@ class PaymentOutcomeService
         }
 
         if ($pending->coupon) {
-            $this->couponRepository->releaseUse($pending->coupon);
+            $this->couponRepository->releaseUse($pending->coupon, $pending->authentication_id);
         }
 
         logglyInfo()->withContext([

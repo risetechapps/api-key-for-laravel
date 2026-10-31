@@ -2,6 +2,8 @@
 
 namespace RiseTechApps\ApiKey\Support;
 
+use Symfony\Component\HttpFoundation\IpUtils;
+
 /**
  * Impede que um webhook de cliente vire porta para a rede interna (SSRF).
  *
@@ -17,6 +19,32 @@ namespace RiseTechApps\ApiKey\Support;
  */
 class WebhookUrlGuard
 {
+    /**
+     * Faixas que não são internet pública e que as flags do filter_var() do
+     * PHP deixam passar: CGNAT (rede da operadora), tradução IPv4/IPv6 (NAT64,
+     * SIIT, 6to4, Teredo), que embute um IPv4 qualquer, inclusive interno,
+     * site-local (o IPv6 privado antigo), faixas de teste e documentação, e
+     * multicast.
+     */
+    private const BLOCKED_RANGES = [
+        '100.64.0.0/10',
+        '192.0.0.0/24',
+        '192.0.2.0/24',
+        '198.18.0.0/15',
+        '198.51.100.0/24',
+        '203.0.113.0/24',
+        '224.0.0.0/4',
+        '64:ff9b::/96',
+        '64:ff9b:1::/48',
+        '::ffff:0:0:0/96',
+        '100::/64',
+        '2001::/32',
+        '2001:db8::/32',
+        '2002::/16',
+        'fec0::/10',
+        'ff00::/8',
+    ];
+
     public static function isAllowed(string $url): bool
     {
         return self::allowedAddresses($url) !== null;
@@ -54,12 +82,18 @@ class WebhookUrlGuard
         }
 
         foreach ($ips as $ip) {
-            if (! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            if (! self::isPublic($ip)) {
                 return null;
             }
         }
 
         return $literal ? [] : $ips;
+    }
+
+    public static function isPublic(string $ip): bool
+    {
+        return (bool) filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)
+            && ! IpUtils::checkIp($ip, self::BLOCKED_RANGES);
     }
 
     /**

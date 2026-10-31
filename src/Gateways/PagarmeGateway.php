@@ -276,6 +276,15 @@ class PagarmeGateway extends AbstractCardGateway
     }
 
     /**
+     * Só com usuário e senha do webhook configurados: sem eles, qualquer
+     * um manda a notificação, e a prova vem da consulta do pedido.
+     */
+    public function webhooksAuthenticated(): bool
+    {
+        return (string) $this->config('webhook_user') !== '' || (string) $this->config('webhook_password') !== '';
+    }
+
+    /**
      * Pedido do Pagar.me no formato de pagamento do pacote.
      *
      * @param  array<string, mixed>  $order

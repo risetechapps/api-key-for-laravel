@@ -108,9 +108,13 @@ const people = computed(() => (team.value ? [team.value.owner, ...team.value.mem
 const canInvite = computed(() => !!team.value && team.value.used < team.value.limit);
 
 /** Admin convida e gerencia atendentes; admins, só o dono (a regra vale no servidor). */
-// Tipo explícito: inferido, os dois ramos viram uma união em que `admin` pode
-// ser undefined, e o `options` do Select (Record<string, string>) recusa.
-const assignableRoles = computed<Record<string, string>>(() => (auth.teamCan('owner') ? { agent: 'Atendente', admin: 'Administrador' } : { agent: 'Atendente' }));
+// Montado num Record: com dois literais, a união tem `admin?: undefined`, que o
+// `options` do Select (Record<string, string>) recusa em modo estrito.
+const assignableRoles = computed(() => {
+    const roles: Record<string, string> = { agent: 'Atendente' };
+    if (auth.teamCan('owner')) roles.admin = 'Administrador';
+    return roles;
+});
 const canManage = (role: string) => auth.teamCan('owner') || role === 'agent';
 
 function initials(name: string) {
@@ -160,7 +164,7 @@ async function changeRole(member: any, role: string) {
     if (role === member.role) return;
     try {
         await axios.put(`/dashboard/team/members/${member.id}`, { role });
-        toast.success(`${member.name} agora é ${ROLES[role].toLowerCase()}.`);
+        toast.success(`${member.name} agora é ${(ROLES[role] ?? role).toLowerCase()}.`);
         load();
     } catch (e: any) {
         toast.error(e?.response?.data?.errors?.role?.[0] || errorMessage(e));

@@ -270,6 +270,14 @@ class PagbankGateway extends AbstractCardGateway
     }
 
     /**
+     * Assinada com o token da conta (`x-authenticity-token`).
+     */
+    public function webhooksAuthenticated(): bool
+    {
+        return true;
+    }
+
+    /**
      * Pedido do PagBank no formato de pagamento do pacote.
      *
      * @param  array<string, mixed>  $order

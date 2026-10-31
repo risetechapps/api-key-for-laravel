@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use RiseTechApps\ApiKey\Models\Coupon\Coupon;
 use RiseTechApps\ApiKey\Repositories\Coupon\CouponEloquentRepository;
 
@@ -119,5 +120,50 @@ describe('Coupon release', function () {
         $this->repository->releaseUse($coupon);
 
         expect($coupon->fresh()->uses)->toBe(0);
+    });
+});
+
+describe('Coupon per account', function () {
+    beforeEach(function () {
+        $this->first = (string) Str::uuid();
+        $this->second = (string) Str::uuid();
+    });
+
+    it('lets an account use a coupon only as often as allowed', function () {
+        config(['api-key.coupons.max_uses_per_user' => 1]);
+        $coupon = Coupon::factory()->create(['max_uses' => 10, 'uses' => 0]);
+
+        expect($this->repository->claimUse($coupon, $this->first))->toBeTrue()
+            ->and($this->repository->claimUse($coupon, $this->first))->toBeFalse()
+            ->and($this->repository->usedUpBy($coupon, $this->first))->toBeTrue()
+            ->and($this->repository->claimUse($coupon, $this->second))->toBeTrue()
+            ->and($coupon->fresh()->uses)->toBe(2);
+    });
+
+    it('gives the account its use back on release', function () {
+        config(['api-key.coupons.max_uses_per_user' => 1]);
+        $coupon = Coupon::factory()->create(['max_uses' => 10, 'uses' => 0]);
+
+        $this->repository->claimUse($coupon, $this->first);
+        $this->repository->releaseUse($coupon, $this->first);
+
+        expect($this->repository->usedUpBy($coupon, $this->first))->toBeFalse()
+            ->and($this->repository->claimUse($coupon->fresh(), $this->first))->toBeTrue();
+    });
+
+    it('does not record a use the coupon itself refused', function () {
+        config(['api-key.coupons.max_uses_per_user' => 1]);
+        $coupon = Coupon::factory()->create(['max_uses' => 1, 'uses' => 1]);
+
+        expect($this->repository->claimUse($coupon, $this->first))->toBeFalse()
+            ->and($this->repository->usedUpBy($coupon, $this->first))->toBeFalse();
+    });
+
+    it('has no per-account limit when set to zero', function () {
+        config(['api-key.coupons.max_uses_per_user' => 0]);
+        $coupon = Coupon::factory()->create(['max_uses' => null, 'uses' => 0]);
+
+        expect($this->repository->claimUse($coupon, $this->first))->toBeTrue()
+            ->and($this->repository->claimUse($coupon, $this->first))->toBeTrue();
     });
 });

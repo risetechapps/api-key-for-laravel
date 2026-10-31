@@ -60,6 +60,37 @@ describe('Profile', function () {
         expect($this->user->fresh()->name)->toBe('NOME ALTERADO');
     });
 
+    it('stores the CPF as digits only', function () {
+        $this->putJson('/api/v1/dashboard/profile', profilePayload(['cpf' => '529.982.247-25']))->assertOk();
+
+        expect($this->user->fresh()->cpf)->toBe('52998224725');
+    });
+
+    it('refuses a CPF another account has, with or without the mask', function () {
+        Authentication::factory()->create(['cpf' => '52998224725']);
+
+        $this->putJson('/api/v1/dashboard/profile', profilePayload(['cpf' => '529.982.247-25']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cpf');
+    });
+
+    it('refuses a CPF stored with the mask before, through the index', function () {
+        // Gravado com máscara antes da normalização: o `unique` compara o
+        // texto e deixa passar, e o índice (só dígitos) é quem recusa.
+        Authentication::factory()->create(['cpf' => '529.982.247-25']);
+
+        $this->putJson('/api/v1/dashboard/profile', profilePayload())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cpf');
+
+        expect($this->user->fresh()->cpf)->not->toBe('52998224725');
+    });
+
+    it('keeps its own CPF on a later update', function () {
+        $this->putJson('/api/v1/dashboard/profile', profilePayload())->assertOk();
+        $this->putJson('/api/v1/dashboard/profile', profilePayload(['name' => 'Outro Nome']))->assertOk();
+    });
+
     it('rejects an invalid CPF', function () {
         $this->putJson('/api/v1/dashboard/profile', profilePayload(['cpf' => '11111111111']))
             ->assertStatus(422);
@@ -105,10 +136,19 @@ describe('Allowed origins', function () {
             ->assertJsonPath('data', ['https://app.example.com', 'https://admin.example.com']);
     });
 
+    it('validates the list like the API keys screen', function () {
+        $this->postJson('/api/v1/dashboard/profile/allowed', ['allowed' => [['nested' => str_repeat('x', 5000)]]])
+            ->assertUnprocessable();
+        $this->postJson('/api/v1/dashboard/profile/allowed', ['allowed' => 'https://app.example.com'])
+            ->assertUnprocessable();
+        $this->postJson('/api/v1/dashboard/profile/allowed', ['allowed' => array_fill(0, 51, 'https://app.example.com')])
+            ->assertUnprocessable();
+    });
+
     it('without an API key, reads an empty list and refuses to save, without an error in the log', function () {
         // jsonSuccess() omite o `data` vazio.
         expect($this->getJson('/api/v1/dashboard/profile/allowed')->assertStatus(200)->json('data') ?? [])->toBe([]);
-        $this->postJson('/api/v1/dashboard/profile/allowed', ['allowed' => ['https://app.example.com']])->assertStatus(410);
+        $this->postJson('/api/v1/dashboard/profile/allowed', ['allowed' => ['https://app.example.com']])->assertNotFound();
     });
 
     it('accepts the allowed_origins spelling too', function () {
@@ -170,7 +210,7 @@ describe('Regenerating the API key', function () {
     });
 
     it('reports when the user has no key to regenerate', function () {
-        $this->postJson('/api/v1/dashboard/profile/regenerate-key')->assertStatus(410);
+        $this->postJson('/api/v1/dashboard/profile/regenerate-key')->assertNotFound();
     });
 });
 

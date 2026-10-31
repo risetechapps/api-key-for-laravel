@@ -58,6 +58,10 @@ class CheckoutController extends Controller
             return response()->json(['success' => false, 'message' => __('api-key::messages.coupon_invalid_or_expired')], 422);
         }
 
+        if ($this->couponRepository->usedUpBy($coupon, (string) auth()->id())) {
+            return response()->json(['success' => false, 'message' => __('api-key::messages.coupon_already_used')], 422);
+        }
+
         $originalPrice = (float) $plan->price;
         $discount = $coupon->type === 'percentage'
             ? $originalPrice * ($coupon->value / 100)
@@ -139,13 +143,22 @@ class CheckoutController extends Controller
             // Claimed before the gateway is called rather than after approval:
             // the claim is what enforces max_uses, so it has to happen while this
             // request can still be refused. See CouponRepository::claimUse().
-            if ($coupon && $this->couponRepository->claimUse($coupon)) {
-                $discount = $coupon->type === 'percentage'
-                    ? $transactionAmount * ($coupon->value / 100)
-                    : min((float) $coupon->value, $transactionAmount);
-                $transactionAmount = max(0, round($transactionAmount - $discount, 2));
-                $appliedCoupon = $coupon;
+            // A refused claim stops the purchase: the buyer was quoted the
+            // discounted price, and charging the full one without asking is not
+            // what they agreed to (coupon exhausted or used in another tab).
+            if (! $coupon || ! $this->couponRepository->claimUse($coupon, (string) auth()->id())) {
+                $message = $coupon && $this->couponRepository->usedUpBy($coupon, (string) auth()->id())
+                    ? __('api-key::messages.coupon_already_used')
+                    : __('api-key::messages.coupon_invalid_or_expired');
+
+                return response()->json(['success' => false, 'message' => $message], 422);
             }
+
+            $discount = $coupon->type === 'percentage'
+                ? $transactionAmount * ($coupon->value / 100)
+                : min((float) $coupon->value, $transactionAmount);
+            $transactionAmount = max(0, round($transactionAmount - $discount, 2));
+            $appliedCoupon = $coupon;
         }
 
         // Proration. subscribeToPlan() replaces the running subscription with a
@@ -655,7 +668,7 @@ class CheckoutController extends Controller
     private function releaseCoupon(?Coupon $coupon): void
     {
         if ($coupon) {
-            $this->couponRepository->releaseUse($coupon);
+            $this->couponRepository->releaseUse($coupon, (string) auth()->id());
         }
     }
 

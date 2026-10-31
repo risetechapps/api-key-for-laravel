@@ -171,14 +171,14 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 | `GET` | `api/v1/dashboard/profile` | Obter perfil |
 | `PUT` | `api/v1/dashboard/profile` | Atualizar perfil |
 | `GET` | `api/v1/dashboard/profile/export` | Baixar todos os dados da conta em JSON (LGPD) |
-| `DELETE` | `api/v1/dashboard/profile` | Excluir a própria conta; pede `password` (LGPD) |
-| `PUT` | `api/v1/dashboard/profile/password` | Trocar a senha (`current_password`, `password`, `password_confirmation`) |
-| `POST` | `api/v1/dashboard/profile/email` | Pedir troca de e-mail (`email`, `password`); vale após confirmar pelo link |
+| `DELETE` | `api/v1/dashboard/profile` | Excluir a própria conta; pede `password` (LGPD) e, com 2FA, `code` ou `recovery_code` |
+| `PUT` | `api/v1/dashboard/profile/password` | Trocar a senha (`current_password`, `password`, `password_confirmation`; com 2FA, `code` ou `recovery_code`) |
+| `POST` | `api/v1/dashboard/profile/email` | Pedir troca de e-mail (`email`, `password`; com 2FA, `code` ou `recovery_code`); vale após confirmar pelo link |
 | `GET/DELETE` | `api/v1/dashboard/sessions` | Listar sessões / encerrar todas as outras |
 | `DELETE` | `api/v1/dashboard/sessions/{id}` | Encerrar uma sessão |
-| `POST/DELETE` | `api/v1/dashboard/two-factor` | Iniciar ativação (devolve segredo e `otpauth://`) / desativar; pedem `password` |
+| `POST/DELETE` | `api/v1/dashboard/two-factor` | Iniciar ativação (devolve segredo e `otpauth://`) / desativar. Os dois pedem `password`; desativar a 2FA já confirmada pede também `code` ou `recovery_code` |
 | `POST` | `api/v1/dashboard/two-factor/confirm` | Confirmar com o código e receber os códigos de recuperação |
-| `POST` | `api/v1/dashboard/two-factor/recovery-codes` | Gerar novos códigos de recuperação |
+| `POST` | `api/v1/dashboard/two-factor/recovery-codes` | Gerar novos códigos de recuperação. Pede `password` e `code` ou `recovery_code` |
 | `GET/POST` | `api/v1/dashboard/api-keys` | Listar / criar chave (o texto da chave só vem na criação) |
 | `PUT/DELETE` | `api/v1/dashboard/api-keys/{id}` | Editar (nome, `scopes`, origens, validade, limite por minuto) / revogar |
 | `POST` | `api/v1/dashboard/api-keys/{id}/regenerate` | Trocar o segredo da chave |
@@ -238,6 +238,7 @@ O papel é trocado em Admin → Usuários → ficha → **Alterar papel**, ou pe
 | `POST` | `api/v1/dashboard/admin/payment-settings/test/{gateway}` | Testar a conexão com o gateway |
 | `POST/PUT/DELETE` | `api/v1/dashboard/plans/{plan}` | Criar / atualizar / excluir planos |
 | `POST/PUT/DELETE` | `api/v1/dashboard/coupons/{coupon}` | Criar / atualizar / excluir cupons |
+| `GET` | `api/v1/dashboard/coupons[/{coupon}]` | Listar / ver cupons (`admin:view`). O cliente nunca lista: só valida o código que tem, em `checkout/coupon` |
 | `GET` | `api/v1/dashboard/admin/plans` | Listar todos os planos (visão admin) |
 | `GET` | `api/v1/dashboard/admin/users` | Listar usuários com assinaturas |
 | `PUT` | `api/v1/dashboard/admin/users/{id}/status` | Suspender ou reativar (`status`: `enabled`, `disabled`, `blocked`) |
@@ -267,7 +268,7 @@ Com `two_factor.required_for_admins` ligado (padrão), as rotas de admin respond
 ### Proteções das rotas embutidas
 
 - **Sem enumeração de contas.** Login, esqueci a senha e reenvio de verificação respondem igual para e-mail cadastrado ou não. O login confere a senha antes de dizer que a conta está sem verificação ou suspensa.
-- **Limite de tentativas.** As rotas públicas de autenticação (`register`, `login`, `forgot-password`, `reset-password`, `email/resend`) dividem o limite `auth_throttle`, por IP. Checkout, validação de cupom e cadastro de cartão dividem o `payment_throttle`, por usuário: sem ele, o cadastro de cartão, que faz uma cobrança de validação, serve para testar cartões roubados em massa. A exclusão de conta tem contador próprio.
+- **Limite de tentativas.** As rotas públicas de autenticação (`register`, `login`, `forgot-password`, `reset-password`, `email/resend`) dividem o limite `auth_throttle`, por IP. Checkout, validação de cupom e cadastro de cartão dividem o `payment_throttle`, por usuário: sem ele, o cadastro de cartão, que faz uma cobrança de validação, serve para testar cartões roubados em massa. A exclusão de conta tem contador próprio. Teste e reenvio de webhook pelo painel dividem o `webhook_test_throttle` (10 por minuto, por usuário), porque cada chamada dispara uma requisição para a URL do cliente. A exportação dos dados da conta tem o `export_throttle` (5 por hora, por usuário), porque cada chamada lê a conta inteira.
 - **Contas suspensas.** Com `status` diferente de `enabled`, a conta não entra no painel (middleware `active.user`, aplicado às rotas `auth:sanctum` do pacote) nem usa a API key. Suspender revoga os tokens; a chave continua a mesma e volta a funcionar ao reativar.
 
 ### Exclusão de conta e exportação de dados
@@ -281,7 +282,7 @@ Com `two_factor.required_for_admins` ligado (padrão), as rotas de admin respond
 - **Troca de senha** pede a senha atual e encerra as outras sessões; a atual continua.
 - **Troca de e-mail** grava o endereço novo em `pending_email` e só troca quando o dono dele clica no link (60 minutos). O endereço antigo é avisado.
 - **Sessões**: cada login grava IP e navegador no token (`personal_access_tokens.device`), e o painel lista e encerra sessões.
-- **Verificação em duas etapas (TOTP)**: compatível com Google Authenticator, Authy e afins, sem dependência extra. Com 2FA, `POST login` devolve `{ two_factor: true, challenge }` em vez do token; o token vem de `POST login/two-factor`. O desafio vale 5 minutos, o mesmo código não passa duas vezes, e cada um dos 8 códigos de recuperação vale uma vez. Segredo e códigos ficam cifrados com a `APP_KEY`.
+- **Verificação em duas etapas (TOTP)**: compatível com Google Authenticator, Authy e afins, sem dependência extra. Com 2FA, `POST login` devolve `{ two_factor: true, challenge }` em vez do token; o token vem de `POST login/two-factor`. O desafio vale 5 minutos, o mesmo código não passa duas vezes, e cada um dos 8 códigos de recuperação vale uma vez. Com a 2FA confirmada, desativá-la, gerar códigos novos, trocar senha, trocar e-mail e excluir a conta pedem `code` ou `recovery_code` além da senha. Códigos errados contam por conta, de qualquer IP, no login e nessas ações: 10 bloqueiam por 15 minutos e o dono recebe um e-mail. Segredo e códigos ficam cifrados com a `APP_KEY`.
 - Toda alteração de segurança manda e-mail ao dono e entra na auditoria.
 
 ### Várias API keys
@@ -292,7 +293,7 @@ Chave com validade avisa o dono antes de vencer: `api-key:notify-expiring`, agen
 
 ### Limite por minuto
 
-O middleware `api.key.rate`, no grupo `plan` logo depois do `api.key`, limita requisições por minuto por chave: o limite da chave, ou o do plano (`rate_limit_per_minute`), ou `rate_limit.per_minute`. Sem nenhum, não limita. A resposta traz `X-RateLimit-Limit` e `X-RateLimit-Remaining`; acima do limite, 429 com `Retry-After`, sem gastar a cota. Se você define `middleware_group.plan` na config, inclua `api.key.rate` na lista.
+O middleware `api.key.rate`, no grupo `plan` logo depois do `api.key`, limita requisições por minuto. O limite do plano (`rate_limit_per_minute`, ou `rate_limit.per_minute` sem ele) vale para a **conta**, somando todas as chaves. A chave pode ter limite próprio, que só aperta: acima do plano é recusado no painel e cortado no plano pelo middleware. Sem nenhum, não limita. A resposta traz `X-RateLimit-Limit` e `X-RateLimit-Remaining`; acima do limite, 429 com `Retry-After`, sem gastar a cota. Se você define `middleware_group.plan` na config, inclua `api.key.rate` na lista.
 
 ### Webhooks de saída
 
@@ -358,7 +359,7 @@ webhooks:
 
 Trate o `data` como contrato: acrescentar campo é seguro; renomear ou tirar quebra quem já recebe. Para uma mudança grande, crie um evento novo (`pedido.criado_v2`) e mantenha o antigo por um tempo.
 
-Endereços privados, de loopback e reservados são recusados no cadastro e de novo a cada entrega (proteção contra SSRF), e redirecionamentos não são seguidos. Os eventos, os headers e o `data` de cada um estão em [`docs/openapi.yaml`](docs/openapi.yaml), na seção `webhooks`.
+Endereços privados, de loopback e reservados são recusados, inclusive CGNAT (`100.64.0.0/10`), NAT64/6to4/Teredo, faixas de teste e documentação e multicast, no cadastro e de novo a cada entrega (proteção contra SSRF), e redirecionamentos não são seguidos. Os eventos, os headers e o `data` de cada um estão em [`docs/openapi.yaml`](docs/openapi.yaml), na seção `webhooks`.
 
 #### Validando as entregas (para quem recebe)
 
@@ -956,6 +957,10 @@ Além de `payment`, o webhook trata `order` (cobranças dos Pagamentos Automáti
 
 O IPN chega justamente porque o pagamento carrega `notification_url`, e **não tem HMAC a conferir**. Quem verifica é o pacote, indo buscar o pagamento na API com o seu access token — só pagamentos da sua própria conta produzem efeito. Como é verificação mais fraca, dá para recusar o formato com `MP_ACCEPT_IPN=false`; nesse caso remova também o `notification_url`, senão o gateway reentrega indefinidamente contra um 400.
 
+Como qualquer um consegue mandar um IPN, cada consulta à API que ele dispara tem teto: `MP_IPN_LOOKUPS_PER_MINUTE` (padrão 60; 0 desliga). Acima dele o pacote responde 503 e o Mercado Pago reentrega depois. O mesmo pagamento não é consultado de novo por IPN dentro de um minuto. O webhook assinado não entra nessa conta.
+
+Para um flood de avisos falsos não barrar os verdadeiros, cada IP tem um teto próprio dentro do geral (`API_KEY_UNSIGNED_NOTIFICATION_LOOKUPS_PER_IP_PER_MINUTE`, padrão 20), e IPs listados em `API_KEY_NOTIFICATION_TRUSTED_IPS` (IPs ou faixas CIDR, separados por vírgula) não entram em teto nenhum. Vale para o IPN e para as notificações sem assinatura da Efí e do Pagar.me. O IP confiável só pula o teto: o pagamento continua sendo consultado na API antes de valer. Atrás de proxy, configure o TrustProxies do Laravel, senão todo aviso parece vir do mesmo IP.
+
 O HMAC prova que o webhook veio do Mercado Pago, não que é recente. Por isso o `ts` assinado tem que estar a no máximo `MP_WEBHOOK_TOLERANCE_SECONDS` (padrão 300) do relógio do servidor, ou a notificação é recusada: uma notificação capturada não serve para ser reenviada depois. Mantenha o relógio sincronizado (NTP). Uma recusa por relógio errado não perde pagamento, porque o Mercado Pago reentrega e a reconciliação agendada alcança o que ficou para trás, mas aparece no log como `signature timestamp outside tolerance`. `0` desliga a checagem.
 
 ### Pagamentos em análise
@@ -1052,6 +1057,8 @@ if ($coupon->isValid()) {
 }
 ```
 
+`max_uses` conta todos os usos do cupom. Cada conta usa o mesmo cupom no máximo `coupons.max_uses_per_user` vezes (padrão 1, `API_KEY_COUPON_MAX_USES_PER_USER`; 0 desliga). O uso é reservado no checkout e devolvido se a compra não vinga, como o `max_uses`, e fica em `coupon_redemptions`.
+
 ---
 
 ## Logs
@@ -1063,7 +1070,7 @@ logglyError()->withContext(['payment_id' => $id])->log('Refund failed');
 logglyError()->exception($e)->log('Checkout process error');
 ```
 
-Rode as migrations do monitoring — o `php artisan migrate` já as inclui — senão a tela responde 410 dizendo que o armazenamento não está disponível.
+Rode as migrations do monitoring — o `php artisan migrate` já as inclui — senão a tela responde 503 dizendo que o armazenamento não está disponível.
 
 ### Tela administrativa
 
@@ -1574,6 +1581,11 @@ return [
 | `API_KEY_PAYMENT_THROTTLE_ENABLED` | Limitar checkout, cupom e cadastro de cartão | `true` |
 | `API_KEY_PAYMENT_THROTTLE_ATTEMPTS` | Tentativas por usuário na janela | `10` |
 | `API_KEY_PAYMENT_THROTTLE_DECAY` | Janela do limite de pagamento (minutos) | `10` |
+| `API_KEY_WEBHOOK_TEST_THROTTLE_ATTEMPTS` | Testes e reenvios de webhook por janela, por usuário | `10` |
+| `API_KEY_WEBHOOK_TEST_THROTTLE_DECAY` | Janela do limite de teste de webhook (minutos) | `1` |
+| `API_KEY_EXPORT_THROTTLE_ENABLED` | Limitar a exportação dos dados da conta | `true` |
+| `API_KEY_EXPORT_THROTTLE_ATTEMPTS` | Exportações por janela, por usuário | `5` |
+| `API_KEY_EXPORT_THROTTLE_DECAY` | Janela do limite de exportação (minutos) | `60` |
 | `API_KEY_SUPPORT_EMAIL` | E-mail exibido na página de suporte da SPA | `MAIL_FROM_ADDRESS` |
 | `API_KEY_HEADER_NAME` | Header HTTP que carrega a API key | `X-API-KEY` |
 | `API_KEY_ROUTES_ENABLED` | Registrar rotas do pacote automaticamente | `true` |
@@ -1586,6 +1598,9 @@ return [
 | `MP_WEBHOOK_SECRET` | Secret HMAC do webhook do MercadoPago | — |
 | `MP_NOTIFICATION_URL` | URL enviada em `notification_url` a cada pagamento. Vazia em desenvolvimento | — |
 | `MP_ACCEPT_IPN` | Aceitar notificações IPN, que chegam sem assinatura | `true` |
+| `MP_IPN_LOOKUPS_PER_MINUTE` | Teto de consultas ao MP disparadas por IPN sem assinatura; 0 desliga | `60` |
+| `API_KEY_UNSIGNED_NOTIFICATION_LOOKUPS_PER_IP_PER_MINUTE` | Teto de cada IP dentro dos tetos de avisos sem assinatura; 0 desliga | `20` |
+| `API_KEY_NOTIFICATION_TRUSTED_IPS` | IPs ou faixas dos gateways, separados por vírgula, que não entram nos tetos | — |
 | `MP_WEBHOOK_TOLERANCE_SECONDS` | Idade máxima do `ts` de um webhook assinado; 0 desliga | `300` |
 | `API_KEY_REFUND_WINDOW_DAYS` | Dias de janela para estorno no cancelamento (`0` = desliga) | `0` |
 | `API_KEY_REFUND_MAX_USAGE_PERCENT` | Teto de consumo do ciclo que ainda dá direito a estorno | `50` |
@@ -1622,8 +1637,10 @@ return [
 | `API_KEY_OVERAGE_MINIMUM_CHARGE` | Excedente abaixo deste valor é perdoado | `1.00` |
 | `API_KEY_RATE_LIMIT_PER_MINUTE` | Limite por minuto padrão, quando chave e plano não definem | — |
 | `API_KEY_MAX_KEYS_PER_USER` | Máximo de API keys por conta | `5` |
+| `API_KEY_COUPON_MAX_USES_PER_USER` | Vezes que a mesma conta usa o mesmo cupom; 0 = sem limite por conta | `1` |
 | `API_KEY_EXPIRY_WARNING_DAYS` | Antecedência, em dias, do aviso de chave vencendo (`0` desliga) | `7` |
 | `API_KEY_2FA_REQUIRED_FOR_ADMINS` | Exigir 2FA para as rotas de admin | `true` |
+| `API_KEY_SESSION_LIFETIME_DAYS` | Validade de cada login no painel, em dias; 0 = sem validade | `30` |
 | `API_KEY_WEBHOOKS_ENABLED` | Enviar webhooks de saída | `true` |
 | `API_KEY_WEBHOOKS_QUEUE` | Fila das entregas de webhook | — |
 | `API_KEY_WEBHOOKS_TIMEOUT` | Timeout de cada entrega (segundos) | `10` |

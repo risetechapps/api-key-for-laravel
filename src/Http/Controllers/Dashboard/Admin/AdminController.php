@@ -66,7 +66,7 @@ class AdminController extends Controller
 
             report($e);
 
-            return response()->jsonGone(
+            return response()->jsonInternal(
                 __('api-key::messages.error_processing_refund', ['id' => $errorId])
             );
         }

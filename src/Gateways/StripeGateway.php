@@ -329,6 +329,14 @@ class StripeGateway extends AbstractCardGateway
     }
 
     /**
+     * Assinada com o signing secret; sem ele, a notificação é recusada.
+     */
+    public function webhooksAuthenticated(): bool
+    {
+        return true;
+    }
+
+    /**
      * PaymentIntent no formato de pagamento do pacote.
      *
      * @param  array<string, mixed>  $intent

@@ -3,7 +3,63 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
-## [Unreleased]
+## [1.2.0] - 2026-10-30
+
+### Atualização
+
+Passo a passo em [UPGRADE.md](UPGRADE.md).
+
+- **Antes do `migrate`, confira e-mails e CPFs repetidos** (consultas no UPGRADE.md). Há índices únicos novos no e-mail e no CPF de `authentications`; com repetidos no banco, a migration para sem mexer em nada e diz quantos são
+- Rode `php artisan migrate`: nova tabela `coupon_redemptions` e os dois índices
+- **Com 2FA, as ações sensíveis do painel pedem um código.** Desligar a 2FA, gerar códigos de recuperação, trocar senha, trocar e-mail e excluir a conta passam a pedir `code` ou `recovery_code` junto da senha quando a conta tem 2FA. Quem chama essas rotas por conta própria precisa mandar o campo
+- **Status HTTP do painel.** As rotas do painel e de login deixam de responder 410 (ver "Alterado"). Se o seu front tratava 410, confira
+- **Login no painel vence em 30 dias** (`API_KEY_SESSION_LIFETIME_DAYS`; 0 = sem validade). Vale para os logins novos; os tokens de antes seguem sem validade
+- **Cada conta usa o mesmo cupom uma vez** (`API_KEY_COUPON_MAX_USES_PER_USER`, padrão 1). Os usos anteriores à atualização não foram registrados e não contam. Para manter o comportamento antigo, `0`
+- **Limite por minuto por conta.** Com várias chaves, o limite do plano passa a valer para a soma delas
+- **Teto por IP nos avisos de pagamento sem assinatura** (20 por minuto). Atrás de proxy ou load balancer, configure o TrustProxies, senão todos os avisos parecem vir do mesmo IP
+- Se você publicou os assets do painel, publique de novo: `php artisan vendor:publish --tag=api-key-assets --force`
+
+### Corrigido (segurança)
+
+Chaves e limites
+
+- **Chave regenerada continuava valendo por até 5 minutos.** A regeneração mantém o id da chave, e o cache de validação (`cache_ttl.validation`, padrão 300s) ligava o segredo ao id: o segredo antigo seguia aceito até o cache expirar. O cache agora confere também o `lookup_hash`, e o segredo antigo para de valer na hora
+- **Limite por minuto contado por chave.** O contador era por chave: com 5 chaves, o cliente tinha 5 vezes o limite do plano. O limite do plano agora conta para a conta inteira; o da chave, quando menor, conta à parte
+- **Limite por minuto da chave acima do plano.** A chave aceitava qualquer `rate_limit_per_minute` e ele vencia o do plano. Agora o painel recusa valor acima do plano, e o middleware corta no plano
+- **`POST /dashboard/profile/allowed` gravava sem validar** (aceitava array aninhado de qualquer tamanho). Valida como a tela de API keys: lista de textos de até 255 caracteres, no máximo 50 (`ApiKey::MAX_ALLOWED_ORIGINS`, que passa a valer também em `/dashboard/api-keys`)
+
+Conta e 2FA
+
+- **Com 2FA, senha e sessão bastavam para contornar a 2FA ou tomar a conta.** Desligar a 2FA, gerar códigos de recuperação novos (que entram no login sem o aplicativo), trocar o e-mail (e, com ele, a recuperação da conta), trocar a senha e excluir a conta pediam só a senha. Com a 2FA confirmada, pedem também `code` ou `recovery_code`; a configuração ainda não confirmada continua saindo só com a senha. O painel ganhou o campo do código nessas telas. Nova `Services\SecondFactorService`, que o `TwoFactorController` também passa a usar
+- **Código da 2FA adivinhável com muitos IPs.** O segundo passo do login só tinha o limite por IP (5 por minuto): quem já tinha a senha e muitos IPs conseguia testar códigos o bastante para acertar. Agora há também um limite por conta, somando qualquer IP e valendo para o login e para as ações do painel acima: 10 códigos errados bloqueiam por 15 minutos, inclusive o código certo (`two_factor.max_attempts` e `lockout_minutes`, `API_KEY_2FA_MAX_ATTEMPTS` e `API_KEY_2FA_LOCKOUT_MINUTES`; 0 desliga). Bloqueado, responde 429 com `Retry-After`. O dono recebe um e-mail (`AccountSecurityNotification::TWO_FACTOR_LOCKED`), porque só chega ali quem acertou a senha, e a auditoria registra `account.two_factor_locked`
+- **Mesmo código de recuperação aceito duas vezes em paralelo.** Duas requisições simultâneas liam a lista antes de uma delas riscar o código. A leitura agora trava a conta
+- **Login no painel não vencia.** O token Sanctum saía sem validade, e um token vazado valia até alguém revogá-lo na tela de sessões. Agora vence em `sessions.lifetime_days` (padrão 30, `API_KEY_SESSION_LIFETIME_DAYS`; 0 = sem validade), a tela de sessões não lista os vencidos e o `sanctum:prune-expired` roda todo dia às 03:15
+- **Duas contas com o mesmo e-mail.** A unicidade era só da validação: dois cadastros ao mesmo tempo passavam os dois. Novo índice único em `LOWER(email)`; a corrida que sobra responde 422, não 500
+- **Dois perfis com o mesmo CPF.** Também só a validação conferia, e comparando o texto: "529.982.247-25" e "52998224725" passavam como CPFs diferentes. O perfil agora grava só os dígitos, e um índice único (só dígitos, CPF vazio fora) recusa o repetido com 422. Perfil e endereço passam a ser gravados numa transação
+- **Mesmo convite de equipe aceito duas vezes.** Dois aceites simultâneos viravam dois membros. O aceite agora marca o convite antes de criar a conta, e só se ninguém marcou
+- **Exportação de dados sem limite.** `GET /dashboard/profile/export` lê a conta inteira, logs inclusive, a cada chamada. Passa pelo `export_throttle` (5 por hora, por usuário; `API_KEY_EXPORT_THROTTLE_ATTEMPTS` e `API_KEY_EXPORT_THROTTLE_DECAY`)
+
+Cupons e planos
+
+- **Cupons visíveis para qualquer cliente.** `GET /dashboard/coupons` e `/dashboard/coupons/{id}` respondiam a qualquer conta logada, o que entregava os códigos (inclusive de 100%). Passam a exigir `admin:view`
+- **Mesmo cupom reusado pela mesma conta.** Só o `max_uses` total era conferido. Novo limite por conta (`coupons.max_uses_per_user`), reservado e devolvido junto com o uso do cupom. `CouponRepository::claimUse()` e `releaseUse()` ganham o parâmetro opcional `$authenticationId`, e o contrato ganha `usedUpBy()`
+- **Plano inativo visível por id.** `GET /dashboard/plans/{plan}` mostra plano inativo só para a equipe do painel
+
+Webhooks e gateways
+
+- **Filtro de rede interna do webhook.** Além das faixas privadas e reservadas, recusa CGNAT (`100.64.0.0/10`), NAT64, SIIT, 6to4 e Teredo (que embutem um IPv4 qualquer, inclusive interno), site-local (`fec0::/10`), faixas de teste e documentação e multicast. Nova `WebhookUrlGuard::isPublic()`
+- **Teste e reenvio de webhook sem limite.** Passam pelo `webhook_test_throttle` (10 por minuto, por usuário)
+- **Avisos de pagamento sem assinatura gastavam o limite da conta no gateway.** Cada aviso, fácil de forjar, virava uma consulta à API: o IPN do Mercado Pago, as notificações da Efí e as do Pagar.me sem usuário e senha do webhook. Agora as consultas têm teto (`MP_IPN_LOOKUPS_PER_MINUTE` e `API_KEY_UNSIGNED_NOTIFICATION_LOOKUPS_PER_MINUTE`, padrão 60): acima dele, 503 e o gateway reentrega depois. Para um flood não barrar os avisos verdadeiros, cada IP tem um teto próprio dentro do geral (`API_KEY_UNSIGNED_NOTIFICATION_LOOKUPS_PER_IP_PER_MINUTE`, padrão 20), e IPs em `API_KEY_NOTIFICATION_TRUSTED_IPS` não entram em teto. O mesmo pagamento com status final não é consultado de novo por IPN dentro de um minuto. Webhook assinado (Mercado Pago, Stripe, PagBank, Pagar.me com usuário e senha) não muda. `CardGateway` ganha `webhooksAuthenticated()`
+
+### Alterado
+
+- **Fim do 410 no painel.** Erro inesperado responde 500; login com senha errada e link de redefinição inválido, 422; conta não verificada, 403; plano ou chave que não existe, 404; logs sem o monitoring instalado, 503. O desafio de 2FA vencido continua 410, que é o que ele é (o painel usa esse status para voltar à senha)
+
+### Corrigido
+
+- **Cupom recusado na hora de pagar virava cobrança cheia.** Se o cupom esgotava ou já tinha sido usado pela conta (outra aba) entre a validação e o pagamento, o checkout cobrava o preço sem desconto. Agora responde 422 com o motivo e não cobra
+- **Front não compilava em TypeScript estrito.** Apps que compilam os `.vue` do pacote com `strict` (o padrão dos projetos Vue/Vite) recebiam erro em `ui/Dropdown.vue` (`position` com `left?: undefined`) e em `views/dashboard/team.vue` (papéis com `admin?: undefined`). Corrigidos, junto com dois acessos por índice sem checagem (`ui/Tabs.vue` e o nome do papel em `team.vue`). O `tsconfig.json` do pacote passa a ser `strict` com `noUncheckedIndexedAccess`, `router/index.ts` e `stores/admin.ts` deixam de ter `@ts-nocheck`, e o `typecheck` do CI pega isso daqui para frente
+- `resources/js/router/index.ts` importa `RouteRecordRaw` como tipo
 
 ## [1.1.0] - 2026-10-29
 

@@ -167,7 +167,7 @@ describe('Processing a refund', function () {
         $this->actingAs($this->admin, 'sanctum');
 
         $response = $this->postJson("/api/v1/dashboard/admin/refunds/{$userPlan->getKey()}")
-            ->assertStatus(410);
+            ->assertStatus(500);
 
         $body = $response->getContent();
 
@@ -202,7 +202,7 @@ describe('Processing a refund', function () {
         $this->actingAs($this->admin, 'sanctum');
 
         $message = $this->postJson("/api/v1/dashboard/admin/refunds/{$userPlan->getKey()}")
-            ->assertStatus(410)
+            ->assertStatus(500)
             ->json('message');
 
         expect($message)->toMatch('/[A-Z0-9]{8}/')
@@ -219,7 +219,7 @@ describe('Processing a refund', function () {
 
         $this->actingAs($this->admin, 'sanctum');
 
-        $this->postJson("/api/v1/dashboard/admin/refunds/{$userPlan->getKey()}")->assertStatus(410);
+        $this->postJson("/api/v1/dashboard/admin/refunds/{$userPlan->getKey()}")->assertStatus(500);
 
         expect($userPlan->fresh()->active)->toBeTrue();
     });

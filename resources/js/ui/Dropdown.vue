@@ -111,7 +111,9 @@ function place() {
     placement.value = !fitsBelow && fitsAbove ? 'top' : 'bottom';
 
     const top = placement.value === 'top' ? trigger.top - GAP - height : trigger.bottom + GAP;
-    const horizontal = props.align === 'right'
+    // Anotado: inferido, a união dos dois ramos tem `left?: undefined`, que o
+    // Record<string, string> recusa em modo estrito.
+    const horizontal: Record<string, string> = props.align === 'right'
         ? { right: `${Math.max(MARGIN, window.innerWidth - trigger.right)}px` }
         : { left: `${Math.max(MARGIN, trigger.left)}px` };
 

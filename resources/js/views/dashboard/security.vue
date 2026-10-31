@@ -18,6 +18,7 @@
                         <TextInput v-model="password.current_password" class="sm:col-span-2" type="password" label="Senha atual" autocomplete="current-password" :error="password.errors.current_password" />
                         <TextInput v-model="password.password" type="password" label="Nova senha" autocomplete="new-password" :error="password.errors.password" hint="Mínimo de 8 caracteres" />
                         <TextInput v-model="password.password_confirmation" type="password" label="Confirmar nova senha" autocomplete="new-password" />
+                        <TextInput v-if="twoFactorEnabled" v-model="password.code" class="sm:col-span-2" label="Código do aplicativo ou de recuperação" placeholder="000 000" autocomplete="one-time-code" mono :error="password.errors.code" />
                     </form>
                     <template #footer>
                         <div class="flex justify-end"><Button type="submit" form="password-form" :loading="password.loading">Alterar senha</Button></div>
@@ -40,6 +41,7 @@
                     <form id="email-form" class="grid gap-4 sm:grid-cols-2" @submit.prevent="changeEmail">
                         <TextInput v-model="email.email" type="email" label="Novo e-mail" :icon="PhEnvelopeSimple" :error="email.errors.email" />
                         <TextInput v-model="email.password" type="password" label="Senha atual" autocomplete="current-password" :error="email.errors.password" />
+                        <TextInput v-if="twoFactorEnabled" v-model="email.code" class="sm:col-span-2" label="Código do aplicativo ou de recuperação" placeholder="000 000" autocomplete="one-time-code" mono :error="email.errors.code" />
                     </form>
                     <template #footer>
                         <div class="flex justify-end"><Button type="submit" form="email-form" :loading="email.loading">Enviar confirmação</Button></div>
@@ -63,8 +65,8 @@
                             </div>
                         </div>
                         <div class="flex flex-wrap gap-2">
-                            <Button variant="outline" size="sm" :icon="PhKey" @click="regenerateRecoveryCodes">Novos códigos de recuperação</Button>
-                            <Button variant="ghost" size="sm" class="!text-red-600" @click="disableTwoFactor">Desativar</Button>
+                            <Button variant="outline" size="sm" :icon="PhKey" @click="openFactor('regenerate')">Novos códigos de recuperação</Button>
+                            <Button variant="ghost" size="sm" class="!text-red-600" @click="openFactor('disable')">Desativar</Button>
                         </div>
                     </div>
 
@@ -135,6 +137,18 @@
             </section>
         </div>
 
+        <!-- Desativar 2FA ou gerar novos códigos: senha e um código, para que só a senha não baste -->
+        <Modal v-model="factor.open" :title="factorText.title" :description="factorText.description">
+            <form id="two-factor-guard" class="space-y-4" @submit.prevent="submitFactor">
+                <TextInput v-model="factor.password" type="password" label="Sua senha" placeholder="••••••••" autocomplete="current-password" :error="factor.errors.password" />
+                <TextInput v-model="factor.code" label="Código do aplicativo ou de recuperação" placeholder="000 000" autocomplete="one-time-code" mono :error="factor.errors.code" />
+            </form>
+            <template #footer>
+                <Button variant="ghost" @click="factor.open = false">Cancelar</Button>
+                <Button type="submit" form="two-factor-guard" :variant="factor.mode === 'disable' ? 'danger' : 'primary'" :loading="factor.loading">{{ factorText.submit }}</Button>
+            </template>
+        </Modal>
+
         <!-- Códigos de recuperação -->
         <Modal v-model="codes.open" title="Guarde seus códigos de recuperação" description="Cada código vale uma vez, para entrar se você perder o celular. Eles não são mostrados de novo." :closable="codes.acknowledged">
             <div class="grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
@@ -164,10 +178,16 @@ const user = computed(() => authStore.user as any);
 const twoFactorEnabled = computed(() => !!user.value?.two_factor_enabled);
 const twoFactorRequired = computed(() => !!user.value?.two_factor_required);
 
-const password = reactive({ current_password: '', password: '', password_confirmation: '', loading: false, errors: {} as Record<string, string> });
-const email = reactive({ email: '', password: '', loading: false, errors: {} as Record<string, string> });
+const password = reactive({ current_password: '', password: '', password_confirmation: '', code: '', loading: false, errors: {} as Record<string, string> });
+const email = reactive({ email: '', password: '', code: '', loading: false, errors: {} as Record<string, string> });
 const setup = reactive({ secret: '', qr: '', code: '', error: '', loading: false });
 const codes = reactive({ open: false, list: [] as string[], acknowledged: false });
+const factor = reactive({ open: false, mode: 'disable' as 'disable' | 'regenerate', password: '', code: '', loading: false, errors: {} as Record<string, string> });
+const factorText = computed(() =>
+    factor.mode === 'disable'
+        ? { title: 'Desativar a verificação em duas etapas?', description: 'A conta volta a pedir só a senha no login.', submit: 'Desativar' }
+        : { title: 'Gerar novos códigos?', description: 'Os códigos atuais deixam de valer.', submit: 'Gerar códigos' },
+);
 const sessions = ref<any[]>([]);
 const sessionsLoading = ref(true);
 
@@ -180,7 +200,18 @@ function apiError(err: any, fallback: string): string {
 
 function fieldErrors(err: any): Record<string, string> {
     const errors = err?.response?.data?.errors || {};
-    return Object.fromEntries(Object.entries(errors).map(([k, v]: any) => [k, v?.[0] ?? '']));
+    const fields = Object.fromEntries(Object.entries(errors).map(([k, v]: any) => [k, v?.[0] ?? '']));
+    // O campo da tela é um só para os dois tipos de código.
+    if (fields.recovery_code && !fields.code) fields.code = fields.recovery_code;
+    return fields;
+}
+
+// Seis dígitos é o código do aplicativo; o resto, código de recuperação.
+// Sem 2FA, nada vai junto.
+function factorPayload(raw: string): Record<string, string> {
+    if (!twoFactorEnabled.value) return {};
+    const code = raw.replace(/\s/g, '');
+    return /^\d{6}$/.test(code) ? { code } : { recovery_code: code };
 }
 
 async function changePassword() {
@@ -191,8 +222,9 @@ async function changePassword() {
             current_password: password.current_password,
             password: password.password,
             password_confirmation: password.password_confirmation,
+            ...factorPayload(password.code),
         });
-        password.current_password = password.password = password.password_confirmation = '';
+        password.current_password = password.password = password.password_confirmation = password.code = '';
         toast.success('Senha alterada', { description: r.data?.data?.message });
         loadSessions();
     } catch (err: any) {
@@ -207,9 +239,9 @@ async function changeEmail() {
     email.loading = true;
     email.errors = {};
     try {
-        const r = await axios.post('/dashboard/profile/email', { email: email.email, password: email.password });
+        const r = await axios.post('/dashboard/profile/email', { email: email.email, password: email.password, ...factorPayload(email.code) });
         if (authStore.user) (authStore.user as any).pending_email = r.data?.data?.pending_email;
-        email.email = email.password = '';
+        email.email = email.password = email.code = '';
         toast.info('Confirme no novo e-mail', { description: r.data?.data?.message, duration: 6000 });
     } catch (err: any) {
         email.errors = fieldErrors(err);
@@ -275,21 +307,32 @@ async function confirmTwoFactor() {
     }
 }
 
-async function disableTwoFactor() {
-    const done = await withPassword('Desativar a verificação em duas etapas?', 'A conta volta a pedir só a senha no login.', async (pwd) => {
-        await axios.delete('/dashboard/two-factor', { data: { password: pwd } });
-        await authStore.initializeAuth();
-    }, 'danger');
-    if (done !== null) toast.success('Verificação em duas etapas desativada');
+function openFactor(mode: 'disable' | 'regenerate') {
+    Object.assign(factor, { open: true, mode, password: '', code: '', errors: {} });
 }
 
-async function regenerateRecoveryCodes() {
-    let list: string[] = [];
-    const done = await withPassword('Gerar novos códigos?', 'Os códigos atuais deixam de valer.', async (pwd) => {
-        const r = await axios.post('/dashboard/two-factor/recovery-codes', { password: pwd });
-        list = r.data.data.recovery_codes;
-    });
-    if (done !== null) showRecoveryCodes(list);
+async function submitFactor() {
+    factor.loading = true;
+    factor.errors = {};
+    const data = { password: factor.password, ...factorPayload(factor.code) };
+    try {
+        if (factor.mode === 'disable') {
+            await axios.delete('/dashboard/two-factor', { data });
+            factor.open = false;
+            await authStore.initializeAuth();
+            toast.success('Verificação em duas etapas desativada');
+        } else {
+            const r = await axios.post('/dashboard/two-factor/recovery-codes', data);
+            factor.open = false;
+            showRecoveryCodes(r.data.data.recovery_codes);
+        }
+    } catch (err: any) {
+        const errors = fieldErrors(err);
+        factor.errors = { password: errors.password ?? '', code: errors.code ?? '' };
+        if (!factor.errors.password && !factor.errors.code) factor.errors.code = apiError(err, 'Não foi possível concluir.');
+    } finally {
+        factor.loading = false;
+    }
 }
 
 async function loadSessions() {

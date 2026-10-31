@@ -102,6 +102,7 @@ const labels: Record<string, string> = {
     'account.two_factor_enabled': '2FA ativada',
     'account.two_factor_disabled': '2FA desativada',
     'account.two_factor_failed': 'Código 2FA errado',
+    'account.two_factor_locked': '2FA bloqueada por tentativas',
     'account.login_two_factor': 'Login com 2FA',
     'account.deleted': 'Conta excluída',
     'account.data_exported': 'Dados exportados',

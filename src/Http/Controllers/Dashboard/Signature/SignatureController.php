@@ -111,7 +111,7 @@ class SignatureController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_creating_signature'));
+            return response()->jsonInternal(__('api-key::messages.error_creating_signature'));
         }
     }
 
@@ -202,7 +202,7 @@ class SignatureController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_cancelling_signature'));
+            return response()->jsonInternal(__('api-key::messages.error_cancelling_signature'));
         }
     }
 
@@ -243,7 +243,7 @@ class SignatureController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_signature_history'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_signature_history'));
         }
     }
 
@@ -288,7 +288,7 @@ class SignatureController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_resuming_signature'));
+            return response()->jsonInternal(__('api-key::messages.error_resuming_signature'));
         }
     }
 
@@ -306,7 +306,7 @@ class SignatureController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_signature_history'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_signature_history'));
         }
     }
 
@@ -348,7 +348,7 @@ class SignatureController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_request_log'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_request_log'));
         }
     }
 
@@ -424,7 +424,7 @@ class SignatureController extends Controller
         } catch (\Exception $e) {
             report($e);
 
-            return response()->jsonGone(__('api-key::messages.error_loading_request_log'));
+            return response()->jsonInternal(__('api-key::messages.error_loading_request_log'));
         }
     }
 }

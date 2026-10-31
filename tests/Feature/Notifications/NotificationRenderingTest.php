@@ -231,6 +231,11 @@ it('monta as notificações de conta e acesso', function (Closure $build, string
         'Verificação em duas etapas desativada',
         [],
     ],
+    '2FA bloqueada por tentativas' => [
+        fn () => new AccountSecurityNotification(AccountSecurityNotification::TWO_FACTOR_LOCKED),
+        'Muitas tentativas de código na sua conta',
+        [],
+    ],
     'evento de segurança desconhecido' => [
         fn () => new AccountSecurityNotification('outro'),
         'Alteração na sua conta',

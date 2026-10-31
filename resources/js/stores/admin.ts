@@ -1,11 +1,10 @@
-//@ts-nocheck
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import axios from 'axios';
 
 export const useAdminStore = defineStore('admin', () => {
-    const plans    = ref([]);
-    const coupons  = ref([]);
+    const plans    = ref<any[]>([]);
+    const coupons  = ref<any[]>([]);
     const features = ref<any[]>([]);
     const users    = ref<any>({ data: [], total: 0, current_page: 1, last_page: 1 });
     const refunds  = ref<any>({ data: [], total: 0, current_page: 1, last_page: 1 });
@@ -36,7 +35,7 @@ export const useAdminStore = defineStore('admin', () => {
 
     async function deletePlan(id: string) {
         await axios.delete(`dashboard/plans/${id}`);
-        plans.value = (plans.value as any[]).filter((p: any) => p.id !== id);
+        plans.value = plans.value.filter((p: any) => p.id !== id);
     }
 
     // ── Coupons (package routes: dashboard/coupons) ────────────────────────
@@ -62,7 +61,7 @@ export const useAdminStore = defineStore('admin', () => {
 
     async function deleteCoupon(id: string) {
         await axios.delete(`dashboard/coupons/${id}`);
-        coupons.value = (coupons.value as any[]).filter((c: any) => c.id !== id);
+        coupons.value = coupons.value.filter((c: any) => c.id !== id);
     }
 
     // ── Features (registry: dashboard/admin/features) ────────────────────

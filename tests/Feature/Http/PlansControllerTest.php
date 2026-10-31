@@ -68,10 +68,20 @@ describe('Plan catalogue', function () {
         expect($this->getJson('/api/v1/dashboard/plans')->json('data'))->toHaveCount(2);
     });
 
+    it('hides an inactive plan from customers but not from the staff', function () {
+        $plan = Plan::factory()->create(['is_active' => false]);
+
+        $this->actingAs($this->user, 'sanctum');
+        $this->getJson("/api/v1/dashboard/plans/{$plan->getKey()}")->assertNotFound();
+
+        $this->actingAs($this->admin, 'sanctum');
+        $this->getJson("/api/v1/dashboard/plans/{$plan->getKey()}")->assertOk();
+    });
+
     it('reports a plan that does not exist', function () {
         $this->actingAs($this->user, 'sanctum');
 
-        $this->getJson('/api/v1/dashboard/plans/'.Str::uuid())->assertStatus(410);
+        $this->getJson('/api/v1/dashboard/plans/'.Str::uuid())->assertNotFound();
     });
 
     it('requires authentication to read a single plan', function () {
@@ -198,6 +208,6 @@ describe('Plan administration', function () {
     it('reports deleting a plan that is not there', function () {
         $this->actingAs($this->admin, 'sanctum');
 
-        $this->deleteJson('/api/v1/dashboard/plans/'.Str::uuid())->assertStatus(410);
+        $this->deleteJson('/api/v1/dashboard/plans/'.Str::uuid())->assertNotFound();
     });
 });

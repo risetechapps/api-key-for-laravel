@@ -1,5 +1,5 @@
-//@ts-nocheck
-import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
+import { createRouter, createWebHistory } from 'vue-router';
+import type { RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import type { TeamRole } from '../stores/auth';
 import appConfig from '@/api-key.config';
