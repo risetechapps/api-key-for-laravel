@@ -1,7 +1,8 @@
 <template>
     <div>
-        <PageHeader title="Webhooks" subtitle="Avisos enviados ao seu sistema quando algo acontece na conta: cota perto do fim, plano vencido, pagamento recusado." :icon="PhPlugsConnected">
+        <PageHeader title="Webhooks" subtitle="Avisos enviados ao seu sistema quando algo acontece na conta. Todos são assinados com o mesmo segredo." :icon="PhPlugsConnected">
             <template #actions>
+                <Button variant="soft" :icon="PhListMagnifyingGlass" @click="openDeliveries(null)">Outras entregas</Button>
                 <Button :icon="PhPlus" @click="openForm()">Novo webhook</Button>
             </template>
         </PageHeader>
@@ -46,22 +47,47 @@
                 </Card>
             </div>
 
-            <Card title="Verificando a assinatura" subtitle="Cada entrega é assinada com o segredo do webhook" class="h-fit lg:sticky lg:top-24">
-                <!-- O texto fica num <span>: no <li> flex, cada trecho e cada <code> virava
-                     um item separado, com gap entre eles. -->
-                <ol class="space-y-3 text-sm text-slate-600 dark:text-slate-400">
-                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">1</span><span class="min-w-0 leading-relaxed">Junte o header <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">X-Webhook-Timestamp</code>, um ponto e o corpo cru, exatamente como chegou.</span></li>
-                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">2</span><span class="min-w-0 leading-relaxed">Calcule o HMAC-SHA256 com o segredo (<code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">whsec_…</code>, inteiro) e compare com <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">X-Webhook-Signature</code>, que chega como <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">sha256=&lt;hex&gt;</code>. Compare em tempo constante.</span></li>
-                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">3</span><span class="min-w-0 leading-relaxed">Recuse timestamps com mais de 5 minutos e responda 2xx em até 10 segundos. Outras respostas são reenviadas com espera crescente.</span></li>
-                    <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">4</span><span class="min-w-0 leading-relaxed">Ignore um <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">X-Webhook-Id</code> já processado: novas tentativas e reenvios mandam o mesmo id.</span></li>
-                </ol>
-                <pre class="mt-4 overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-[11px] leading-relaxed text-slate-300"><span class="text-slate-500">// PHP</span>
+            <div class="space-y-6 lg:sticky lg:top-24 lg:h-fit">
+                <!-- Um segredo por conta: assina os endpoints daqui e as entregas para
+                     a URL que o cliente informa em cada pedido. -->
+                <Card title="Segredo de assinatura" subtitle="O mesmo para todos os webhooks da conta, inclusive os enviados para a URL que você informa em cada pedido">
+                    <Skeleton v-if="secret.loading" :lines="2" />
+                    <div v-else class="space-y-4">
+                        <CopyField v-if="secret.value" :value="secret.value" masked />
+                        <Button variant="outline" size="sm" :icon="PhKey" @click="rotate">Gerar novo segredo</Button>
+
+                        <form class="space-y-3 border-t border-slate-100 pt-4 dark:border-slate-800" @submit.prevent="sendUrlTest">
+                            <TextInput v-model="urlTest.url" label="Testar uma URL" type="url" placeholder="https://seu-sistema.com/webhooks" :icon="PhLink" :error="urlTest.error" hint="Envia um webhook.test assinado e mostra a resposta. A URL não precisa estar cadastrada." />
+                            <Button type="submit" variant="soft" size="sm" :icon="PhPaperPlaneTilt" :loading="urlTest.loading" :disabled="!urlTest.url">Enviar teste</Button>
+                            <Alert v-if="urlTest.result" :tone="urlTest.result.delivered ? 'success' : 'danger'">
+                                <template v-if="urlTest.result.delivered">Entregue: a URL respondeu HTTP {{ urlTest.result.http_status }}.</template>
+                                <template v-else>
+                                    Não entregue{{ urlTest.result.http_status ? ` (HTTP ${urlTest.result.http_status})` : '' }}.
+                                    <span v-if="urlTest.result.http_status === 401">A assinatura foi recusada: confira se o seu sistema usa este segredo.</span>
+                                    <span v-if="urlTest.result.error" class="mt-1 block break-all font-mono text-xs">{{ urlTest.result.error }}</span>
+                                </template>
+                            </Alert>
+                        </form>
+                    </div>
+                </Card>
+
+                <Card title="Verificando a assinatura" subtitle="Cada entrega é assinada com o segredo da conta">
+                    <!-- O texto fica num <span>: no <li> flex, cada trecho e cada <code> virava
+                         um item separado, com gap entre eles. -->
+                    <ol class="space-y-3 text-sm text-slate-600 dark:text-slate-400">
+                        <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">1</span><span class="min-w-0 leading-relaxed">Junte o header <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">X-Webhook-Timestamp</code>, um ponto e o corpo cru, exatamente como chegou.</span></li>
+                        <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">2</span><span class="min-w-0 leading-relaxed">Calcule o HMAC-SHA256 com o segredo da conta (<code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">whsec_…</code>, inteiro) e compare com <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">X-Webhook-Signature</code>, que chega como <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">sha256=&lt;hex&gt;</code>. Compare em tempo constante.</span></li>
+                        <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">3</span><span class="min-w-0 leading-relaxed">Recuse timestamps com mais de 5 minutos e responda 2xx em até 10 segundos. Outras respostas são reenviadas com espera crescente.</span></li>
+                        <li class="flex gap-3"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">4</span><span class="min-w-0 leading-relaxed">Ignore um <code class="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">X-Webhook-Id</code> já processado: novas tentativas e reenvios mandam o mesmo id.</span></li>
+                    </ol>
+                    <pre class="mt-4 overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-[11px] leading-relaxed text-slate-300"><span class="text-slate-500">// PHP</span>
 $expected = 'sha256=' . hash_hmac('sha256',
     $timestamp . '.' . $body, $secret);
 
 hash_equals($expected, $signature)
     && abs(time() - (int) $timestamp) &lt;= 300;</pre>
-            </Card>
+                </Card>
+            </div>
         </div>
 
         <!-- Formulário -->
@@ -89,22 +115,11 @@ hash_equals($expected, $signature)
             </template>
         </Modal>
 
-        <!-- Segredo: mostrado uma vez -->
-        <Modal v-model="secret.open" title="Segredo de assinatura" :closable="secret.acknowledged">
-            <div class="space-y-4">
-                <Alert tone="warning" title="Guarde agora">Use para validar as entregas no seu sistema. Ele não é mostrado de novo.</Alert>
-                <CopyField :value="secret.value" />
-                <Checkbox v-model="secret.acknowledged" label="Já guardei o segredo" />
-            </div>
-            <template #footer>
-                <Button :disabled="!secret.acknowledged" @click="secret.open = false">Concluir</Button>
-            </template>
-        </Modal>
-
         <!-- Entregas -->
-        <Drawer v-model="deliveriesOpen" title="Entregas" :description="deliveriesHook?.url" size="lg">
-            <DataTable :columns="deliveryColumns" :rows="deliveries" :loading="deliveriesLoading" empty-title="Nenhuma entrega ainda" empty-text="Use “Enviar teste” para conferir a integração." :empty-icon="PhBroadcast">
+        <Drawer v-model="deliveriesOpen" :title="deliveriesHook ? 'Entregas' : 'Outras entregas'" :description="deliveriesHook?.url ?? 'Enviadas para a URL informada em cada pedido, fora dos webhooks cadastrados.'" size="lg">
+            <DataTable :columns="deliveriesHook ? deliveryColumns : directColumns" :rows="deliveries" :loading="deliveriesLoading" empty-title="Nenhuma entrega ainda" empty-text="Use “Enviar teste” para conferir a integração." :empty-icon="PhBroadcast">
                 <template #cell-event="{ row }"><code class="text-xs text-slate-900 dark:text-white">{{ row.event }}</code></template>
+                <template #cell-url="{ row }"><Tooltip :text="row.url"><span class="block max-w-[14rem] truncate font-mono text-xs">{{ row.url }}</span></Tooltip></template>
                 <template #cell-status="{ row }"><Badge :tone="row.status === 'delivered' ? 'success' : row.status === 'failed' ? 'danger' : 'warning'" dot>{{ deliveryStatus[row.status] ?? row.status }}</Badge></template>
                 <template #cell-response_code="{ row }"><Tooltip v-if="row.error" :text="row.error"><span class="cursor-help underline decoration-dotted">{{ row.response_code ?? '—' }}</span></Tooltip><span v-else>{{ row.response_code ?? '—' }}</span></template>
                 <template #cell-created_at="{ row }"><span class="whitespace-nowrap text-slate-500">{{ format.relative(row.created_at) }}</span></template>
@@ -155,9 +170,47 @@ const form = reactive({
     errors: {} as Record<string, string>,
 });
 
-const secret = reactive({ open: false, value: '', acknowledged: false });
+const directColumns: Column[] = [...deliveryColumns.slice(0, 1), { key: 'url', label: 'URL' }, ...deliveryColumns.slice(1)];
 
-onMounted(load);
+const secret = reactive({ value: '', loading: true });
+
+const urlTest = reactive({
+    url: '',
+    loading: false,
+    error: '',
+    result: null as null | { delivered: boolean; http_status: number | null; error: string | null },
+});
+
+onMounted(() => {
+    load();
+    loadSecret();
+});
+
+async function loadSecret() {
+    try {
+        const r = await axios.get('/dashboard/webhooks/secret');
+        secret.value = r.data?.data?.secret ?? '';
+    } catch (err) {
+        toast.error('Não foi possível carregar o segredo', { description: errorMessage(err) });
+    } finally {
+        secret.loading = false;
+    }
+}
+
+async function sendUrlTest() {
+    urlTest.loading = true;
+    urlTest.error = '';
+    urlTest.result = null;
+    try {
+        const r = await axios.post('/dashboard/webhooks/test-url', { url: urlTest.url });
+        urlTest.result = r.data?.data ?? null;
+    } catch (err: any) {
+        urlTest.error = err?.response?.data?.errors?.url?.[0] ?? '';
+        if (!urlTest.error) toast.error('Não foi possível enviar o teste', { description: errorMessage(err) });
+    } finally {
+        urlTest.loading = false;
+    }
+}
 
 async function load() {
     try {
@@ -177,7 +230,6 @@ async function load() {
 function actions(hook: any): DropdownItem[] {
     return [
         { label: 'Editar', icon: PhPencilSimple, onClick: () => openForm(hook) },
-        { label: 'Gerar novo segredo', icon: PhKey, onClick: () => rotate(hook) },
         { divider: true },
         { label: 'Excluir', icon: PhTrash, danger: true, onClick: () => remove(hook) },
     ];
@@ -203,10 +255,6 @@ function openForm(hook: any = null) {
     });
 }
 
-function showSecret(value: string) {
-    Object.assign(secret, { open: true, value, acknowledged: false });
-}
-
 async function save() {
     form.loading = true;
     form.errors = {};
@@ -218,8 +266,8 @@ async function save() {
             await axios.put(`/dashboard/webhooks/${form.id}`, payload);
             toast.success('Webhook atualizado');
         } else {
-            const r = await axios.post('/dashboard/webhooks', payload);
-            showSecret(r.data.data.secret);
+            await axios.post('/dashboard/webhooks', payload);
+            toast.success('Webhook cadastrado', { description: 'As entregas são assinadas com o segredo da conta.' });
         }
         form.open = false;
         await load();
@@ -232,11 +280,14 @@ async function save() {
     }
 }
 
+function deliveriesBase(): string {
+    return deliveriesHook.value ? `/dashboard/webhooks/${deliveriesHook.value.id}/deliveries` : '/dashboard/webhooks/deliveries';
+}
+
 async function loadDeliveries() {
-    if (!deliveriesHook.value) return;
     deliveriesLoading.value = true;
     try {
-        const r = await axios.get(`/dashboard/webhooks/${deliveriesHook.value.id}/deliveries`);
+        const r = await axios.get(deliveriesBase());
         deliveries.value = r.data?.data ?? [];
     } finally {
         deliveriesLoading.value = false;
@@ -264,7 +315,7 @@ async function sendTest(hook: any) {
 
 async function redeliver(delivery: any) {
     try {
-        await axios.post(`/dashboard/webhooks/${deliveriesHook.value.id}/deliveries/${delivery.id}/redeliver`);
+        await axios.post(`${deliveriesBase()}/${delivery.id}/redeliver`);
         toast.success('Reenvio na fila');
         await loadDeliveries();
     } catch (err) {
@@ -272,19 +323,18 @@ async function redeliver(delivery: any) {
     }
 }
 
-async function rotate(hook: any) {
-    let value = '';
+async function rotate() {
     const ok = await confirm({
         title: 'Gerar novo segredo?',
-        description: 'O segredo atual deixa de valer imediatamente. Atualize o seu sistema logo depois.',
+        description: 'O segredo atual deixa de valer imediatamente para todos os webhooks da conta. Atualize o seu sistema logo depois.',
         tone: 'danger',
         confirmText: 'Gerar novo segredo',
         onConfirm: async () => {
-            const r = await axios.post(`/dashboard/webhooks/${hook.id}/rotate-secret`);
-            value = r.data.data.secret;
+            const r = await axios.post('/dashboard/webhooks/secret/rotate');
+            secret.value = r.data.data.secret;
         },
     });
-    if (ok) showSecret(value);
+    if (ok) toast.success('Novo segredo gerado', { description: 'Atualize o seu sistema com o valor novo.' });
 }
 
 async function remove(hook: any) {

@@ -2,6 +2,42 @@
 
 Passo a passo para atualizar entre versões. O detalhe de cada mudança está no [CHANGELOG](CHANGELOG.md).
 
+## Da 1.2 para a 1.3
+
+Tempo estimado: 5 minutos, mais o de atualizar os sistemas que recebem webhooks, se alguma conta tiver endpoints com segredos diferentes.
+
+### 1. Antes do `migrate`: contas com mais de um endpoint
+
+Todos os webhooks de uma conta passam a ser assinados com um segredo só, o da conta. A migração copia para ela o segredo do endpoint mais antigo. Contas com um endpoint (ou nenhum) não mudam nada. Para ver as que têm mais de um:
+
+```sql
+SELECT authentication_id, COUNT(*) FROM webhook_endpoints GROUP BY 1 HAVING COUNT(*) > 1;
+```
+
+Os endpoints dessas contas, menos o mais antigo, passam a receber com o segredo do mais antigo. Avise o dono da conta: ele copia o segredo da tela Webhooks para os sistemas que recebem por esses endpoints.
+
+### 2. Atualizar e migrar
+
+```bash
+composer update risetechapps/api-key-for-laravel
+php artisan migrate
+```
+
+Se você publicou os assets do painel, publique de novo:
+
+```bash
+php artisan vendor:publish --tag=api-key-assets --force
+```
+
+### 3. Se o seu app tem um webhook próprio
+
+Se o app envia avisos por conta própria (um `webhook_url` por pedido, com segredo e assinatura do app), troque pelo `WebhookDispatcher::dispatchTo()`: o cliente passa a validar tudo com o segredo da conta, e as entregas ganham novas tentativas e histórico no painel. O evento não precisa ser registrado. O corpo passa a ser o envelope `{id, event, created_at, data}`: o que o app enviava vai em `data`, e o sistema que recebe precisa ler de lá.
+
+### 4. Quem chama as rotas do painel por conta própria
+
+- O segredo não vem mais por endpoint: leia em `GET dashboard/webhooks/secret`
+- `POST dashboard/webhooks/{id}/rotate-secret` troca o segredo da conta inteira. Prefira `POST dashboard/webhooks/secret/rotate`
+
 ## Da 1.1 para a 1.2
 
 Tempo estimado: 10 a 20 minutos, mais o que levar resolver e-mails ou CPFs repetidos, se houver.

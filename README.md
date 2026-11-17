@@ -183,12 +183,17 @@ Quando `API_KEY_ROUTES_ENABLED=true` (padrão), o pacote registra as rotas autom
 | `PUT/DELETE` | `api/v1/dashboard/api-keys/{id}` | Editar (nome, `scopes`, origens, validade, limite por minuto) / revogar |
 | `POST` | `api/v1/dashboard/api-keys/{id}/regenerate` | Trocar o segredo da chave |
 | `GET` | `api/v1/dashboard/api-keys/revoked` | Chaves já excluídas (id, nome, quando), para filtrar o histórico de requisições |
-| `GET/POST` | `api/v1/dashboard/webhooks` | Listar / cadastrar webhook (o segredo só vem na criação) |
+| `GET/POST` | `api/v1/dashboard/webhooks` | Listar / cadastrar webhook |
 | `PUT/DELETE` | `api/v1/dashboard/webhooks/{id}` | Editar / excluir |
-| `POST` | `api/v1/dashboard/webhooks/{id}/rotate-secret` | Novo segredo de assinatura |
+| `GET` | `api/v1/dashboard/webhooks/secret` | Segredo de assinatura da conta (o mesmo de todas as entregas) |
+| `POST` | `api/v1/dashboard/webhooks/secret/rotate` | Novo segredo da conta (5 por minuto) |
+| `POST` | `api/v1/dashboard/webhooks/{id}/rotate-secret` | Obsoleta: troca o segredo da conta |
 | `POST` | `api/v1/dashboard/webhooks/{id}/test` | Enviar evento de teste |
-| `GET` | `api/v1/dashboard/webhooks/{id}/deliveries` | Últimas 50 entregas |
+| `POST` | `api/v1/dashboard/webhooks/test-url` | Enviar `webhook.test` a uma URL qualquer e devolver a resposta |
+| `GET` | `api/v1/dashboard/webhooks/{id}/deliveries` | Últimas 50 entregas do endpoint |
 | `POST` | `api/v1/dashboard/webhooks/{id}/deliveries/{deliveryId}/redeliver` | Reenviar uma entrega |
+| `GET` | `api/v1/dashboard/webhooks/deliveries` | Últimas 50 entregas para URLs avulsas (`dispatchTo`) |
+| `POST` | `api/v1/dashboard/webhooks/deliveries/{deliveryId}/redeliver` | Reenviar uma entrega avulsa |
 | `GET` | `api/v1/dashboard/checkout/payments/{paymentId}` | Situação de um pagamento pendente (PIX) |
 | `GET/PUT` | `api/v1/dashboard/billing/overage` | Ver / alterar a escolha de excedente (`enabled`, `spend_cap` em reais); inclui os excedentes em aberto (`unpaid`) |
 | `POST` | `api/v1/dashboard/billing/overage/{id}/pix` | Gerar o PIX de um excedente em aberto |
@@ -268,7 +273,7 @@ Com `two_factor.required_for_admins` ligado (padrão), as rotas de admin respond
 ### Proteções das rotas embutidas
 
 - **Sem enumeração de contas.** Login, esqueci a senha e reenvio de verificação respondem igual para e-mail cadastrado ou não. O login confere a senha antes de dizer que a conta está sem verificação ou suspensa.
-- **Limite de tentativas.** As rotas públicas de autenticação (`register`, `login`, `forgot-password`, `reset-password`, `email/resend`) dividem o limite `auth_throttle`, por IP. Checkout, validação de cupom e cadastro de cartão dividem o `payment_throttle`, por usuário: sem ele, o cadastro de cartão, que faz uma cobrança de validação, serve para testar cartões roubados em massa. A exclusão de conta tem contador próprio. Teste e reenvio de webhook pelo painel dividem o `webhook_test_throttle` (10 por minuto, por usuário), porque cada chamada dispara uma requisição para a URL do cliente. A exportação dos dados da conta tem o `export_throttle` (5 por hora, por usuário), porque cada chamada lê a conta inteira.
+- **Limite de tentativas.** As rotas públicas de autenticação (`register`, `login`, `forgot-password`, `reset-password`, `email/resend`) dividem o limite `auth_throttle`, por IP. Checkout, validação de cupom e cadastro de cartão dividem o `payment_throttle`, por usuário: sem ele, o cadastro de cartão, que faz uma cobrança de validação, serve para testar cartões roubados em massa. A exclusão de conta tem contador próprio. Teste e reenvio de webhook pelo painel dividem o `webhook_test_throttle` (10 por minuto, por usuário), porque cada chamada dispara uma requisição para a URL do cliente. A troca do segredo de webhook tem o `webhook_secret_throttle` (5 por minuto), porque cada troca derruba as integrações que usam o anterior. A exportação dos dados da conta tem o `export_throttle` (5 por hora, por usuário), porque cada chamada lê a conta inteira.
 - **Contas suspensas.** Com `status` diferente de `enabled`, a conta não entra no painel (middleware `active.user`, aplicado às rotas `auth:sanctum` do pacote) nem usa a API key. Suspender revoga os tokens; a chave continua a mesma e volta a funcionar ao reativar.
 
 ### Exclusão de conta e exportação de dados
@@ -320,6 +325,14 @@ Também vale listar em `config('api-key.webhooks.events')`, com ou sem descriç�
 ```php
 WebhookDispatcher::dispatch($pedido->conta, 'pedido.criado', ['id' => $pedido->id, 'total' => $pedido->total]);
 ```
+
+Quando o cliente informa a URL no próprio pedido (um `webhook_url` de callback), envie para ela com `dispatchTo()`. A entrega tem o mesmo envelope, a mesma assinatura, as mesmas novas tentativas e aparece no painel em "Outras entregas":
+
+```php
+WebhookDispatcher::dispatchTo($pedido->conta, $pedido->webhook_url, 'pedido.pronto', $dados, id: "pedido-{$pedido->id}-pronto");
+```
+
+O `id` é opcional e vira o `id` do envelope e o `X-Webhook-Id`. Passe um id estável quando o mesmo aviso puder ser pedido mais de uma vez: quem recebe descarta o repetido. A URL é conferida contra rede privada a cada tentativa; recusada, a entrega fica como falha no histórico. Confira também quando o cliente a informar (`WebhookUrlGuard::isAllowed()`), para recusar o pedido na hora. O evento não precisa estar registrado (a URL foi pedida pelo cliente para aquele aviso, não é assinatura do painel; registrado, ele apareceria como opção dos endpoints sem ser enviado a eles), só seguir o formato `recurso.acao`. Devolve a `WebhookDelivery`, ou `null` se os webhooks estão desligados ou o nome é inválido.
 
 Só evento registrado sai. Um nome que não está no registro (um erro de digitação, um evento esquecido) não é enviado a ninguém, nem a quem marcou "Todos os eventos": o `dispatch()` devolve 0 e o erro vai para o log (`report()`). Assim o cliente só recebe o que pôde escolher. No cadastro do endpoint, um evento não registrado é recusado com 422.
 
@@ -376,7 +389,7 @@ Esta parte é para o sistema do cliente, o que recebe os webhooks. Cada entrega 
 { "id": "evt_01j…", "event": "subscription.activated", "created_at": "2026-10-29T12:00:00-03:00", "data": { … } }
 ```
 
-A assinatura é `HMAC-SHA256(segredo, timestamp + "." + corpo_bruto)`, em hexadecimal, com o prefixo `sha256=`. O segredo é o `whsec_…` mostrado uma única vez no cadastro do endpoint (ou ao girar o segredo), e entra inteiro, com o prefixo.
+A assinatura é `HMAC-SHA256(segredo, timestamp + "." + corpo_bruto)`, em hexadecimal, com o prefixo `sha256=`. O segredo é o da conta (`whsec_…`), mostrado na tela Webhooks, e entra inteiro, com o prefixo. É um só para todas as entregas da conta: os endpoints cadastrados e as URLs avulsas. No app, `$conta->webhookSecret()` devolve o segredo (gerado no primeiro uso) e `$conta->rotateWebhookSecret()` troca.
 
 Para validar:
 
@@ -431,7 +444,7 @@ app.post('/webhooks', express.raw({ type: 'application/json' }), (req, res) => {
 O que mais o integrador precisa saber:
 
 - **Responda rápido.** Só um `2xx` em até 10 segundos (`webhooks.timeout`) conta como entregue. Valide, enfileire e responda; o processamento vem depois.
-- **Novas tentativas.** Qualquer outra resposta, ou falta de resposta, volta para a fila em 1 min, 5 min, 15 min, 1 h e 6 h, com o mesmo `X-Webhook-Id` e timestamp e assinatura novos. Depois de `webhooks.disable_after_failures` (20) entregas perdidas seguidas, o endpoint é desligado.
+- **Novas tentativas.** Qualquer outra resposta, ou falta de resposta, volta para a fila em 1 min, 5 min, 15 min, 1 h e 6 h, com o mesmo `X-Webhook-Id` e timestamp e assinatura novos (`webhooks.tries`, padrão 6, e `webhooks.backoff`, em segundos). Depois de `webhooks.disable_after_failures` (20) entregas perdidas seguidas, o endpoint é desligado; URLs avulsas não têm o que desligar.
 - **Girar o segredo vale na hora.** O antigo para de funcionar já na próxima entrega, sem período de convivência. Atualize o segredo no seu sistema logo depois de girar.
 - **Relógio sincronizado** (NTP) no servidor que recebe, por causa da tolerância de 5 minutos.
 - **Para testar**, o botão "Enviar teste" do painel manda um `webhook.test` assinado do mesmo jeito. O histórico de entregas do endpoint mostra, para cada entrega, a última resposta HTTP e o erro, se houver.
@@ -1646,6 +1659,7 @@ return [
 | `API_KEY_WEBHOOKS_TIMEOUT` | Timeout de cada entrega (segundos) | `10` |
 | `API_KEY_WEBHOOKS_MAX_PER_USER` | Máximo de webhooks por conta | `5` |
 | `API_KEY_WEBHOOKS_DISABLE_AFTER` | Entregas perdidas seguidas que desligam o endpoint | `20` |
+| `API_KEY_WEBHOOKS_TRIES` | Tentativas por entrega de webhook | `6` |
 | `API_KEY_WEBHOOKS_ALLOW_HTTP` | Aceitar URL `http://` (só desenvolvimento) | `false` |
 | `API_KEY_WEBHOOKS_BLOCK_PRIVATE` | Recusar IPs privados/loopback (proteção SSRF) | `true` |
 | `API_KEY_RECEIPT_ISSUER_NAME` | Nome do emissor no recibo | `APP_NAME` |

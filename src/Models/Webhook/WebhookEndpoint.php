@@ -13,7 +13,7 @@ use RiseTechApps\ApiKey\Models\Authentication\Authentication;
  * @property string $id
  * @property string $authentication_id
  * @property string $url
- * @property string $secret
+ * @property string|null $secret obsoleto desde a 1.3.0: as entregas usam Authentication::webhookSecret()
  * @property array<int, string>|null $events
  * @property bool $active
  * @property int $consecutive_failures
@@ -30,8 +30,8 @@ class WebhookEndpoint extends Model
     protected $hidden = ['secret'];
 
     protected $casts = [
-        // Cifrado com a APP_KEY: é preciso o valor original para assinar, então
-        // não dá para guardar só um hash.
+        // Obsoleto: a coluna fica só para o down() da migração 1.3.0. Todas as
+        // entregas são assinadas com o segredo da conta.
         'secret' => 'encrypted',
         'events' => 'array',
         'active' => 'boolean',

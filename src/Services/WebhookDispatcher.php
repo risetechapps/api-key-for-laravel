@@ -153,6 +153,8 @@ class WebhookDispatcher
     }
 
     /**
+     * Envia o evento para todos os endpoints da conta que o assinam.
+     *
      * @param  array<string, mixed>  $data
      * @return int Quantas entregas foram enfileiradas.
      */
@@ -178,25 +180,13 @@ class WebhookDispatcher
                 ->filter(fn (WebhookEndpoint $endpoint) => $endpoint->listensTo($event));
 
             foreach ($endpoints as $endpoint) {
-                $delivery = WebhookDelivery::create([
+                self::queue(WebhookDelivery::create([
                     'webhook_endpoint_id' => $endpoint->getKey(),
+                    'authentication_id' => $user->getKey(),
                     'event' => $event,
-                    'payload' => [
-                        'id' => 'evt_'.Str::lower((string) Str::ulid()),
-                        'event' => $event,
-                        'created_at' => now()->toIso8601String(),
-                        'data' => $data,
-                    ],
+                    'payload' => self::envelope($event, $data),
                     'status' => WebhookDelivery::PENDING,
-                ]);
-
-                $job = new DeliverWebhookJob($delivery->getKey());
-
-                if ($queue = config('api-key.webhooks.queue')) {
-                    $job->onQueue($queue);
-                }
-
-                dispatch($job);
+                ]));
             }
 
             return $endpoints->count();
@@ -207,5 +197,80 @@ class WebhookDispatcher
 
             return 0;
         }
+    }
+
+    /**
+     * Envia o evento para uma URL que não é endpoint cadastrado: a que o
+     * cliente informou num pedido (ex.: o `webhook_url` de uma geração).
+     *
+     * Mesmo envelope, mesma assinatura (o segredo da conta), mesmas novas
+     * tentativas e mesmo histórico dos endpoints. A URL passa pela proteção
+     * contra rede privada a cada tentativa; recusada, a entrega fica como
+     * falha no histórico, com o motivo. Valide a URL também quando o cliente
+     * a informar (WebhookUrlGuard::isAllowed()), para recusar na hora.
+     *
+     * O evento não precisa estar registrado: a URL foi pedida pelo cliente
+     * para este aviso, não é assinatura escolhida no painel. Registrar faria o
+     * evento aparecer como opção dos endpoints sem nunca ser enviado a eles.
+     * O nome segue o formato `recurso.acao`.
+     *
+     * `$id` vira o `id` do envelope e o `X-Webhook-Id`. Passe um id estável
+     * (ex.: derivado do recurso e do estado) quando o mesmo aviso puder ser
+     * pedido mais de uma vez: quem recebe descarta o repetido pelo id.
+     *
+     * @param  array<string, mixed>  $data
+     * @return WebhookDelivery|null null quando não foi enfileirada (webhooks
+     *                              desligados ou nome de evento inválido).
+     */
+    public static function dispatchTo(Authentication $user, string $url, string $event, array $data, ?string $id = null): ?WebhookDelivery
+    {
+        if (! config('api-key.webhooks.enabled', true)) {
+            return null;
+        }
+
+        if (! preg_match(self::NAME_PATTERN, $event)) {
+            report(new InvalidArgumentException("Nome de evento de webhook inválido: [{$event}]. Use recurso.acao em minúsculas, ex.: pedido.criado."));
+
+            return null;
+        }
+
+        try {
+            return self::queue(WebhookDelivery::create([
+                'webhook_endpoint_id' => null,
+                'authentication_id' => $user->getKey(),
+                'url' => $url,
+                'event' => $event,
+                'payload' => self::envelope($event, $data, $id),
+                'status' => WebhookDelivery::PENDING,
+            ]));
+        } catch (Throwable $e) {
+            report($e);
+
+            return null;
+        }
+    }
+
+    /** @return array{id: string, event: string, created_at: string, data: array<string, mixed>} */
+    public static function envelope(string $event, array $data, ?string $id = null): array
+    {
+        return [
+            'id' => $id ?? 'evt_'.Str::lower((string) Str::ulid()),
+            'event' => $event,
+            'created_at' => now()->toIso8601String(),
+            'data' => $data,
+        ];
+    }
+
+    private static function queue(WebhookDelivery $delivery): WebhookDelivery
+    {
+        $job = new DeliverWebhookJob($delivery->getKey());
+
+        if ($queue = config('api-key.webhooks.queue')) {
+            $job->onQueue($queue);
+        }
+
+        dispatch($job);
+
+        return $delivery;
     }
 }

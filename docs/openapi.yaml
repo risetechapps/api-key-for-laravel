@@ -591,7 +591,9 @@ components:
       required: true
       description: |
         `sha256=` followed by the hex HMAC-SHA256 of `<X-Webhook-Timestamp>.<raw body>`,
-        keyed with the endpoint's secret (`whsec_…`, used whole). Recompute it over
+        keyed with the account's webhook secret (`whsec_…`, used whole). It is the
+        same secret for every delivery of the account: registered endpoints and
+        per-request URLs alike. Recompute it over
         the raw bytes received, never over re-encoded JSON, and compare in
         constant time.
       schema: { type: string, pattern: '^sha256=[0-9a-f]{64}$' }

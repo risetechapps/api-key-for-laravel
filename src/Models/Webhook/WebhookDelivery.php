@@ -6,10 +6,13 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use RiseTechApps\ApiKey\Models\Authentication\Authentication;
 
 /**
  * @property string $id
- * @property string $webhook_endpoint_id
+ * @property string|null $webhook_endpoint_id null na entrega para URL avulsa (WebhookDispatcher::dispatchTo)
+ * @property string|null $authentication_id conta dona da entrega
+ * @property string|null $url destino da entrega para URL avulsa
  * @property string $event
  * @property array<string, mixed> $payload
  * @property string $status
@@ -21,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read WebhookEndpoint|null $endpoint
+ * @property-read Authentication|null $authentication
  */
 class WebhookDelivery extends Model
 {
@@ -32,7 +36,7 @@ class WebhookDelivery extends Model
 
     public const FAILED = 'failed';
 
-    protected $fillable = ['webhook_endpoint_id', 'event', 'payload', 'status', 'attempts', 'response_code', 'error', 'next_attempt_at', 'delivered_at'];
+    protected $fillable = ['webhook_endpoint_id', 'authentication_id', 'url', 'event', 'payload', 'status', 'attempts', 'response_code', 'error', 'next_attempt_at', 'delivered_at'];
 
     protected $casts = [
         'payload' => 'array',
@@ -46,5 +50,23 @@ class WebhookDelivery extends Model
     public function endpoint(): BelongsTo
     {
         return $this->belongsTo(WebhookEndpoint::class, 'webhook_endpoint_id');
+    }
+
+    /** @return BelongsTo<Authentication, $this> */
+    public function authentication(): BelongsTo
+    {
+        return $this->belongsTo(Authentication::class);
+    }
+
+    /** Para onde a entrega vai: a URL do endpoint ou a URL avulsa. */
+    public function targetUrl(): ?string
+    {
+        return $this->webhook_endpoint_id !== null ? $this->endpoint?->url : $this->url;
+    }
+
+    /** A conta que assina: a do endpoint ou a gravada na entrega avulsa. */
+    public function owner(): ?Authentication
+    {
+        return $this->webhook_endpoint_id !== null ? $this->endpoint?->authentication : $this->authentication;
     }
 }

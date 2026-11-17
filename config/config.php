@@ -61,6 +61,10 @@ return [
         'max_per_user' => env('API_KEY_WEBHOOKS_MAX_PER_USER', 5),
         // Falhas seguidas (depois de todas as novas tentativas) que desligam o endpoint.
         'disable_after_failures' => env('API_KEY_WEBHOOKS_DISABLE_AFTER', 20),
+        // Tentativas por entrega e espera, em segundos, antes de cada nova
+        // tentativa (a última espera se repete se houver mais tentativas).
+        'tries' => env('API_KEY_WEBHOOKS_TRIES', 6),
+        'backoff' => [60, 300, 900, 3600, 21600],
         // Só HTTPS, e nunca para IP privado, de loopback ou reservado (SSRF).
         // Desligue apenas em desenvolvimento.
         'allow_http' => env('API_KEY_WEBHOOKS_ALLOW_HTTP', false),
@@ -402,6 +406,14 @@ return [
         'enabled' => env('API_KEY_WEBHOOK_TEST_THROTTLE_ENABLED', true),
         'attempts' => env('API_KEY_WEBHOOK_TEST_THROTTLE_ATTEMPTS', 10),
         'decay_minutes' => env('API_KEY_WEBHOOK_TEST_THROTTLE_DECAY', 1),
+    ],
+
+    // Troca do segredo de webhook da conta: cada troca derruba as integrações
+    // que ainda usam o anterior.
+    'webhook_secret_throttle' => [
+        'enabled' => env('API_KEY_WEBHOOK_SECRET_THROTTLE_ENABLED', true),
+        'attempts' => env('API_KEY_WEBHOOK_SECRET_THROTTLE_ATTEMPTS', 5),
+        'decay_minutes' => env('API_KEY_WEBHOOK_SECRET_THROTTLE_DECAY', 1),
     ],
 
     /*

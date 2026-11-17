@@ -121,15 +121,25 @@ class RoutesApiKey
                 Route::delete('/dashboard/api-keys/{id}', [ApiKeyController::class, 'destroy'])->whereUuid('id');
 
                 Route::get('/dashboard/webhooks', [WebhookController::class, 'index']);
+                Route::get('/dashboard/webhooks/secret', [WebhookController::class, 'secret']);
+                Route::get('/dashboard/webhooks/deliveries', [WebhookController::class, 'directDeliveries']);
+                // Troca de credencial: cada chamada derruba as integrações que
+                // ainda usam o segredo anterior.
+                Route::middleware(self::throttle('webhook_secret_throttle', 5, 1, 'webhook-secret'))->group(function () {
+                    Route::post('/dashboard/webhooks/secret/rotate', [WebhookController::class, 'rotateAccountSecret']);
+                    // Obsoleta: troca o segredo da conta, não só o do endpoint.
+                    Route::post('/dashboard/webhooks/{id}/rotate-secret', [WebhookController::class, 'rotateSecret'])->whereUuid('id');
+                });
                 Route::post('/dashboard/webhooks', [WebhookController::class, 'store']);
                 Route::put('/dashboard/webhooks/{id}', [WebhookController::class, 'update'])->whereUuid('id');
                 Route::delete('/dashboard/webhooks/{id}', [WebhookController::class, 'destroy'])->whereUuid('id');
-                Route::post('/dashboard/webhooks/{id}/rotate-secret', [WebhookController::class, 'rotateSecret'])->whereUuid('id');
                 Route::get('/dashboard/webhooks/{id}/deliveries', [WebhookController::class, 'deliveries'])->whereUuid('id');
                 // Cada chamada enfileira uma entrega para a URL do cliente: sem
                 // freio, viraria um disparador de requisições.
                 Route::middleware(self::throttle('webhook_test_throttle', 10, 1, 'webhook-test'))->group(function () {
                     Route::post('/dashboard/webhooks/{id}/test', [WebhookController::class, 'test'])->whereUuid('id');
+                    Route::post('/dashboard/webhooks/test-url', [WebhookController::class, 'testUrl']);
+                    Route::post('/dashboard/webhooks/deliveries/{deliveryId}/redeliver', [WebhookController::class, 'redeliverDirect'])->whereUuid('deliveryId');
                     Route::post('/dashboard/webhooks/{id}/deliveries/{deliveryId}/redeliver', [WebhookController::class, 'redeliver'])->whereUuid(['id', 'deliveryId']);
                 });
 

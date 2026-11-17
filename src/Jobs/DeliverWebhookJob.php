@@ -13,41 +13,59 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Entrega um evento a um webhook do cliente.
+ * Entrega um evento a um webhook do cliente: um endpoint cadastrado ou uma URL
+ * avulsa (WebhookDispatcher::dispatchTo()).
  *
  * Assinatura: `X-Webhook-Signature: sha256=<hmac>` sobre "<timestamp>.<corpo>",
- * com o segredo do endpoint; `X-Webhook-Timestamp` permite ao cliente recusar
- * reenvios antigos. Qualquer 2xx conta como entregue. Falha volta para a fila
- * com espera crescente; depois da última, a entrega fica como falha e o
- * endpoint é desligado se acumular falhas seguidas demais.
+ * com o segredo da conta (Authentication::webhookSecret()), o mesmo para todas
+ * as entregas dela; `X-Webhook-Timestamp` permite ao cliente recusar reenvios
+ * antigos. Qualquer 2xx conta como entregue. Falha volta para a fila com
+ * espera crescente; depois da última, a entrega fica como falha e o endpoint,
+ * quando há, é desligado se acumular falhas seguidas demais.
  */
 class DeliverWebhookJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable;
 
-    public int $tries = 6;
+    public int $tries;
 
-    public function __construct(public readonly string $deliveryId) {}
+    public function __construct(public readonly string $deliveryId)
+    {
+        $this->tries = max(1, (int) config('api-key.webhooks.tries', 6));
+    }
 
     /** @return list<int> */
     public function backoff(): array
     {
-        return [60, 300, 900, 3600, 21600];
+        $backoff = array_values(array_map('intval', (array) config('api-key.webhooks.backoff', [60, 300, 900, 3600, 21600])));
+
+        return $backoff !== [] ? $backoff : [60];
     }
 
     public function handle(): void
     {
-        $delivery = WebhookDelivery::with('endpoint')->find($this->deliveryId);
-        $endpoint = $delivery?->endpoint;
+        $delivery = WebhookDelivery::with(['endpoint.authentication', 'authentication'])->find($this->deliveryId);
 
-        if (! $delivery || ! $endpoint || ! $endpoint->active || $delivery->status === WebhookDelivery::DELIVERED) {
+        if (! $delivery || $delivery->status === WebhookDelivery::DELIVERED) {
+            return;
+        }
+
+        // Endpoint desligado não recebe. Apagado, a entrega some junto (cascade).
+        if ($delivery->webhook_endpoint_id !== null && ! $delivery->endpoint?->active) {
+            return;
+        }
+
+        $url = $delivery->targetUrl();
+        $owner = $delivery->owner();
+
+        if ($url === null || $owner === null) {
             return;
         }
 
         $delivery->increment('attempts');
 
         // Tentar de novo não muda o destino: falha na hora, sem novas tentativas.
-        $addresses = WebhookUrlGuard::allowedAddresses($endpoint->url);
+        $addresses = WebhookUrlGuard::allowedAddresses($url);
 
         if ($addresses === null) {
             $delivery->update(['error' => 'URL not allowed (private network or invalid scheme)']);
@@ -58,12 +76,12 @@ class DeliverWebhookJob implements ShouldQueue
 
         $body = json_encode($delivery->payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $timestamp = (string) time();
-        $signature = hash_hmac('sha256', $timestamp.'.'.$body, $endpoint->secret);
+        $signature = hash_hmac('sha256', $timestamp.'.'.$body, $owner->webhookSecret());
 
         // Conecta nos IPs que o guard conferiu, sem nova resolução de DNS: entre
         // a checagem e a conexão o nome poderia passar a apontar para a rede
         // interna (DNS rebinding).
-        $resolve = WebhookUrlGuard::curlResolve($endpoint->url, $addresses);
+        $resolve = WebhookUrlGuard::curlResolve($url, $addresses);
 
         try {
             $response = Http::withoutRedirecting()
@@ -78,7 +96,7 @@ class DeliverWebhookJob implements ShouldQueue
                     'X-Webhook-Signature' => 'sha256='.$signature,
                 ])
                 ->withBody((string) $body, 'application/json')
-                ->post($endpoint->url);
+                ->post($url);
         } catch (Throwable $e) {
             $this->recordAttempt($delivery, null, $e->getMessage());
 
@@ -94,7 +112,7 @@ class DeliverWebhookJob implements ShouldQueue
                 'next_attempt_at' => null,
             ]);
 
-            $endpoint->update(['consecutive_failures' => 0]);
+            $delivery->endpoint?->update(['consecutive_failures' => 0]);
 
             return;
         }

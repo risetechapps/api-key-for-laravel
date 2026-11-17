@@ -3,6 +3,33 @@
 Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e este projeto segue o [Versionamento Semântico](https://semver.org/lang/pt-BR/) (SemVer).
 
+## [1.3.0] - 2026-11-16
+
+### Atualização
+
+Passo a passo em [UPGRADE.md](UPGRADE.md).
+
+- Rode `php artisan migrate`: segredo de webhook na conta (`authentications.webhook_secret`) e entregas para URL avulsa em `webhook_deliveries` (`authentication_id`, `url`; `webhook_endpoint_id` passa a aceitar null)
+- **Um segredo por conta assina todos os webhooks.** A migração copia para a conta o segredo do endpoint mais antigo dela, então quem tem um endpoint só não muda nada. **Conta com dois ou mais endpoints de segredos diferentes:** os outros passam a ser assinados com o do mais antigo. Atualize o sistema que recebe por eles
+- Se você publicou os assets do painel, publique de novo: `php artisan vendor:publish --tag=api-key-assets --force`
+
+### Adicionado
+
+- **Segredo de webhook da conta.** `Authentication::webhookSecret()` devolve o segredo, gerado no primeiro uso (cifrado com a APP_KEY, fora do `HasToUpper`), e `rotateWebhookSecret()` troca. Painel: `GET dashboard/webhooks/secret` e `POST dashboard/webhooks/secret/rotate` (`webhook_secret_throttle`, 5 por minuto)
+- **`WebhookDispatcher::dispatchTo($conta, $url, $evento, $data, id: ...)`**: envia um evento para uma URL que não é endpoint cadastrado (sem precisar registrá-lo, só no formato `recurso.acao`), como o `webhook_url` que o cliente informa num pedido. Mesmo envelope, mesma assinatura, mesmas novas tentativas e mesmo histórico. O `id` opcional vira o `id` do envelope e o `X-Webhook-Id`, para quem recebe descartar o repetido
+- **Histórico das entregas avulsas**: `GET dashboard/webhooks/deliveries` e `POST dashboard/webhooks/deliveries/{id}/redeliver`; no painel, "Outras entregas"
+- **Teste de qualquer URL**: `POST dashboard/webhooks/test-url` envia um `webhook.test` assinado, espera a resposta e devolve `delivered`, `http_status` e `error`, sem novas tentativas. No painel, no card do segredo
+- `WebhookDispatcher::envelope()`, o envelope `{id, event, created_at, data}` das entregas
+- `webhooks.tries` (`API_KEY_WEBHOOKS_TRIES`, padrão 6) e `webhooks.backoff` (padrão `[60, 300, 900, 3600, 21600]`)
+
+### Alterado
+
+- **O painel de Webhooks mostra o segredo da conta** num card próprio, com copiar, gerar novo e teste de URL. O cadastro de endpoint não mostra mais um segredo próprio, e a ação "Gerar novo segredo" saiu de cada endpoint
+- `POST dashboard/webhooks` devolve em `secret` o segredo da conta
+- `POST dashboard/webhooks/{id}/rotate-secret` fica **obsoleta**: troca o segredo da conta inteira, não só o do endpoint, e passa pelo `webhook_secret_throttle`
+- `webhook_endpoints.secret` não é mais lido nem gravado. A coluna fica, anulável, para o `down()` da migração
+- As entregas dos endpoints também gravam `authentication_id`
+
 ## [1.2.0] - 2026-10-30
 
 ### Atualização

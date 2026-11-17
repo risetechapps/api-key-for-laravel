@@ -199,7 +199,7 @@ describe('Per-minute rate limit', function () {
 describe('Outbound webhooks', function () {
     beforeEach(fn () => config(['api-key.webhooks.block_private_networks' => false]));
 
-    it('registers an endpoint and returns the signing secret once', function () {
+    it('registers an endpoint and returns the account signing secret', function () {
         Sanctum::actingAs($this->user);
 
         $data = $this->postJson('/api/v1/dashboard/webhooks', [
@@ -207,7 +207,8 @@ describe('Outbound webhooks', function () {
             'events' => ['subscription.activated'],
         ])->assertOk()->json('data');
 
-        expect($data['secret'])->toStartWith('whsec_');
+        expect($data['secret'])->toStartWith('whsec_')
+            ->and($data['secret'])->toBe($this->user->fresh()->webhookSecret());
 
         $this->getJson('/api/v1/dashboard/webhooks')
             ->assertOk()
@@ -284,9 +285,12 @@ describe('Outbound webhooks', function () {
             // O usuário já tinha plano: é troca, não ativação.
             ->and($delivery->event)->toBe('subscription.changed');
 
-        Http::assertSent(function (HttpRequest $request) {
+        // Assinado com o segredo da conta, não com o antigo do endpoint.
+        $secret = $this->user->fresh()->webhookSecret();
+
+        Http::assertSent(function (HttpRequest $request) use ($secret) {
             $timestamp = $request->header('X-Webhook-Timestamp')[0];
-            $expected = 'sha256='.hash_hmac('sha256', $timestamp.'.'.$request->body(), 'whsec_test');
+            $expected = 'sha256='.hash_hmac('sha256', $timestamp.'.'.$request->body(), $secret);
 
             return $request->header('X-Webhook-Signature')[0] === $expected
                 && $request['event'] === 'subscription.changed';

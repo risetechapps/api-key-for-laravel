@@ -15,7 +15,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use RiseTechApps\Address\Models\Address;
 use RiseTechApps\Address\Traits\HasAddress\HasAddress;
@@ -50,6 +52,7 @@ use RiseTechApps\ToUpper\Traits\HasToUpper;
  * @property string|null $two_factor_secret
  * @property array<int, string>|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
+ * @property string|null $webhook_secret assina todos os webhooks da conta; use webhookSecret()
  * @property string|null $rg
  * @property string|null $cpf
  * @property string|null $birth_date
@@ -114,6 +117,7 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
         'password',
         'two_factor_secret',
         'two_factor_recovery_codes',
+        'webhook_secret',
     ];
 
     protected $casts = [
@@ -128,6 +132,8 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
         'two_factor_secret' => 'encrypted',
         'two_factor_recovery_codes' => 'encrypted:array',
         'two_factor_confirmed_at' => 'datetime',
+        // Cifrado com a APP_KEY: é preciso o valor original para assinar.
+        'webhook_secret' => 'encrypted',
     ];
 
     // HasToUpper normaliza strings para maiúsculo, mas estes são identificadores /
@@ -135,7 +141,50 @@ class Authentication extends Authenticatable implements HasLocalePreference, Med
     // (AuthService::$ENABLE = 'enabled', $CLIENT = 'client') e com o e-mail de
     // login. Uppercase aqui violaria o enum de status/role (CHECK/enum no banco) e
     // quebraria o match — inclusive em produção quando o status é alterado.
-    protected array $no_upper = ['email', 'pending_email', 'status', 'role', 'team_role', 'external_id', 'locale', 'two_factor_secret', 'two_factor_recovery_codes'];
+    protected array $no_upper = ['email', 'pending_email', 'status', 'role', 'team_role', 'external_id', 'locale', 'two_factor_secret', 'two_factor_recovery_codes', 'webhook_secret'];
+
+    /** Formato dos segredos gerados pelo pacote. */
+    public static function generateWebhookSecret(): string
+    {
+        return 'whsec_'.Str::random(40);
+    }
+
+    /**
+     * O segredo que assina todos os webhooks da conta: os dos endpoints
+     * cadastrados e os enviados para URLs avulsas.
+     *
+     * Gerado no primeiro uso. O update condicional garante que duas entregas
+     * simultâneas não gravem segredos diferentes: a que perde lê o da outra.
+     */
+    public function webhookSecret(): string
+    {
+        if (is_string($this->webhook_secret) && $this->webhook_secret !== '') {
+            return $this->webhook_secret;
+        }
+
+        static::query()
+            ->whereKey($this->getKey())
+            ->whereNull('webhook_secret')
+            ->update(['webhook_secret' => Crypt::encryptString(static::generateWebhookSecret())]);
+
+        // toBase(): o value() do Eloquent devolveria o valor já decifrado.
+        $stored = static::query()->whereKey($this->getKey())->toBase()->value('webhook_secret');
+
+        // Sem passar pelo setAttribute: o valor do banco já está cifrado.
+        $this->setRawAttributes(array_merge($this->getAttributes(), ['webhook_secret' => $stored]), true);
+
+        return (string) $this->webhook_secret;
+    }
+
+    /** Troca o segredo da conta. O anterior deixa de valer na hora. */
+    public function rotateWebhookSecret(): string
+    {
+        $secret = static::generateWebhookSecret();
+
+        $this->forceFill(['webhook_secret' => $secret])->save();
+
+        return $secret;
+    }
 
     #[\Override]
     protected static function booted(): void
